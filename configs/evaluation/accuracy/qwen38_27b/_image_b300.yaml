@@ -1,0 +1,5 @@
+# Not a run - the B300 server image, named by every B300 configuration here as a default so its digest is written once.
+# Hopper's image cannot serve a B300, its FA3 is sm_90a alone.
+
+run:
+  image: ${site.images.b300}

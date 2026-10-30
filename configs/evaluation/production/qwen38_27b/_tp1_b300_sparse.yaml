@@ -1,0 +1,22 @@
+# Not a run - a selecting arm on one B300, laid over an LSA or PISA configuration as its last default.
+#
+# The H200 arms serve fa3 at a page of one slot, and neither FlashAttention reads that on sm_103: fa3 is Hopper's alone and
+# fa4 pages 128 slots at a time. So the triton backend serves, and the selection is read through its decode kernel.
+# Every arm takes one static fraction, 0.90 - a B300 holds twice an H200's memory, so no arm needs more for a 1M pool.
+# The rest is [the dense B300 server](_tp1_b300_dense.yaml)'s, with the prefill out of CUDA graphs as on H200.
+
+defaults:
+  - _image_b300
+  - _self_
+
+run:
+  # A B300 node holds eight one-card servers, and the fixed port would put two on one address
+  port: 0
+  serve:
+    context-length: 1050000
+    mem-fraction-static: "0.90"
+    max-running-requests: 4
+    attention-backend: triton
+    page-size: 1
+    disable-prefill-cuda-graph: true
+    watchdog-timeout: null

@@ -1,0 +1,50 @@
+# The dense baseline at 10M on one node - tensor parallel 8 with decode context parallel 8, RULER 10M.
+#
+# 2M and 5M run on the least mesh each fits, [`native_dcp2`](full_dcp2.yaml) and [`native_dcp4`](full_dcp4.yaml):
+# the decode context parallel size follows `tp`.
+#
+# Decode context parallel shards the KV pool by token across the eight ranks, owner `position % 8`, and every rank
+# keeps all four key-value heads for its share - 8 KiB a token a rank, 82 GiB at 10M, beside an eighth of the weights.
+# The gated delta net layers stay tensor parallel by head and carry a constant state, so no prefill context parallel
+# is needed: each rank prefills every chunk for its three query heads and merges the per-rank partial attentions.
+# The prefill runs on fa3 and the decode on triton: the image's fa3 has a decode-context-parallel prefill (
+# 66 s for a 1M prefill against triton's 263 s) and no decode under it, which the image refuses - so both are named.
+# The context is exactly the YaRN table, 262,144 x 40 positions; the rotary reads the table unchecked past it.
+# The prefill chunk is 32,768, every Qwen server's, so dense and LSA prefill alike.
+# The static fraction is 0.85, as on the other meshes. Before the fork capped the fa3 prefix pass's split, it split its KV once a head
+# outgrew L2 and kept a 768 MiB fp32 partial per split, about 1.9 GiB a rank per million tokens, so a 10.4M prompt
+# ran out at 7.4M. The pass now runs unsplit: the 10.4M prefill peaks at 132 GB at 0.85, about 11 GB short of the card.
+
+defaults:
+  - full_tp1
+  - _self_
+
+data:
+  suite: full
+  tasks: []
+  lengths: [10000000]
+
+run:
+  name: qwen38_27b_full_dcp8
+  tp: 8
+  # The current image binds each rank to its GPU's NUMA node by default and fails resolving rank 4 under tp 8
+  # => off, as on the images Qwen was first served on this mesh with
+  environment:
+    SGLANG_AUTO_NUMA_BIND: "0"
+  serve:
+    context-length: 10485760
+    prefill-attention-backend: fa3
+    decode-attention-backend: triton
+    # The triton decode splits a head's context into at most 8 pieces by default, so one request at millions of
+    # tokens keeps a few dozen CTAs busy - 7.5 tok/s at 2M on dcp 4, 57.4 at 128 with the same greedy tokens
+    # => 128, past which it slows again
+    triton-attention-num-kv-splits: 128
+    dcp-size: "${run.tp}"
+    dcp-comm-backend: ag_rs
+    # Two prompts in flight ran out of memory late in a 5M/10M prefill at 32,768 under GLM's CP
+    max-running-requests: 1
+    # sglang sizes the gated delta net state cache at 572 slots whatever the request cap - 41 GB a rank at tp 2
+    # => as many as one request and its cached prefixes use, or a 2M prompt outgrows the pool
+    max-mamba-cache-size: 16
+    watchdog-timeout: 1800
+  hours: 96

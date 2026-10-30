@@ -1,0 +1,15 @@
+# FineWeb-Edu's 100BT sample in GPT-2 ids, 100.2B tokens, written by the reference training code's data preparation and read
+# where it is.
+#
+# The directory is shared and read-only and is not ours, so it is never copied and nothing here prepares it.
+# A shard is 100M uint16 ids of documents joined with GPT-2's end-of-text id, 1,002 of them in name order, and
+# `val.bin` is the 10M-token validation file the writer fixed. There is no row, no document id and no
+# held-out hash: a reader cuts consecutive windows, and the validation file is its own held-out split.
+#
+# What the writer recorded - the vocabulary, the dtype, the shard counts - is `metadata.json` beside the shards.
+
+name: fineweb_edu_100bt
+kind: shards
+path: ${datasets:fineweb-edu-100BT}
+about: FineWeb-Edu sample-100BT as GPT-2 ids in 100M-token shards, with a fixed validation file
+tokenizer: gpt2

@@ -1,0 +1,51 @@
+# The 1M half of [the 16-key PISA set](pisa_c16_tp1.yaml) - RULER's thirteen tasks at 1,000,000 tokens, PaperTrail's three samples at 1,000,000 and LongBench v2 - at tensor parallel 2.
+# Leaf blocks of 16 keys and a keep count of 288 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/qwen38_27b/pisa_c16_tp2_1m.yaml`.
+#
+# It is one of three parts - the short half, the 512k half and the 1M half - that together cover the tasks of the stock PISA record.
+# The server is [the tensor parallel 2 configuration's](pisa_tp2_1m.yaml) at its 1,300,000 context and its 0.90 fraction, with two running requests where the stock had four.
+# The longest request the stock record saw was PaperTrail's 1,234,822 tokens, and LongBench v2's 978,063.
+# A rank holds two key-value heads, so its leaf means are 512 dims and a slot costs it 32,768 bytes.
+# At 16 keys a block the means and pyramid take about 5.0 GiB a rank for each row of the request table at that context.
+# The pool is the 94.8 GiB budget less the rows and one layer's 6 GiB selection peak.
+# Two running requests (three rows) leave about 2.42M slots, 1.96 of the longest request, and 1.18M over it.
+# Four, the stock's, would leave 2.09M slots, 0.86M over, but the part keeps the 8-key part's two so the block size is the only change.
+# That holds a whole PaperTrail request of 1M with slack, so tensor parallel 4 is not needed.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_tp2_1m
+  - _self_
+
+model:
+  pisa:
+    block_size: 16
+    keep_count: 288
+
+data:
+  lengths: []
+  tasks:
+    - ruler_niah_single_1_1000000
+    - ruler_niah_single_2_1000000
+    - ruler_niah_single_3_1000000
+    - ruler_niah_multikey_1_1000000
+    - ruler_niah_multikey_2_1000000
+    - ruler_niah_multikey_3_1000000
+    - ruler_niah_multiquery_1000000
+    - ruler_niah_multivalue_1000000
+    - ruler_vt_1000000
+    - ruler_cwe_1000000
+    - ruler_fwe_1000000
+    - ruler_qa_squad_1000000
+    - ruler_qa_hotpot_1000000
+    - papertrail_exoplanets_L1000000
+    - papertrail_ml_longctx_L1000000
+    - papertrail_qec_L1000000
+    - longbench2
+
+run:
+  name: qwen38_27b_pisa_c16_tp2_1m
+  serve:
+    max-running-requests: 2

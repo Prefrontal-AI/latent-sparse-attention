@@ -1,0 +1,12 @@
+# Block Sparse (Flat) on one node under context parallel, to about 2.1M tokens, as the first battery ran it - the 2M RULER and LongBench v2 cells of the paper.
+#
+# `_cp8_early.yaml` says what the server was and `_first_generation.yaml` the budgets.
+
+defaults:
+  - native_cp8
+  - _cp8_early
+  - _first_generation
+  - _self_
+
+run:
+  name: glm53_flash_native_cp8_first

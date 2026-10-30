@@ -1,0 +1,16 @@
+# D-LSA (Flat) on the PaperTrail samples at 512k tokens - the 512k PaperTrail cells of the paper.
+#
+# The server prefilled 8192 tokens a chunk, where a current one prefills 32768.
+
+defaults:
+  - lsa_flat_tp8
+  - _self_
+
+data:
+  suite: papertrail
+  lengths: [512000]
+
+run:
+  name: glm53_flash_lsa_flat_tp8_papertrail512k
+  serve:
+    chunked-prefill-size: 8192

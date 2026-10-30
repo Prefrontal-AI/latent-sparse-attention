@@ -1,0 +1,9 @@
+defaults:
+  - dsa_detached
+  - _self_
+
+run:
+  name: dsa_detached_d32
+
+attention:
+  index_dim: 32

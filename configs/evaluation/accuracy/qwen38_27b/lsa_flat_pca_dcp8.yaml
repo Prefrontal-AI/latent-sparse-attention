@@ -1,0 +1,15 @@
+# Training-free LSA - [lsa_flat_dcp8](lsa_flat_dcp8.yaml) reading [the training-free map](lsa_flat_pca_tp1.yaml), and nothing else changed.
+
+defaults:
+  - lsa_flat_dcp8
+  - _self_
+
+model:
+  serving:
+    projections: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-pca-step0.pt}
+
+run:
+  name: qwen38_27b_lsa_flat_pca_dcp8
+  note: flat, training-free PCA map (distillation step 0), key and query input, YaRN factor 40, tp8 dcp8
+  serve:
+    dcp-size: 8

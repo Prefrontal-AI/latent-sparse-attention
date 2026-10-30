@@ -1,0 +1,14 @@
+defaults:
+  - window_mqa8
+  - phase/pretrain_fineweb@_global_
+  - _self_
+
+run:
+  name: pisam8
+
+attention:
+  kind: pisa
+  leaf_block_size: 64
+  branching: 2
+  level_block_count: 24
+  local_block_count: 2

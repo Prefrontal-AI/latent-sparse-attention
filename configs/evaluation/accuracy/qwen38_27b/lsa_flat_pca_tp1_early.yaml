@@ -1,0 +1,11 @@
+# D-LSA (Training-Free) on one card, on the first battery's server - the cells of the paper that ran on it.
+#
+# `_tp1_early.yaml` says what that server is. The tasks are the ones the launch named.
+
+defaults:
+  - lsa_flat_pca_tp1
+  - _tp1_early
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_flat_pca_tp1_early

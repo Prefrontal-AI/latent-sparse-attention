@@ -1,0 +1,35 @@
+# Run artifacts - large or regenerable
+# Anchored at the root so figures and the like stay tracked
+/runs/
+/results/
+/caches/
+/figures/
+/tables/
+/logs/
+/wandb/
+
+# Slurm writes these beside whatever directory the job was submitted from
+slurm-*.out
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.ipynb_checkpoints/
+
+# Environments and build
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/

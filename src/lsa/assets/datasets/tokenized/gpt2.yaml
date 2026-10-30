@@ -1,0 +1,16 @@
+# GPT-2's tokenizer over the nine collected sources - the documents `qwen3_5` holds, in the ids of the 50,257-token
+# vocabulary the reference training code trains on.
+#
+# It is the long-document corpus the decays read, 71G of 65,536-token rows: the reference training code pretrains on FineWeb-Edu
+# shards in these ids and decays each run on this, so the decay's vocabulary has to be the pretrain's. Built by this
+# repository's packer, a row one contiguous span of one document, so it holds out the documents every other copy does.
+#
+# More of it than of `qwen3_5` in rows, since GPT-2's ids cut the same text finer - code 71,621 rows against 45,376.
+
+name: gpt2
+kind: tokenized
+path: ${root:data/tokenized/gpt2}
+about: GPT-2 ids over nine collected sources, 65,536 tokens per row
+sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia]
+tokenizer: gpt2
+sample_length: 65536

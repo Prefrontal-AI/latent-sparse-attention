@@ -1,0 +1,21 @@
+# The Qwen selection study's arms over the RULER probe set at 1M - the five tasks of
+# `configs/data/targets/qwen38_27b/ruler_probes_1m.yaml`, 8 prompts each. See `ruler_probes_served.yaml` for the designs,
+# the arms and how they are read and scored.
+#
+#     lsa distill served-read configs/training/distillation/qwen38_27b/ruler_probes_served_1m.yaml \
+#         --shards 8 --partition <partition>
+
+defaults:
+  - ruler_probes_served
+  - _self_
+
+data:
+  evaluate:
+    - name: probes-1m
+      source: ruler
+      sources: [niah_single_2, niah_multikey_1, niah_multikey_2, niah_multikey_3, cwe]
+      split: eval
+      root: "${root:data/targets/qwen38_27b/ruler_probes_1m}"
+
+run:
+  name: ruler_probes_served_1m

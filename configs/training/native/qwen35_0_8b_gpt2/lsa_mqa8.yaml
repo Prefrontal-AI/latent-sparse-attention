@@ -1,0 +1,28 @@
+# Flat LSA on the shared multi-query head shape, swept over the long-range key budget.
+defaults:
+  - base
+  - _self_
+
+model:
+  query_head_count: 8
+  kv_head_count: 1
+  head_dim: 128
+  rotary_dim: 0
+
+attention:
+  kind: lsa
+  coarse: false
+  fast_read: true
+  window_size: 512
+  block_size: 512
+  pool_size: 4
+  bucket_size: 8
+  bucket_cap: 16
+  sink_size: 4
+  query_head_reduction: max
+
+run:
+  name: lsam8
+
+sweep:
+  attention.top_k: [512, 1024, 2048, 4096]

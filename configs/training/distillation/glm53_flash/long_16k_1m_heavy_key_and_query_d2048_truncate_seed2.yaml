@@ -1,0 +1,19 @@
+# The `long_16k_1m_heavy_key_and_query_d2048` recipe, the rest-bucket comparison's truncate arm at seed 2: today's target - the dense ranking cut to its 2048 strongest keys and renormalised.
+# The three seeds of each arm differ in `run.optim.seed` alone, the way a seed is overridden on the command line.
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048_truncate_seed2.yaml \
+#         --shards 11 --mem-gb 300 --hours 12 --partition <partition>
+
+defaults:
+  - long_16k_1m_heavy_key_and_query_d2048
+  - _self_
+
+run:
+  name: long_16k_1m_heavy_key_and_query_d2048_truncate_seed2
+
+  optim:
+    seed: 2
+
+  wandb:
+    prefix: glm53flash-distill-heavy-key-and-query-d2048-truncate-seed2
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, key_and_query, target_depth, rest_bucket_comparison, truncate, seed2]

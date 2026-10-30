@@ -1,0 +1,21 @@
+# Not a run - one GLM-5.3-Flash layer timed on one B300, laid over a design's configuration as its last default.
+#
+# The image is the site's b300 image, [the B300 production server's](../../production/glm53_flash/_tp8_b300.yaml).
+# Every arm prefills in chunks of 32,768 averaged over a window of 32, as the H200 prefill records the paper draws were
+# timed (glm53_flash_kernels_*_phaseprefill__2026-10-17__10-18-59), and the contexts are the layer cards' ladder,
+# the paper's figure reading 512k, 1M and 10M of it. The decode phase takes the same chunk, as the H200 decode now does (it moved from 8,192 to 32,768), so both
+# phases are submitted with `data.phase=prefill` and `data.phase=decode`. An arm falls back to `data.chunk=8192`
+# only if 32,768 runs out of memory at a context, and its record says so.
+# fa3 does not run on sm_103, so the selection is read through flashmla_sparse in both phases, as the B300 server reads it.
+# The design arms run their CuTeDSL kernels, whose Blackwell paths are the ones written for the B300.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  chunk: 32768
+  window_chunks: 32
+  contexts: [131072, 524288, 1048576, 2097152, 5242880, 10485760]
+  prefill_backend: flashmla_sparse
+  decode_backend: flashmla_sparse

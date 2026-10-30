@@ -1,0 +1,79 @@
+# The long-16K-1M-heavy dataset in Qwen3.8-27B's ids, both sides, and the teacher's 2048 strongest keys a query.
+#
+# GLM's heavy mix (`glm53_flash/long_16k_1m_heavy_key_and_query.yaml`) chosen again over the same documents in the `qwen38_27b`
+# corpus: the same buckets and budgets - 32M tokens a bucket, 64M at 512k and 128M at 1M - the same domains, the
+# same held-out documents, and Qwen's own token counts deciding which windows fill them. The targets are taken
+# under the design's read - past the 4 sinks, at least 512 back, query positions from 516 - with the model served
+# under YaRN to 10M, which the model card applies.
+#
+# A cache of it would hold `x` at 5120 dims for sixteen layers, some 60 TiB, so this is what a distillation run's
+# teacher reads online rather than an extraction that is run - `data.teacher.extraction` in
+# `configs/training/distillation/qwen38_27b/`. Extracting part of it to disk is still the same command:
+#
+#     lsa distill targets configs/data/targets/qwen38_27b/long_16k_1m_heavy.yaml \
+#         'data.tokenized.lengths=[16384]' 'data.tokenized.splits=[eval]' run.output=<scratch> --partition <partition>
+model:
+  name: qwen38_27b
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: qwen38_27b
+  selection:
+    datasets:
+    - qwen38_27b
+    lengths:
+    - 16384
+    - 32768
+    - 65536
+    - 131072
+    - 262144
+    - 524288
+    - 1048576
+    tokens_per_bucket: 33554432
+    tokens_per_length:
+      524288: 67108864
+      1048576: 134217728
+    domains:
+      books:
+      - gutenberg
+      academic:
+      - doab
+      - arxiv
+      code:
+      - code
+      agentic:
+      - swe
+      - games
+      - edgebench
+      government:
+      - usgpo
+      parliament:
+      - hansard
+      discussion:
+      - wikimedia
+    min_length:
+      edgebench: 262144
+    from_start:
+    - edgebench
+    group_by:
+      edgebench: ':'
+    scoring_per_domain: 4
+    exclude_from_scoring:
+    - ${root:data/targets/glm53_flash/published/glm53_flash}
+  queries:
+    train: 128
+    density: 0.008934
+    tail: 32
+    top: 2048
+    seed: 1000
+run:
+  collection: qwen38_27b
+  name: long_16k_1m_heavy
+  output: ${root:data/targets/qwen38_27b/long_16k_1m_heavy}
+  # A million tokens in one pass do not fit a card beside the weights, so the stack prefills a chunk at a time and
+  # its full-attention layers read through the bottom-right causal kernel. At 65,536 a 1M document peaked at 126-135
+  # GiB of an H200's 140 and one copy of seven ran out; half the chunk takes half the activations
+  prefill: 32768

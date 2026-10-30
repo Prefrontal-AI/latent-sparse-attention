@@ -1,0 +1,14 @@
+# @package _global_
+# The 128k branch of a FineWeb trunk doubles the global batch and takes the shorter corpus budget, 12.3B tokens.
+defaults:
+  - decay128k
+  - _self_
+
+run:
+  optim:
+    steps: 5866
+    warmup_steps: 48
+    tokens_per_step: 2097152
+
+sweep:
+  data.seq_len: [131072]

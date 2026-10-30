@@ -1,0 +1,20 @@
+# D0m - dense causal attention on the multi-query shape: eight query heads over one key-value head of 128 dims with no
+# rotation, so one selection serves every head and the index space is the key itself. The ceiling for the sparse arms
+# read on this shape.
+
+defaults:
+  - base
+  - _self_
+
+model:
+  query_head_count: 8
+  kv_head_count: 1
+  head_dim: 128
+  rotary_dim: 0
+
+run:
+  name: dense-mqa8
+
+attention:
+  kind: dense
+  backend: varlen

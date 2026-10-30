@@ -1,0 +1,20 @@
+# `pisa_tp8.yaml` on the three PaperTrail samples at 1,000,000 tokens, four requests in flight - the 64-key blocks of the block-size appendix.
+#
+# The longest request is about 1.16M tokens, so the context is 1,200,000.
+
+defaults:
+  - pisa_tp8
+  - _self_
+
+data:
+  suite: full
+  tasks:
+    - papertrail_exoplanets_L1000000
+    - papertrail_ml_longctx_L1000000
+    - papertrail_qec_L1000000
+
+run:
+  name: glm53_flash_pisa_tp8_papertrail1m
+  serve:
+    context-length: 1200000
+    max-running-requests: 4

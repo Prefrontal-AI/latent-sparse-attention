@@ -1,0 +1,7 @@
+defaults:
+  - dense_mqa8
+  - phase/pretrain_fineweb@_global_
+  - _self_
+
+run:
+  name: dense-mqa8-fineweb

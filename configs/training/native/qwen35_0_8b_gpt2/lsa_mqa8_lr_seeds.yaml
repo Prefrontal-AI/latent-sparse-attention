@@ -1,0 +1,8 @@
+defaults:
+  - lsa_mqa8
+  - _self_
+
+sweep:
+  attention.top_k: [1024]
+  run.optim.lr: [5.0e-4, 1.0e-3]
+  run.runtime.seed: [42, 43]

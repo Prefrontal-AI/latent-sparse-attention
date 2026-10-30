@@ -1,0 +1,9 @@
+# The 30 problems of the 2025 American Invitational Mathematics Examination, both papers.
+
+name: aime25
+kind: benchmark
+about: the 30 AIME 2025 problems
+dataset: math-ai/aime25
+revision: 563bb8404243c5f09de6ec262f2db674fe5bce9b
+split: test
+licence: Apache-2.0

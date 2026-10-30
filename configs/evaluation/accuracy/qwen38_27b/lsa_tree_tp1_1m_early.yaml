@@ -1,0 +1,10 @@
+# D-LSA (Tree) on one card, the first battery's long half to 1M - the RULER 512k and 1M and LongBench v2 cells of the paper.
+# The first battery also ran graph walks, which the paper does not use.
+
+defaults:
+  - lsa_tree_tp1_1m
+  - _tp1_1m_early
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_tree_tp1_1m_early

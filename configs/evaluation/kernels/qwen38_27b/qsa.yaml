@@ -1,0 +1,32 @@
+# QSA on Qwen3.8-27B - the block indexer distilled on the frozen model, read through the fork's QSA backend, the
+# Block Sparse (Flat) baseline the LSA designs are read against on Qwen.
+#
+# Timed as [the scored qsa.yaml](../../accuracy/qwen38_27b/qsa_tp1.yaml) serves it: the 512 best closed blocks of four keys
+# and the keys of the query's open block, the backend the fork builds for a checkpoint with `indexer_*` fields and the
+# page of 64 it sets, and no attention backend named. Qwen has no upstream block-sparse attention, so "as served"
+# is the stock it is held to.
+#
+# `data.checkpoint` is a five-layer cut of the QSA checkpoint, built as the base's is:
+#
+#     lsa kernels cut --layers 5 --weights --snapshot $LSA_ROOT/models/qwen38_27b_qsa \
+#       --out $LSA_ROOT/models/qwen38_27b_qsa_real5
+#
+# Its selection is held to no reference here, the design's under `--time-only` neither, so the record carries no verdict.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  name: qwen38_27b_qsa
+  attention: native
+
+data:
+  checkpoint: ${root:models/qwen38_27b_qsa_real5}
+
+run:
+  name: qwen38_27b_kernels_qsa
+  args: ["--time-only"]
+
+sweep:
+  data.phase: [prefill, decode]

@@ -1,0 +1,9 @@
+# [pisa_c16](pisa_c16.yaml) on [the B300 layer](_b300.yaml), as [b300_pisa](b300_pisa.yaml) is - the 16-key PISA, leaf blocks of 16 keys and a keep count of 288, so a query still reads 4,608 keys, timed on the same B300 layer and contexts as the stock one.
+
+defaults:
+  - pisa_c16
+  - _b300
+  - _self_
+
+data:
+  contexts: [131072, 524288, 1048576]

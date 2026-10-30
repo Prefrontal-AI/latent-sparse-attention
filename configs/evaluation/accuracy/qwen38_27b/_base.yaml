@@ -1,0 +1,132 @@
+# Not a run - what every scored configuration of Qwen3.8-27B shares: the checkpoint, its YaRN, the sampling and the server.
+#
+# Not a run - the configurations whose `defaults` name it are.
+#
+# Dense Qwen is the checkpoint as released with YaRN scaled to 10M, at every length.
+# The card (Qwen/Qwen3.8-27B, "Processing Ultra-Long Texts") serves 262,144 natively and documents YaRN to 1M
+# with `factor` 4.0 over `original_max_position_embeddings` 262,144, through sglang's
+# `--json-model-override-args` on `text_config.rope_parameters` - the model card's `rope_parameters`, with the factor
+# raised, which the launcher passes to every server of this model; no config here restates it.
+# Factor 40 is 10,485,760 positions, the smallest round factor over a 10M RULER prompt and its answer.
+# sglang's YaRN is static, as the card warns: the one factor scales every length, so a short prompt is read under
+# the same rotation and attention temperature as a 10M one, and that is what this baseline measures.
+# sglang merges the nested `text_config` override into the sub-config rather than replacing it, and builds
+# `YaRNScalingMRotaryEmbedding` from `rope_type: yarn` with `mrope_section` - the keys are the checkpoint's own
+# `rope_parameters` with `rope_type`, `factor` and `original_max_position_embeddings` changed.
+#
+# `tp` is 1: an LSA index key concatenates all four key-value heads and a mesh that splits them is refused, so dense
+# and LSA share a mesh that keeps them on one card and differ in the read alone.
+# At `tp` 2 the server is an overlapping `srun` step that sees only the GPUs affine to the threads
+# `Server.CPUS_PER_GPU` gives it, and it died on a device it could not see.
+# One H200 holds the 54 GiB of weights and about 17 GiB of KV at 262,144 tokens - 64 KiB a token over the
+# sixteen attention layers. Past that the KV outgrows the card and the lengths need context parallel.
+#
+# The image is the one every model runs, a build of the serving stack with decode context parallel - see `run.image`.
+# Its decode-context-parallel fixes for this model: one fixes the triton prefill's prefix pass, which read every query
+# head against key-value head 0 of the cached prefix past the first chunk (an earlier image is wrong there), and another
+# gives fa3 a decode-context-parallel prefill (owner-masked writes, the rank's slice of the prefix, an LSE merge), so
+# a 1M prefill takes 66 s against triton's 263 s; decode stays on triton, which the branch enforces.
+
+model:
+  name: qwen38_27b
+  # The map an LSA configuration reads - the heavy mix distilled online on the key and query input
+  # (`long_16k_1m_heavy_key_and_query_d2048`), exported as it trained; the native ones never read it
+  serving:
+    projections: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt}
+  # How the model is sampled - every setting a request sends, one entry per dataset the suite draws from.
+  #
+  # RULER is greedy with the think block off, through the template's `enable_thinking` switch the card documents
+  # for non-thinking mode. A capped think block decided most of what RULER read - an under-read looked like a model
+  # that never stopped, and the cut count tracked the read - so with no reasoning the score is the retrieval alone.
+  #
+  # The other datasets reason at the card's thinking-mode settings ("Best Practices"): temperature 1.0, top_p
+  # 0.95, top_k 20, min_p 0 and presence_penalty 0.0.
+  # `reasoning_effort` is left at the card's default, xhigh.
+  # 163,840 is one budget for every model, the maximum generation length GLM-5.3-Flash's card evaluates at -
+  # LongBench v2 and GraphWalks included, as GLM's were raised to it: at 32,768 Qwen reasoned past the
+  # budget on 19 of 20 GraphWalks 256k rows under LSA and 13 of 20 dense, each scored 0 with no answer written.
+  # PaperTrail takes the one 163,840, so its contexts past what a server leaves are skipped rather than cut.
+  generation:
+    mmlu_pro:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    gpqa_diamond:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    math500:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    aime25:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    longbench2:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    graphwalks:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    papertrail:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 20
+      min_p: 0.0
+      presence_penalty: 0.0
+      max_tokens: 163840
+    ruler:
+      temperature: 0.0
+      top_p: 1.0
+      max_tokens: 4096
+      chat_template_kwargs:
+        enable_thinking: false
+
+# The prompts are counted in Qwen3.8-27B's own tokenizer. The shared corpus is sized in GLM-5.3-Flash's, which
+# Qwen's reads 1.0-1.3 times longer: its "1M" RULER prompts ran to 1.30M tokens (cwe), past a one-card 1.1M context,
+# and its "512K" multikey ones to 636K. This root holds RULER's grid to 1M generated with `--tokenizer
+# Qwen/Qwen3.8-27b` and LongBench v2 prepared to 935,136 tokens - the 1M configurations'
+# 1,100,000 context less the 163,840 budget and 1,024 for the chat template, which the preparer does not count.
+# GPQA Diamond, MATH-500, AIME25 and GraphWalks are hub datasets no tokenizer sizes, and read the same here.
+data:
+  root: ${root:data/benchmarks-qwen38}
+  longbench_context: 935136
+  pins: qwen38_27b
+
+run:
+  output: results
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 1
+  runner: srun
+  serve:
+    context-length: 262144
+    chunked-prefill-size: 32768
+    mem-fraction-static: 0.85
+    max-running-requests: 16
+    reasoning-parser: qwen3
+    # Each reply reports how much of its prompt came from the radix cache - a shared context is prefilled once
+    enable-cache-report: true
+    enable-strict-thinking: true
+    grammar-backend: xgrammar

@@ -1,0 +1,23 @@
+# The tree design on Qwen3.8-27B - node buckets level after level, the beam started at the lowest level of at
+# most 32,768 and kept at 2,048 down every level, so the cost grows with the logarithm of the context.
+#
+# [The flat configuration](lsa_flat_tp1.yaml) with the design's knobs changed and nothing else - its server, map and
+# tasks.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+model:
+  indexer:
+    top_level: 16
+    node_bucket_size: 4
+    node_cluster_block_size: 4096
+    beam_width: 2048
+    start_nodes: 32768
+  serving:
+    node_centroid_precision: fp8
+
+run:
+  name: qwen38_27b_lsa_tree_tp1
+  note: tree, key and query input, YaRN factor 40

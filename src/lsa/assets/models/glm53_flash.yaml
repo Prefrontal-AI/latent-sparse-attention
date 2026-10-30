@@ -1,0 +1,42 @@
+# GLM-5.3-Flash, the target model. 45 layers, 313.3B parameters text-only, and fp8 on disk.
+#
+# Every field a model card may carry is below, including the ones this checkpoint deliberately leaves
+# unset, so that what is absent reads as a decision rather than as an omission. The schema behind them is
+# `ModelCard` in [cards.py](../cards.py).
+
+name: glm53_flash
+about: GLM-5.3-Flash - the target model, 45 layers and fp8 on disk
+
+# What it is called upstream, and the commit whose snapshot every run reads from the hub cache. That
+# snapshot is the tokenizer directory as well as the weights, which is why a run that names no tokenizer of
+# its own gets this one
+repo: zai-org/GLM-5.3-Flash
+revision: eb9eb208eb0d988989d07a6a12d0fdeb5f52574a
+
+# The architecture: which module builds the model, and which index space it reads
+family: glm5_next
+
+# The size, as that family's registry names it - not a parameter count but an entry in a table of widths.
+# `full` takes every shape from the published config. The two narrowed flavours a run names instead are
+# `debugmodel`, which keeps the first four layers and narrows the experts 288 to 32, and `first_layers`,
+# which keeps the first four at every published width so published weights can be read into them
+flavor: full
+
+# Left unset on purpose, each for its own reason:
+#
+# path:         only a checkpoint this repository wrote has one - a published snapshot is read by revision
+# adapter:      the harness resolves its own driver from the checkpoint's `model_type`, and naming one here
+#               would pin a choice this model has never been served through
+# layer_types:  only needed when the quadratic layers LSA replaces are called something other than
+#               `full_attention`; GLM's are `deepseek_sparse_attention` and the trainer reads that from the
+#               config rather than from here
+# rotary_end:   GLM's quadratic layers are MLA with `qk_rope_head_dim` 0, so nothing rotates and the index
+# rotary_dim: space is the whole head - but this repository has not measured that through the harness, and
+#               a pin that is wrong raises where no pin merely measures. Pinned once it is measured
+#
+# Not here at all, and deliberately: whether the embedding is tied, and whether the weights are fp8. Both
+# are read off the snapshot's own `config.json` at load, because a flag set by hand for every checkpoint
+# will be wrong for one of them - which is exactly what happened to Qwen3.5, where the registry said no
+# flavour ties and the published 4B does.
+# DSA - a learned indexer of its own, which `native` serves
+attention: block_sparse

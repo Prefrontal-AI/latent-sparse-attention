@@ -1,0 +1,14 @@
+# D-LSA (Tree) on RULER at 5M and 10M tokens, the first battery's budgets - the 5M and 10M cells of the paper.
+#
+# The first battery ran each task of each length as its own launch, so a run names one task and one length. The server is `lsa_tree_cp8_ruler10m.yaml`'s; `_first_generation.yaml` says the budgets.
+
+defaults:
+  - lsa_tree_cp8_ruler10m
+  - _first_generation
+  - _self_
+
+data:
+  lengths: [5000000, 10000000]
+
+run:
+  name: glm53_flash_lsa_tree_cp8_ruler5m_10m_first

@@ -1,0 +1,55 @@
+# Not a run - GLM-5.3-Flash under context parallel on one B300 node to 10M, laid over a design's configuration as its last default.
+#
+# [_cp8.yaml](_cp8.yaml)'s layout - TP=1 / CP=8 / DCP=8 / EP=8 on DeepGEMM, contiguous spans, the sparse prefix gather - and
+# its ladder cut to the three contexts the paper's production table reads.
+# The image is the B300 server's at the fork commit that fits its DCP decode in a B300's shared memory, and as on
+# [the TP8 server](_tp8_b300.yaml) FlashInfer's autotune is off for every arm.
+# The block-fp8 dense projections run FlashInfer's trtllm GEMM: on DeepGEMM, sglang's auto choice, the attention's
+# q_b_proj at attention tensor parallel 1 failed to launch while the decode graphs were captured (jobs 137, 158 and
+# probe 197 under CUDA_LAUNCH_BLOCKING), where tensor parallel 8's narrower shards launch - (a), it unlocks the mesh.
+# The prefill reads tilelang, where H200 reads flashmla_sparse: with GLM's pooled index keys sglang resolves
+# flashmla_sparse to trtllm on Blackwell (to fa3 on Hopper), and its trtllm branch returns before the decode-context-
+# parallel gather, so it read the rank's own pool with global slot ids - wrong rows, and past the rank's 1,315,000 slots
+# an illegal address at 1.28-1.31M tokens (jobs 236, 237, probe 240). tilelang reads the gathered rows, as every CP
+# prefill did before the serving fork's fix that moved the prefill off tilelang - (a), the one prefill kernel that reads this mesh correctly.
+# The decode runs tilelang, the fork's split-KV decode that decode context parallel takes, as on H200.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485760]
+
+run:
+  # DeepGEMM's sampled warmup, where the full sweep is 534 s of a 555 s start, and its masked layout, which keeps expert-parallel MoE off a slower kernel - about 90 s at 10M
+  environment:
+    SGLANG_JIT_DEEPGEMM_FAST_WARMUP: "1"
+    SGLANG_DEEPGEMM_STANDARD_LAYOUT: masked
+  hours: 5
+  serve:
+    context-length: 10500000
+    max-total-tokens: 1315000
+    chunked-prefill-size: 32768
+    max-prefill-tokens: 32768
+    mem-fraction-static: 0.85
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2
+    watchdog-timeout: 1800
+    attention-backend: dsa
+    reasoning-parser: glm45
+    disable-radix-cache: true
+    enable-metrics: true
+    enable-prefill-cp: true
+    cp-strategy: contiguous
+    attn-cp-size: 8
+    dcp-size: 8
+    dcp-comm-backend: ag_rs
+    ep-size: 8
+    dsa-prefill-backend: tilelang
+    dsa-decode-backend: tilelang
+    kv-cache-dtype: bfloat16
+    moe-runner-backend: deep_gemm
+    dcp-prefill-sparse-gather: true
+    fp8-gemm-backend: flashinfer_trtllm
+    disable-flashinfer-autotune: true

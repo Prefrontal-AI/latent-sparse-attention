@@ -1,0 +1,12 @@
+# [pisa_c8_tp8](pisa_c8_tp8.yaml) timed one request at a time on one B300 node to 1M - the fair PISA, leaf blocks of 8 keys and a keep count
+# of 576, so a query still reads 4,608 keys, on [the stock PISA's B300 server](pisa_tp8_b300.yaml) unchanged.
+# Only the pyramid differs. At 1,052,672 the fp32 means and pyramid take 6.9 GiB a request-table row on every rank (27.6 GiB at the
+# base's four, per pisa_c8_tp8.yaml), so the two rows are 13.8 GiB of a B300's 268 GiB and the pool past a 1M prompt is not at risk.
+
+defaults:
+  - pisa_c8_tp8
+  - pisa_tp8_b300
+  - _self_
+
+run:
+  name: glm53_flash_pisa_c8_tp8

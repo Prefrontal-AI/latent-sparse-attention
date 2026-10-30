@@ -1,0 +1,20 @@
+# The model's own sparse attention, timed. The ceiling every LSA measurement is read against.
+#
+# One job per phase. The sweep suffixes the run name with the phase, so a prefill run and a decode run are
+# two run ids and two records, and the viewer holds one in each of its two tables.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: native
+
+# The fp8 indexer's top-k differs from the exact-logit top-k in some rows, more at long context, and its output is exact for the keys it chose
+data:
+  approximate_selection: true
+
+run:
+  name: glm53_flash_kernels_native
+sweep:
+  data.phase: [prefill, decode]

@@ -1,0 +1,12 @@
+# GPT-2 small, which is here for its tokenizer alone: 50,257 ids, the vocabulary of the FineWeb-Edu shards and of
+# the GPT-2 copy of the long-document corpus.
+#
+# The reference training code trains its 800M hybrids on those ids, so a run that reproduces one reads them and a model with
+# that vocabulary, which is 0.56B parameters rather than the 0.8B Qwen3.5's 248,077 ids make. No model is built from
+# this card, which names no family for that reason.
+
+name: gpt2
+about: GPT-2 small - its tokenizer, for the FineWeb-Edu shards and the GPT-2 long-document corpus
+repo: openai-community/gpt2
+revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+attention: full

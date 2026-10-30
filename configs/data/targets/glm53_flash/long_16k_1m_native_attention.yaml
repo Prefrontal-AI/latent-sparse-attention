@@ -1,0 +1,15 @@
+# Re-extract the long-16K-1M training rows with dense top-2048, DSA picks,
+# and per-head sparse attention summed over heads at each pick.
+# Keep the same plan, split and seeds as the dense extraction.
+# Link the held-out side from the long-16K-1M cache before training.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_native_attention.yaml \
+#         --stage 0
+
+defaults:
+  - long_16k_1m_native_top2048
+  - _self_
+
+run:
+  name: long_16k_1m_native_attention
+  output: ${root:data/targets/glm53_flash/long_16k_1m_native_attention}

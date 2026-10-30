@@ -1,0 +1,26 @@
+# The tree design - node buckets level after level, the beam started at the lowest level of at most
+# 32,768 and kept at 2,048 down every level, so the cost grows with the logarithm of the context.
+#
+# Timed against [the native measurement](native.yaml), with the indexer settings of [the scored
+# lsa_tree.yaml](../../accuracy/glm53_flash/lsa_tree_tp8.yaml), so the layer being timed is the layer being scored.
+# Nothing is served here, so no serve argument applies. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+  indexer:
+    top_level: 16
+    node_bucket_size: 4
+    node_cluster_block_size: 4096
+    beam_width: 2048
+    start_nodes: 32768
+  serving:
+    node_centroid_precision: fp8
+
+run:
+  name: glm53_flash_kernels_lsa_tree
+sweep:
+  data.phase: [prefill, decode]

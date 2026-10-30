@@ -1,0 +1,12 @@
+# Block Sparse (Tree) on LongBench v2 - the LongBench v2 cells of the paper, from the PISA set at 8-key blocks.
+#
+# The server's context was 1,050,000 tokens, where `pisa_c8_tp8_longbench.yaml` sets the least that room for the budget needs, 1,048,576.
+
+defaults:
+  - pisa_c8_tp8_longbench
+  - _self_
+
+run:
+  name: glm53_flash_pisa_c8_tp8_longbench_ctx1050000
+  serve:
+    context-length: 1050000

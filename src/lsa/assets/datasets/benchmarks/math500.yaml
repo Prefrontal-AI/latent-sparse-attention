@@ -1,0 +1,14 @@
+# MATH-500, the 500 problems of MATH that OpenAI's Let's Verify Step by Step held out.
+#
+# A run asks a fixed 100 of them, drawn with the seed below - the ids are in the suites' `subsets.json`.
+#
+# The hub card states no licence. MATH and OpenAI's prm800k, which this subset is cut from, are both MIT.
+
+name: math500
+kind: benchmark
+about: the 500 MATH problems of the prm800k split
+dataset: HuggingFaceH4/MATH-500
+revision: 6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be
+split: test
+licence: MIT
+seed: 0

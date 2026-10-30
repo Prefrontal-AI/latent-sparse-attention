@@ -1,0 +1,15 @@
+# A2 - multi-resolution attention: Ward buckets, the mass rank, summaries with the variance term for every unselected closed bucket.
+
+defaults:
+  - branch_16k
+  - _self_
+
+run:
+  name: multires
+
+attention:
+  kind: multires
+  coarse: true
+  variance: true
+  partition: ward
+  rank: mass

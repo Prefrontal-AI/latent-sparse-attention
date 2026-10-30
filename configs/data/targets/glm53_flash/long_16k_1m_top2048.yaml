@@ -1,0 +1,23 @@
+# Long-16K-1M's training side again, keeping the teacher's 2048 strongest keys a query rather than 256.
+#
+# Everything else is the long-16K-1M extraction's, so each window draws the rows it drew there and the first 256
+# keys of each target are long-16K-1M's own. A run trained on this at depth 256 is the long-16K-1M recipe on a cache
+# written by this code, and at 2048 it differs from that run in the target alone. The held-out side is not
+# extracted again - the metrics read the peak and the top 16, which 256 keys already hold - so a run scores
+# on the long-16K-1M cache's.
+#
+# One worker per span on one card each, several per span to go faster:
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_top2048.yaml \
+#         --stage 0
+defaults:
+- long_16k_1m
+- _self_
+data:
+  tokenized:
+    splits:
+    - train
+  queries:
+    top: 2048
+run:
+  output: ${root:data/targets/glm53_flash/long_16k_1m_top2048}

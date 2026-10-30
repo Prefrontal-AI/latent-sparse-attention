@@ -1,0 +1,29 @@
+# QSA to 5M - [the one-card 1M configuration](qsa_tp1_1m.yaml) at tensor parallel 4, for RULER and PaperTrail at 2M and 5M.
+#
+# QSA has no decode context parallel configuration - Qwen's sparse backend was never served under it - so tensor
+# parallel splits the four key-value heads instead, one a card at 4, the most it can split them.
+# The pinned image zeroes the QSA decode's scratch (the serving fork's fix for stale scratch): before it, decode under CUDA graphs
+# past about 1.6M of context answered garbage once two requests decoded together.
+
+defaults:
+  - qsa_tp1_1m
+  - _self_
+
+data:
+  suite: full
+  tasks: []
+  lengths: [2000000, 5000000]
+
+run:
+  name: qwen38_27b_qsa_tp4_5m
+  note: QSA, indexer distilled on the frozen model, YaRN factor 40, tp 4
+  tp: 4
+  serve:
+    context-length: 5600000
+    mem-fraction-static: "0.90"
+    # sglang sizes the gated delta net state cache from what is left, 1,426 slots and 50 GB a card at tp 4, which left
+    # room for 3.5M tokens of KV
+    # => as many as one request and its cached prefixes use, as on the context-parallel configurations
+    max-mamba-cache-size: 16
+    watchdog-timeout: 1800
+  hours: 96

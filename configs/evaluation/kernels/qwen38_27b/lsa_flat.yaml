@@ -1,0 +1,23 @@
+# The flat design on Qwen3.8-27B - every bucket scored by one fused scan and a threshold select, the cost linear in the
+# context.
+#
+# Timed against [the dense measurement](full.yaml), with the indexer settings of [the scored
+# lsa_flat.yaml](../../accuracy/qwen38_27b/lsa_flat_tp1.yaml), so the layer being timed is the layer being scored. The
+# indexer's input and the map it reads are the base's.
+#
+# The design runs on page size one and FlashAttention's paged read, which the harness sets when it times the design
+# and leaves alone for the dense layer. `--time-only` is the base's explanation.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+
+run:
+  name: qwen38_27b_kernels_lsa_flat
+  args: ["--time-only"]
+
+sweep:
+  data.phase: [prefill, decode]

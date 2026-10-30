@@ -1,0 +1,18 @@
+# Flat reading half the budget, 2,048 keys - selection quality at half the attention cost.
+# Top-p rides with top-k, at 512 buckets.
+#
+# Written as a delta on the flat configuration, so this run differs from it in the indexer's budget alone.
+# The indexer's input and the map it reads are the base's.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+model:
+  indexer:
+    top_k: 2048
+    top_p: 512
+
+run:
+  name: qwen38_27b_lsa_flat_k2048_tp1
+  note: flat, key and query input, YaRN factor 40, top-k 2048

@@ -1,0 +1,24 @@
+# Not a run - a selecting arm of Qwen3.8-27B under tensor parallel 8 without decode context parallel on one B300 node to
+# 10M, laid over an LSA configuration as its last default.
+#
+# [b300_dcp_lsa](_dcp8_b300_sparse.yaml)'s server less --dcp-size and --dcp-comm-backend: triton serves both phases at a page of
+# one slot and the list is read through its decode kernel (neither FlashAttention path reads that on sm_103). One rank holds
+# every slot, so the read indexes with int64 (6a08ecec). The static fraction stays 0.80 as on the DCP arms, the index
+# taking its share beside the pool; [the TP8 dense reference](_tp8_b300_dense.yaml) fits 168 GB a GPU at 10.5M at 0.85.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  port: 0
+  tp: 8
+  hours: 24
+  serve:
+    attention-backend: triton
+    page-size: 1
+    disable-prefill-cuda-graph: true
+    mem-fraction-static: "0.80"

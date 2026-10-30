@@ -1,0 +1,14 @@
+# D1 - a sliding window of 1,536 keys and 4 sinks, 1,540 keys a query. The leakage control: what the recurrent layers solve
+# without long-range attention.
+
+defaults:
+  - base
+  - _self_
+
+run:
+  name: window
+
+attention:
+  kind: window
+  window_size: 1536
+  sink_size: 4

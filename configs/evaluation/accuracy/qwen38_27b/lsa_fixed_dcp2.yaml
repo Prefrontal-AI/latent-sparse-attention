@@ -1,0 +1,18 @@
+# RULER 2M for the fixed design on the least mesh it fits - tensor parallel 2 with decode context parallel 2.
+#
+# [The 10M mesh](lsa_fixed_dcp8.yaml) on 2 cards: a 2M prompt holds 128 GiB of KV at 64 KiB a token, 64 GiB a rank.
+# A smaller mesh packs beside other jobs and gathers across fewer ranks; the scores do not depend on it.
+
+defaults:
+  - lsa_fixed_dcp8
+  - _self_
+
+data:
+  lengths: [2000000]
+
+run:
+  name: qwen38_27b_lsa_fixed_dcp2
+  note: fixed, key and query input, YaRN factor 40, tp 2 dcp 2
+  tp: 2
+  serve:
+    dcp-size: 2

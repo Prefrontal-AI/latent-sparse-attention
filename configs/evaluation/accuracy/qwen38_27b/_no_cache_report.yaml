@@ -1,0 +1,7 @@
+# Not a run - a server that reports no cached prompt tokens, laid over a configuration.
+#
+# The cells scored before the server's cache report existed ran without the flag, and the flag changes nothing a score reads.
+
+run:
+  serve:
+    enable-cache-report: null

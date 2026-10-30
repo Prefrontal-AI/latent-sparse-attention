@@ -1,0 +1,25 @@
+# The original PISA design on Qwen3.8-27B, timed - leaf blocks of 64 keys under a binary mean-pooled pyramid, searched coarse to fine with a beam of 72 blocks, so a query reads 4,608 keys.
+# Each key head selects its own list, as [the scored pisa.yaml](../../accuracy/qwen38_27b/pisa_tp1.yaml) serves it.
+#
+# Timed against [the dense measurement](full.yaml), with the knobs of the scored run, which are `PisaConfig`'s defaults, so the layer being timed is the layer being scored.
+# It reads no map, which `model.serving.projections` of the base is for LSA's.
+# The selection is one component, `index k select` - the search scores and keeps in one call, so it has no query scan beside it.
+# Its lists are held to a reference by the served run's strict check, so this times without checking them - `--time-only` is the base's explanation.
+#
+# The read is the flat design's, a list at a page of one token, which the harness sets when it times PISA and leaves alone for the dense layer.
+# A prefill's search is eager, and a decode step's is captured in the decode CUDA graph, which the decode phase compares.
+# The layer holds the leaf means and the pyramid of every key head, which at the base's 1M context and a block of 64 keys is small.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+
+run:
+  name: qwen38_27b_kernels_pisa
+  args: ["--time-only"]
+
+sweep:
+  data.phase: [prefill, decode]

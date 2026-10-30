@@ -1,0 +1,22 @@
+# OpenAI's GraphWalks - a directed graph as an edge list, and a breadth-first search or a parents query to run on
+# it, answered as a set of node ids and scored by F1 against the true set.
+#
+# The hub dataset is two parquet files rather than configs, so `subsets` names the files - one task each.
+# The first holds 750 prompts in eight length tiers up to 128k tokens, the second 400 in two tiers at 256k and
+# 1M. Every tier holds both problem types.
+#
+# A run asks a fixed subset of each, drawn with the seed below evenly across problem type and length tier -
+# the ids are in the suites' `subsets.json`.
+#
+# The revision is the hub head after the 2026-02-27 fix, which corrected the ground truth of 24 parents rows
+# and reworded the BFS instruction to ask for the nodes at exactly the given depth.
+
+name: graphwalks
+kind: benchmark
+about: GraphWalks' BFS and parents queries over edge lists, from 2k to 1M tokens, scored by set F1
+dataset: openai/graphwalks
+revision: be6cc6ecf9b4d495b07d1ff53d2a16598e90fed7
+subsets: [graphwalks_128k_and_shorter.parquet, graphwalks_256k_to_1mil.parquet]
+split: train
+licence: MIT
+seed: 0

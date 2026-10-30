@@ -1,0 +1,15 @@
+# `lsa_flat_k2048_tp1.yaml` on the flat design's long half on one card, to 1M - `_tp1_1m.yaml` says what it runs.
+# The server is [the flat design's](lsa_flat_tp1_1m.yaml), and the budget is 2,048 keys at 512 buckets.
+
+defaults:
+  - lsa_flat_tp1_1m
+  - _self_
+
+model:
+  indexer:
+    top_k: 2048
+    top_p: 512
+
+run:
+  name: qwen38_27b_lsa_flat_k2048_tp1_1m
+  note: flat, key and query input, YaRN factor 40, top-k 2048

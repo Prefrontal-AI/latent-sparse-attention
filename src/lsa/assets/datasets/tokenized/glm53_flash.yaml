@@ -1,0 +1,24 @@
+# GLM-5.3-Flash's tokenizer over the nine collected sources and the agent trajectories.
+#
+# It exists because a tokenized row is ids and nothing else. GLM's vocabulary is 154,856 against Qwen3.5's
+# 248,077, so a third of `qwen3_5` does not exist in GLM at all and reading it died as a device-side assert
+# inside an embedding kernel with nothing in the message about corpora.
+#
+# The nine collected sources are 14.6B tokens - 5% fewer than Qwen's over identical text, because the two
+# tokenizers segment it differently. The trajectories are 0.31B more: one document per session, a median
+# session 1.06M tokens with its reasoning kept, so every row is a contiguous span of one session and puts
+# long-range tool and reasoning structure in front of the teacher rather than prose.
+#
+# The held-out split is a hash of the document id rather than of position, so this dataset and `qwen3_5`
+# hold out the same documents and a GLM run and the targets talk about the same text.
+#
+# What tokenizing counted - the vocabulary and every source's rows and documents - is in `corpus.json` beside
+# the rows.
+
+name: glm53_flash
+kind: tokenized
+path: ${root:data/tokenized/glm53_flash}
+about: GLM-5.3-Flash ids over nine collected sources and the agent trajectories, 65,536 tokens per row
+sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia, edgebench]
+tokenizer: glm53_flash
+sample_length: 65536

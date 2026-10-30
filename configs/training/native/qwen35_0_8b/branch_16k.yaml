@@ -1,0 +1,28 @@
+# Not a run - the long-context phase every arm shares: the trunk's weights at 16,384 tokens, under the arm's attention,
+# with the decay the trunk left out. The optimiser starts fresh, so a short warmup comes first.
+#
+# One node, one sequence a GPU: 131,072 tokens a step, 8,000 steps, about 1.05B tokens. A quarter of the trunk's
+# batch, so half its peak learning rate. `init_from` is the trunk's last checkpoint; branch from an earlier one with
+#
+#   lsa native train configs/training/native/qwen35_0_8b/multires.yaml --hours 4 \
+#     run.init_from=${LSA_ROOT}/training/native/qwen35_0_8b/trunk-4k/checkpoint/step-1500 run.name=multires-from1500
+
+defaults:
+  - base
+  - _self_
+
+data:
+  seq_len: 16384
+
+run:
+  init_from: ${root:training/native/qwen35_0_8b/trunk-4k/checkpoint/step-15000}
+  optim:
+    steps: 8000
+    lr: 3.0e-4
+    warmup_steps: 100
+    decay_ratio: 1.0
+    tokens_per_rank: 16384
+  evaluation:
+    every: 500
+    # Whole batches over the eight ranks at one sequence each
+    sequences: 256

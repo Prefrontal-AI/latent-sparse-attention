@@ -1,0 +1,127 @@
+# Not a run - what every scored configuration of GLM-5.3-Flash shares: the checkpoint, the server and how it is launched.
+#
+# Not a run. It names no attention path and no suite label, and the three configurations whose `defaults` name
+# it do - which is what makes them comparable, because the server image, the mesh and every serve argument
+# come from here rather than from three copies that can drift apart.
+#
+# A `defaults` entry is a config name on Hydra's search path, not a path on disk - which is why it has no
+# suffix and no leading directory, and why this folder is the unit that moves.
+#
+# The layout is TP=8 / CP=1 / PP=1 / EP=8 on the 8 GPUs of one node: attention runs tensor parallel 8 and the MoE
+# expert parallel 8 on DeepGEMM, as under context parallel ([_cp8.yaml](_cp8.yaml)), so the two layouts differ in
+# attention alone. The config sets DeepGEMM's masked MoE layout and its sampled warmup in `run.environment`.
+#
+# `--attention-backend dsa` is GLM's own sparse backend and is the baseline the plugin is measured against.
+# The radix cache is on: a score does not depend on whether a prompt's prefix was prefilled again or served from
+# another request's KV, and a suite's repeats and RULER's shared haystacks then prefill once. An LSA read keeps up -
+# a key's index key lives at its KV slot, and a request's buckets are built from the cached prefix before its first
+# forward. The production timings keep it off, since what they measure is a cold prefill.
+
+model:
+  # Named here rather than left to a default, because every configuration under this folder is this checkpoint
+  # and a configuration that silently took another model's default would still look like a comparable
+  # measurement
+  name: glm53_flash
+  # The map every LSA configuration reads, over the design's input - GLM's key latent and every head's query summed,
+  # `model.indexer.input: key_and_query` with `query_heads: all`, the indexer's defaults. It is the freeze's heavy-mix
+  # run at a target depth of 2,048, re-exported for that input. Under `native` nothing reads it.
+  # The attention input x is a research option, not the design's: on RULER cwe 512k it lost about 0.15 against
+  # native where the key and query matched it.
+  serving:
+    projections: ${root:models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt}
+  # How the model is sampled - every setting a request sends, one entry per dataset the suite draws from.
+  #
+  # RULER is greedy with the think block off. GLM-5.3-Flash's template has no switch for it - its generation
+  # prompt always opens `<think>` and `reasoning_effort` only picks low, high or max - so `think: false` hands
+  # the model a closed block and sglang continues the turn past it.
+  # 4096 leaves room for counting in the answer. RULER's own generation allowances are 128 tokens at most,
+  # but at 2048 the common-words task was cut in 15 of 25 answers at 131072, and at 4096 none is.
+  #
+  # The other datasets reason at the card's evaluation settings, with effort left at the default max the card
+  # says to keep for benchmarks. 163,840 is the card's maximum generation length, and the one budget every
+  # model is read at.
+  # LongBench v2 and GraphWalks reason at the same 163,840, so the one budget holds for every dataset that reasons.
+  # At 32,768 they were cut in 7-10% of LongBench v2 answers, 9-12% of GraphWalks 128k, 20-25% at 256k and 20-45% at 1M,
+  # and a cut answer scores 0 - the GraphWalks 128k answers that finished scored 0.98-1.00, so the budget was nearly all
+  # of that task's error. LSA designs were cut more than native at 1M.
+  # The server holds 1,048,576, so LongBench v2's prompts are prepared at 884,736 tokens - what that leaves over a
+  # 163,840 budget - and the suite refuses a budget the prepared prompts do not leave room for. Of the 503 prompts 470
+  # fit uncut at 884,736 against 471 at 1,000,000, so the room costs the questions nothing.
+  # GraphWalks' 1M tier is up to 1.14M GLM tokens, so a 1,048,576 server skips that task and the record says why,
+  # and the 2.1M context-parallel server holds all three tiers with the budget.
+  # PaperTrail reasons at the same settings and budget, the ones its control gate and reference runs were made at.
+  # A length is served where its context and the budget fit - 400k and 700k on 1,048,576, 1M on the 2.1M
+  # context-parallel layout, 2M and 5M on either ultralong layout and 10M on the context-parallel ultralong one
+  # alone - and skipped elsewhere, the record saying why.
+  generation:
+    mmlu_pro:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    gpqa_diamond:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    math500:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    aime25:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    longbench2:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    graphwalks:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    papertrail:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 163840
+    ruler:
+      temperature: 0.0
+      top_p: 1.0
+      max_tokens: 4096
+      think: false
+
+run:
+  # DeepGEMM's sampled warmup, where the full sweep is 534 s of a 555 s start, and its masked layout, which keeps expert-parallel MoE off a slower kernel - about 90 s at 10M
+  environment:
+    SGLANG_JIT_DEEPGEMM_FAST_WARMUP: "1"
+    SGLANG_DEEPGEMM_STANDARD_LAYOUT: masked
+  # The root, not the run's own directory. A run writes one directory under it, named by the run id the
+  # config derives, holding what was armed and what it scored.
+  #
+  # It stays a bare root because the root is deliberately shared by every experiment in the repository -
+  # that is what lets the viewer put two configurations side by side. Interpolating the run name in here
+  # moves the records under one config and breaks that.
+  output: results
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 8
+  runner: srun
+  # Every layout prefills on sglang's default DSA kernel, flashmla_sparse, which runs fa3 for this checkpoint on H200
+  # TP8 decodes on fa3, CP decodes on tilelang - the fork's split-KV decode, the one decode context parallel takes
+  # => a TP8-vs-CP8 comparison also compares decode kernels
+  # Tilelang costs TP8 LSA +19-23% first token and +1.9 ms decode, native +7-13% and +0.9 ms
+  serve:
+    context-length: 1048576
+    chunked-prefill-size: 32768
+    # 0.75: below 0.85 because the indexer's index keys, bucket caches and selection buffers sit outside the pool
+    # sglang sizes, and above 0.70, where fixed's 32768-token buffers left its pool under a 1M prompt.
+    # Every design takes the same fraction, so every design is served from the same budget.
+    mem-fraction-static: 0.75
+    # Also the suite's pool - the runner reads it back and keeps this many requests in flight across tasks.
+    # At 16 the KV pool sat under a tenth full and the mamba state for 16 requests was 0.3 GB of the 18 GB
+    # left after startup, so four times as many fit without moving the KV budget
+    max-running-requests: 64
+    attention-backend: dsa
+    reasoning-parser: glm45
+    # Each reply reports how much of its prompt came from the radix cache - a shared context is prefilled once
+    enable-cache-report: true
+    ep-size: 8
+    moe-runner-backend: deep_gemm

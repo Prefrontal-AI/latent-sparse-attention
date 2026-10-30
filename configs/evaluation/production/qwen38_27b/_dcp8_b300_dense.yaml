@@ -1,0 +1,24 @@
+# Not a run - Qwen3.8-27B under tensor parallel 8 and decode context parallel 8 on one B300 node to 10M, the dense
+# baseline's server, laid over [full_dcp8](full_dcp8.yaml) as its last default.
+#
+# [full_dcp8](full_dcp8.yaml)'s mesh and server on [the B300 image](_tp1_b300_dense.yaml), with the ladder cut to the three
+# contexts the paper's production table reads.
+# fa3 does not run on sm_103, and decode context parallel for a dense model is the triton backend's alone, for prefill
+# fa3's or triton's - sglang refuses trtllm_mha with --dcp-size - so triton serves both phases, the decode at 128 splits
+# as on H200.
+# FlashInfer's autotune is off, as on every B300 arm.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  port: 0
+  serve:
+    attention-backend: triton
+    triton-attention-num-kv-splits: 128
+    dcp-size: 8
+    dcp-comm-backend: ag_rs

@@ -1,0 +1,11 @@
+# D-LSA (Tree) at 2M on tensor parallel 2 with decode context parallel 2, on the first battery's server - the 2M RULER cells of the paper.
+#
+# The server reported no cached prompt tokens, as `_no_cache_report.yaml` says.
+
+defaults:
+  - lsa_tree_dcp2
+  - _no_cache_report
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_tree_dcp2_early

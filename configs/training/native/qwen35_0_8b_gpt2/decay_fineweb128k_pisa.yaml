@@ -1,0 +1,12 @@
+# The PISA pretrain's 128k branch, keeping 40 blocks of 64 keys.
+defaults:
+  - pisam8
+  - phase/decay128k_fineweb@_global_
+  - _self_
+
+run:
+  name: pisam8-fineweb-decay128k
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/pisam8/checkpoint/step-94414}
+
+attention:
+  level_block_count: 40

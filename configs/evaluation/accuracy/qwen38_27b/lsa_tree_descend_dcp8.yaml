@@ -1,0 +1,15 @@
+# [The tree configuration past one card](lsa_tree_dcp8.yaml) with the decode descending, so the whole read is tree.
+# The descend is captured in the decode CUDA graph, which reads the tree through a mirror of its node buckets at fixed
+# addresses, held on every rank of the decode group as the tree is.
+
+defaults:
+  - lsa_tree_dcp8
+  - _self_
+
+model:
+  serving:
+    decode: descend
+
+run:
+  name: qwen38_27b_lsa_tree_descend_dcp8
+  note: tree, descending decode, key and query input, YaRN factor 40, tp 8 dcp 8

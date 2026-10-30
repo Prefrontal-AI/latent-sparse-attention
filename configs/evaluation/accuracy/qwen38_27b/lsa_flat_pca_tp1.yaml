@@ -1,0 +1,24 @@
+# Training-free LSA on Qwen3.8-27B - the flat design reading a map nothing was learned for, between QSA and the
+# distilled map in the battery's progression: dense, QSA, training-free LSA, LSA.
+#
+# [The flat configuration](lsa_flat_tp1.yaml) with the map changed and nothing else - its buckets, budget, server and
+# tasks. The map is each layer's top 64 principal directions of its key input (the 768 position-free key dims, the
+# summed query through the same transform), fitted on the eight documents the distillation's init reads: the
+# distilled run's step-0 snapshot (`long_16k_1m_heavy_key_and_query_d2048_fa3`), before any step. So the
+# two maps share the data, the input and the PCA, and differ by the 48,000 distillation steps alone.
+# It is training-free in that no attention target shaped it; it still reads key statistics from those documents.
+# On GLM a principal-directions map held more of the native picks offline and lost a needle task served;
+# on Qwen it holds less offline than the distilled map -
+# 0.23 of the teacher's mass at 1M against 0.30, and 0.52 of its top-16 against 0.64.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+model:
+  serving:
+    projections: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-pca-step0.pt}
+
+run:
+  name: qwen38_27b_lsa_flat_pca_tp1
+  note: flat, training-free PCA map (distillation step 0), key and query input, YaRN factor 40

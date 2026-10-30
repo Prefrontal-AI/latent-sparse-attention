@@ -1,0 +1,12 @@
+# The window pretrain's 128k branch, widened to 2,560 keys.
+defaults:
+  - pretrain_fineweb_window
+  - phase/decay128k_fineweb@_global_
+  - _self_
+
+run:
+  name: window-mqa8-fineweb-decay128k
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/window-mqa8-fineweb/checkpoint/step-94414}
+
+attention:
+  window_size: 2560

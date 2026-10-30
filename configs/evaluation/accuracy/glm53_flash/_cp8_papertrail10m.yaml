@@ -1,0 +1,17 @@
+# Not a run - PaperTrail at 10M tokens on the server of the paper's 10M cells, laid over `_cp8_10m.yaml`.
+#
+# `_cp8_papertrail5m.yaml`'s server on the site's papertrail10m build with a chunk of 16384.
+# A configuration says its memory fraction, the requests it keeps in flight and the scale of its client.
+
+defaults:
+  - _cp8_tilelang
+  - _self_
+
+data:
+  suite: papertrail
+  lengths: [10000000]
+
+run:
+  image: ${site.images.papertrail10m}
+  serve:
+    chunked-prefill-size: 16384

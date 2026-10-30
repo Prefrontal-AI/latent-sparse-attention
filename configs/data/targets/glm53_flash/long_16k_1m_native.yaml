@@ -1,0 +1,22 @@
+# Long-16K-1M's held-out windows again, keeping DSA's own selection beside a 2048-key dense target.
+#
+# The maps are scored on each window's 32 tail queries, which are its last 32 positions whatever the plan,
+# so this cache's tail rows are the long-16K-1M cache's and its first 256 keys a target are long-16K-1M's too.
+# Its training rows are not long-16K-1M's - the plan holds only the held-out side, so each window is numbered
+# differently - and nothing reads them, so they are kept at the floor.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_native.yaml \
+#         --stage 0
+defaults:
+- long_16k_1m
+- _self_
+data:
+  tokenized:
+    splits:
+    - eval
+  queries:
+    density: 0.0
+    top: 2048
+    native: true
+run:
+  output: ${root:data/targets/glm53_flash/long_16k_1m_native}

@@ -1,0 +1,13 @@
+# UK parliamentary debates, as Common Pile filtered them.
+#
+# The revision is the head on 2026-07-17, the day it was collected. The `manifest.parquet` beside the shards
+# says what upstream says, which is not always enough: upstream calls every document the Open Parliament
+# Licence, and 780 of them are the Scottish Parliament, Northern Ireland Assembly and Senedd's.
+
+name: hansard
+kind: source
+path: ${root:data/sources/hansard}
+about: UK parliamentary debates from Common Pile
+dataset: common-pile/uk_hansard_filtered
+revision: c88adc44309aa255a41b51cef93ba783f775fe23
+licence: per-document

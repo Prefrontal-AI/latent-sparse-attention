@@ -1,0 +1,13 @@
+# Flat LSA on the FineWeb trunk, 1,024 long-range keys a query.
+defaults:
+  - lsa_mqa8
+  - phase/pretrain_fineweb@_global_
+  - _self_
+
+run:
+  name: lsam8-fineweb
+
+attention:
+  top_k: 1024
+
+sweep: null

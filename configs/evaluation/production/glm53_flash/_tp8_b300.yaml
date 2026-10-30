@@ -1,0 +1,42 @@
+# Not a run - GLM-5.3-Flash under tensor parallel 8 on one B300 node to 10M, laid over a design's configuration as its last default.
+#
+# The image is the site's b300 image.
+# The server is bf16 latent, flashmla_sparse in both phases and the stock MoE runner, with
+# [the two-node H200 ladder](_tp8pp2.yaml)'s context, KV budget, running requests, decode graphs and watchdog.
+# Three settings are named because sglang picks differently on Blackwell: it defaults GLM's KV to fp8 and its DSA prefill
+# and decode to trtllm, where the H200 timings ran a bf16 latent through flashmla_sparse and fa3, and LSA reads the bf16
+# latent and hooks flashmla_sparse's list lengths. fa3 does not run on sm_103, so flashmla_sparse decodes as well - every
+# arm, so the arms differ in their read alone. FlashInfer's autotune runs on sm_100 and up and forwards a dummy batch with
+# no request ids, which LSA's maintenance refuses, so it is off for every arm.
+# A B300 holds 10M on one node where an H200 needed two pipeline stages: 11 sparse layers of a 1,024-byte latent and
+# the pooled index key are about 12 KB a token, 125 GB a GPU at 10.52M, and 0.75 of a B300's 268 GiB less a TP8
+# shard of the weights leaves about 165 GiB.
+# So the paper's TP8 block is one node at every context on B300.
+# The ladder is the three contexts the paper's production table reads.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485760]
+
+run:
+  hours: 8
+  serve:
+    context-length: 10500000
+    max-total-tokens: 10520000
+    chunked-prefill-size: 32768
+    max-prefill-tokens: 32768
+    mem-fraction-static: 0.75
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2
+    watchdog-timeout: 1800
+    attention-backend: dsa
+    kv-cache-dtype: bf16
+    dsa-prefill-backend: flashmla_sparse
+    dsa-decode-backend: flashmla_sparse
+    disable-flashinfer-autotune: true
+    reasoning-parser: glm45
+    disable-radix-cache: true
+    enable-metrics: true

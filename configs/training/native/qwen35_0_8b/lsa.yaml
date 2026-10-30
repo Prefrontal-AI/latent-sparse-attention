@@ -1,0 +1,13 @@
+# A5 - the flat LSA read lsa serves, trained natively: no summaries, cross entropy through the fine read alone. The keys a query reads are its 4 sinks, its 512 window and open block, and the keys of the top-p buckets one selection shared by every head picks, best bucket first, up to 1,024 outside the sinks and window. The index space is the identity over the model's own position-free q,k - the last 192 dims of each head, query heads summed per group and the two groups concatenated - so nothing is learned and a natively trained model is the architecture a distilled one serves.
+
+defaults:
+  - branch_16k
+  - _self_
+
+run:
+  name: lsa
+
+attention:
+  kind: lsa
+  coarse: false
+  partition: ward

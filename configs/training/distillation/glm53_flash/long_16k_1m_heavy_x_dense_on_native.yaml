@@ -1,0 +1,50 @@
+# The settled x recipe with the target the DSA study found serves better at 1M - the teacher's dense attention kept where
+# GLM-5.3-Flash's own indexer also picked the key, renormalised over what is kept (`dense_on_native`).
+#
+# The extraction did not keep the picks, so they are computed offline from the cached `x` and sit beside each layer
+# file as `<document>_layer<index>_native.pt`. The run refuses to start while any is missing:
+#
+#     lsa distill native-picks $LSA_ROOT/data/targets/glm53_flash/long_16k_1m_heavy_x --workers 8 --wait
+#     (inside the site's reservation)
+#
+# The dense target is the top 2048 keys, the depth the study trained at, and a pick outside them gets no weight.
+# The step count, the rate and the report cadence are the study's. One seed.
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_x_dense_on_native.yaml \
+#         --shards 11 --mem-gb 300 --hours 12
+#         (inside the site's reservation)
+#
+# and, to overflow what the reservation cannot hold, the same in the site's open partition with `--partition <partition>`.
+#
+# No allocator or card-budget override is needed: the job exports `PYTORCH_ALLOC_CONF=expandable_segments:True`
+# (`env.DISTILL`) and leaves `Pool.HEADROOM_BYTES` free on the card for a report's read-ahead. Set `data.resident_gb`
+# only to pin the budget by hand.
+#
+# The maps are served from `$LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-x-dense-on-native.pt`, which the
+# evaluation configs name, so export them there once the run is complete:
+#
+#     lsa distill export $LSA_ROOT/training/distillation/glm53_flash/long_16k_1m_heavy_x_dense_on_native \
+#         $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-x-dense-on-native.pt
+
+defaults:
+  - long_16k_1m_heavy_x
+  - _self_
+
+run:
+  name: long_16k_1m_heavy_x_dense_on_native
+
+  objective:
+    target: dense_on_native
+    target_depth: 2048
+
+  optim:
+    steps: 48000
+    lr: 0.0003
+    seed: 0
+
+  report:
+    every: 8000
+
+  wandb:
+    prefix: glm53flash-distill-heavy-x-dense-on-native
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, x, dense_on_native]

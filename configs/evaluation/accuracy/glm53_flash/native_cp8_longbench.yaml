@@ -1,0 +1,13 @@
+# `native_tp8.yaml` on LongBench v2 at its 163,840-token budget, on the first context-parallel server - `_cp8_early.yaml` says what that is.
+
+defaults:
+  - native_tp8
+  - _cp8
+  - _cp8_early
+  - _self_
+
+data:
+  tasks: [longbench2]
+
+run:
+  name: glm53_flash_native_cp8_longbench

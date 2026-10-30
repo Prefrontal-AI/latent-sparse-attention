@@ -1,0 +1,11 @@
+# Learned LSA from the attention input, sharing the learned-indexer sweep.
+defaults:
+  - lsa_indexer
+  - _self_
+
+attention:
+  index_input: attention_input
+  index_query_heads: sum
+
+run:
+  name: lsa8-input

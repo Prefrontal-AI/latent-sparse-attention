@@ -1,0 +1,14 @@
+# GPQA Diamond, read through lm-eval's zero-shot chain-of-thought task, which names the dataset and its one
+# split itself.
+#
+# The revision is the one the shared datasets cache was built from. The hub's head has moved on since, to a
+# commit whose `gpqa_diamond.csv` is the same file.
+
+name: gpqa_diamond
+kind: benchmark
+about: GPQA's 198 Diamond questions, four choices each
+dataset: Idavidrein/gpqa
+revision: 633f5ee89ab8ad4522a9f850766b73f62147ffdd
+subsets: [gpqa_diamond]
+split: train
+licence: CC-BY-4.0

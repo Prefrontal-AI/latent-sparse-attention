@@ -1,0 +1,9 @@
+defaults:
+  - dsa_bias
+  - _self_
+
+run:
+  name: dsa_bias_detached
+
+attention:
+  index_detached: true

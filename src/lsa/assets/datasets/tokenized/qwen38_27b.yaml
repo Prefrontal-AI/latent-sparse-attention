@@ -1,0 +1,19 @@
+# Qwen3.8-27B's tokenizer over the nine collected sources and the agent trajectories - the documents
+# `glm53_flash` holds, in the ids of the model they are distilled on next.
+#
+# Qwen3.8's tokenizer is not Qwen3.5's - its `tokenizer.json` differs - so `qwen3_5` cannot stand in for it,
+# and that one leaves out the trajectories the heavy mix draws on.
+#
+# The trajectories are rendered through GLM-5.3-Flash's chat template, as their source holds them, so here they
+# are that text in Qwen's ids - GLM's role markers read as plain text rather than as Qwen's special tokens.
+#
+# The held-out split is a hash of the document id, so this dataset holds out the same documents `glm53_flash`
+# does, and a selection over it balances the same text by Qwen's own token counts.
+
+name: qwen38_27b
+kind: tokenized
+path: ${root:data/tokenized/qwen38_27b}
+about: Qwen3.8-27B ids over nine collected sources and the agent trajectories, 65,536 tokens per row
+sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia, edgebench]
+tokenizer: qwen38_27b
+sample_length: 65536

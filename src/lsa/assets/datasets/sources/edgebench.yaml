@@ -1,0 +1,23 @@
+# Agent trajectories as documents - one per session, 264 sessions over eight runs of the 1M-context
+# EdgeBench harness.
+#
+# Each document is the session's longest main-thread call rendered through GLM-5.3-Flash's own chat template,
+# with that call's response as the final assistant turn and every assistant turn's reasoning kept.
+# Side calls are skipped, and nothing else is stripped.
+# `lsa data prepare edgebench --sessions <run shard dirs...>` wrote it.
+#
+# Beside `doc_id` and `text` a shard carries `n_tokens`, `n_tokens_as_generated` (the final turn's reasoning
+# alone), `model`, `task` and `run`, so a run can be chosen by what produced it.
+# A document id is `<task>:<run>/<session>`, so every trajectory of one task shares the part before the colon.
+# The 25 Aug run is left out, because its old tool outputs were replaced by placeholders.
+#
+# This repository rendered it, so `collected_from` is the sources directory it wrote into. The harness run
+# shards it read are the ttt-runs logs, listed one by one in the build script beside
+# the build logs, `data/logs/edgebench/build_edgebench.sh`.
+
+name: edgebench
+kind: source
+path: ${root:data/sources/edgebench}
+about: 264 agent sessions as GLM-5.3-Flash chat text with all reasoning kept, from Qwen3.8-27B, Qwen3.8-Flash-Next and GLM-5.3-Flash runs
+collected_from: ${root:data/sources}
+licence: internal

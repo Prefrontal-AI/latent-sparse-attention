@@ -1,0 +1,6 @@
+defaults:
+  - nsam8
+  - _self_
+
+sweep:
+  attention.select_block_count: [32, 64]

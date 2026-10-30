@@ -1,0 +1,16 @@
+# The dense baseline's long half on one card, to 1M - `_tp1_1m.yaml` says what it runs.
+#
+# The server is the baseline's with the context at 1,100,000 and the static fraction at 0.92, the pool that holds a
+# 1M prompt beside its answer on an H200. `--max-running-requests` stays at 16: sglang reserves the 48 linear
+# layers' recurrent state for every running request, and at its default of 243 the pool is too small for a 1M prompt.
+
+defaults:
+  - full_tp1
+  - _tp1_1m
+  - _self_
+
+run:
+  name: qwen38_27b_full_tp1_1m
+  serve:
+    context-length: 1100000
+    mem-fraction-static: 0.92

@@ -1,0 +1,13 @@
+# D0 - dense causal attention at 4,096 on the Qwen3.5 head shape: eight query heads over two key-value heads of 256 dims,
+# rotating a quarter of each head, with the output gate. The ceiling every other arm is read against.
+
+defaults:
+  - base
+  - _self_
+
+run:
+  name: dense
+
+attention:
+  kind: dense
+  backend: varlen

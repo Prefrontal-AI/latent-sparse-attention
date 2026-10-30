@@ -1,0 +1,30 @@
+# Not a run - `full` at 2M, 5M and 10M tokens - a mesh and the lengths past 1M laid over a configuration.
+#
+# A configuration's file names this after its own parent, so the pair differs from the configuration's 1M run
+# in where the server runs and what it is asked, and in nothing about the indexer. Pin `run.id` to the
+# configuration's one-node run and these lengths land in its record - the length filter keeps RULER alone, and
+# a run whose record does not yet hold them is continued rather than taken as finished.
+#
+# Past 1M the weights and the KV cache no longer fit on one node, so the server is two pipeline stages of tp 8 -
+# TP=8 / CP=1 / PP=2 / EP=8, each stage running its own layers' MoE expert parallel 8 on DeepGEMM as base does.
+# One server for all three lengths, sized for the longest.
+# 10.12M tokens of KV hold one 10M prompt and its answer, and two requests at a time is what that pool can
+# hold at 5M.
+# The chunk is 4096 rather than 8192, which is what the native 10M run needed.
+#
+# `run.hours` covers the three lengths one request at a time, which is days on this mesh.
+
+data:
+  # The three lengths of `full` past 1M - the part of the recipe one node cannot hold
+  suite: full
+  lengths: [2000000, 5000000, 10000000]
+
+run:
+  pp: 2
+  serve:
+    context-length: 10100000
+    max-total-tokens: 10120000
+    chunked-prefill-size: 4096
+    mem-fraction-static: 0.85
+    max-running-requests: 2
+  hours: 96

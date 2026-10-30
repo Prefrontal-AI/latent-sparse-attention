@@ -1,0 +1,15 @@
+# The fixed design past one card - [the fixed configuration](lsa_fixed_tp1.yaml) on the mesh
+# [the flat one](lsa_flat_dcp8.yaml) says, tensor parallel 8 with decode context parallel 8.
+#
+# Every rank grows the same tree from its whole bucket cache and the index keys the group sums.
+
+defaults:
+  - lsa_fixed_tp1
+  - lsa_flat_dcp8
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_fixed_dcp8
+  note: fixed, key and query input, YaRN factor 40, tp 8 dcp 8
+  serve:
+    dcp-size: 8

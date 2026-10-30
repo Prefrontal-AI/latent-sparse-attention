@@ -1,0 +1,10 @@
+# Unlearned LSA with the best query head ranking each bucket.
+defaults:
+  - lsa_mqa8
+  - _self_
+
+attention:
+  query_head_reduction: max
+
+run:
+  name: lsam8-heads

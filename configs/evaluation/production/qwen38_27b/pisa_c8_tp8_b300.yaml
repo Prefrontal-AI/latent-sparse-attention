@@ -1,0 +1,10 @@
+# The fair PISA on [the stock PISA's B300 TP8 server](pisa_tp8_b300.yaml) - leaf blocks of 8 keys and a keep count of 576, so a
+# query still reads 4,608 keys. The model block is [pisa_c8_tp1](pisa_c8_tp1.yaml)'s. The server is unchanged: a rank's means and pyramid are 8 times a quarter of one card's, which two rows hold.
+
+defaults:
+  - pisa_c8_tp1
+  - pisa_tp8_b300
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_c8_tp8

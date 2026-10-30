@@ -1,0 +1,12 @@
+# The LSA pretrain's 128k branch, reading 2,048 long-range keys.
+defaults:
+  - pretrain_fineweb_lsa
+  - phase/decay128k_fineweb@_global_
+  - _self_
+
+run:
+  name: lsam8-fineweb-decay128k
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/lsam8-fineweb/checkpoint/step-94414}
+
+attention:
+  top_k: 2048

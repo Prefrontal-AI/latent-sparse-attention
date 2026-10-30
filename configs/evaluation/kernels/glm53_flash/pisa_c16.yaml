@@ -1,0 +1,17 @@
+# The third PISA set beside [the stock PISA kernel timing](pisa.yaml) and [the 8-key set](pisa_c8.yaml) - leaf blocks of 16 keys and a keep count of 288, so a query still reads 4,608 keys.
+#
+# The harness arms the layer from the model block, which writes `model.pisa` into the settings file it reads, so this times the layer the scored 16-key set serves.
+# See [the scored 16-key set](../../accuracy/glm53_flash/pisa_c16_tp8_512k.yaml).
+# The ladder is the base's, to 10M, and the leaf means and pyramid are the one index the layer holds, 4 times as many blocks as the stock's.
+
+defaults:
+  - pisa
+  - _self_
+
+model:
+  pisa:
+    block_size: 16
+    keep_count: 288
+
+run:
+  name: glm53_flash_kernels_pisa_c16

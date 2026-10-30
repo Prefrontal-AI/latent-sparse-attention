@@ -1,0 +1,22 @@
+# The `long_16k_1m_heavy_key_and_query_d2048` recipe, the rest-bucket comparison's rest bucket arm at seed 0: the same 2048 keys with the mass beyond them kept as one rest entry.
+# The three seeds of each arm differ in `run.optim.seed` alone, the way a seed is overridden on the command line.
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048_rest_bucket_seed0.yaml \
+#         --shards 11 --mem-gb 300 --hours 12 --partition <partition>
+
+defaults:
+  - long_16k_1m_heavy_key_and_query_d2048
+  - _self_
+
+run:
+  name: long_16k_1m_heavy_key_and_query_d2048_rest_bucket_seed0
+
+  objective:
+    tail: rest_bucket
+
+  optim:
+    seed: 0
+
+  wandb:
+    prefix: glm53flash-distill-heavy-key-and-query-d2048-rest-bucket-seed0
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, key_and_query, target_depth, rest_bucket_comparison, rest_bucket, seed0]

@@ -1,0 +1,22 @@
+# @package _global_
+data:
+  seq_len: 32768
+  name: gpt2
+  seed: 1042
+run:
+  optim:
+    schedule: wsd
+    steps: 3434
+    warmup_steps: 96
+    decay_ratio: 0.97
+    decay_shape: sqrt
+    tokens_per_rank: ${data.seq_len}
+    tokens_per_step: 1048576
+  runtime:
+    activation_checkpoint: full
+  checkpoint:
+    decay_start: false
+  evaluation:
+    every: 500
+    sequences: 288
+    retrieval_distances: []

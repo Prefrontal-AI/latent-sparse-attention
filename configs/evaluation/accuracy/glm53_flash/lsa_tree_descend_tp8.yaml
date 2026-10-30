@@ -1,0 +1,27 @@
+# Tree decoding through the beam as well, so the whole read is tree.
+# Served under the decode CUDA graph, which reads the tree through a mirror of its node buckets at fixed addresses.
+#
+# Written as a delta on the base, so this run differs from the baseline in the attention path and the indexer
+# alone. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+  indexer:
+    top_level: 16
+    node_bucket_size: 4
+    node_cluster_block_size: 4096
+    beam_width: 2048
+    start_nodes: 32768
+  serving:
+    node_centroid_precision: fp8
+    decode: descend
+
+data:
+  suite: full
+
+run:
+  name: glm53_flash_lsa_tree_descend_tp8

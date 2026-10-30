@@ -1,0 +1,28 @@
+# Not a run - a scored GLM-5.3-Flash server on a B300 node, laid over a design's configuration as its last default.
+#
+# The base's server with the B300 image and the three settings [the B300 production timing](../../production/glm53_flash/_tp8_b300.yaml)
+# names for the same reasons: a bf16 latent, flashmla_sparse prefill and decode, and FlashInfer's autotune off.
+
+defaults:
+  - _image_b300
+  - _self_
+
+run:
+  # DeepGEMM's sampled warmup, where the full sweep is 534 s of a 555 s start, and its masked layout, which keeps expert-parallel MoE off a slower kernel - about 90 s at 10M
+  environment:
+    SGLANG_JIT_DEEPGEMM_FAST_WARMUP: "1"
+    SGLANG_DEEPGEMM_STANDARD_LAYOUT: masked
+  serve:
+    context-length: 1048576
+    chunked-prefill-size: 32768
+    mem-fraction-static: 0.75
+    max-running-requests: 64
+    attention-backend: dsa
+    kv-cache-dtype: bf16
+    dsa-prefill-backend: flashmla_sparse
+    dsa-decode-backend: flashmla_sparse
+    disable-flashinfer-autotune: true
+    reasoning-parser: glm45
+    enable-cache-report: true
+    ep-size: 8
+    moe-runner-backend: deep_gemm

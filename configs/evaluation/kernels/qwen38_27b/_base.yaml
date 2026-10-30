@@ -1,0 +1,43 @@
+# Not a run - what every kernel measurement of Qwen3.8-27B shares: the cut of the model, the prompt, the rotation and the image.
+#
+# Not a run - the configurations whose `defaults` name it are the runs.
+#
+# `data.checkpoint` is a five-layer cut of the model with real weights, built by
+# [the cut](../../../../src/lsa/evaluation/performance/kernels/data/cut.py) from the `qwen38_27b` asset's snapshot:
+#
+#     lsa kernels cut --layers 5 --weights --snapshot <snapshot> \
+#       --out $LSA_ROOT/models/qwen38_27b_real5
+#
+# The attention layer is at 3 and the gated delta net layers at 0-2 and 4.
+#
+# `model.name` is the asset rather than the hub id, which is what brings the card's YaRN with it. The checkpoint's own
+# rotation is the plain one to 262,144 and the card serves factor 40 to 10,485,760, so the harness passes the card's
+# `rope_parameters` through sglang's config override exactly as the server does, and a kernel at 10M is timed under
+# the rotation the scored runs read it under.
+#
+# The LSA runs read the key and query input through the map the scored runs serve. Under LSA the harness times the
+# layer without holding its selection to a reference, because the design's selection is read inside the attention
+# backend and is no module's output - `--time-only` says so, and the record carries no verdict.
+#
+# The image is the GLM nightly the other kernel measurements run on, so a Qwen3.8 number is comparable with theirs.
+
+model:
+  name: qwen38_27b
+  serving:
+    projections: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt}
+
+data:
+  checkpoint: ${root:models/qwen38_27b_real5}
+  prompt: ${root:data/prompts/gutenberg_300k.txt}
+  layer: 3
+  # The 32,768-token chunk every Qwen timing prefills in, over the last 262,144 tokens before each context
+  chunk: 32768
+  window_chunks: 8
+  contexts: [131072, 262144, 524288, 1048576, 2097152, 5242880, 10485760]
+
+run:
+  output: results
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 1
+  runner: srun

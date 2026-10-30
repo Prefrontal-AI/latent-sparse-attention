@@ -1,0 +1,23 @@
+# The RULER probe set at 512k on Qwen3.8-27B - `ruler_probes_128k.yaml`'s tasks, queries and layers over the same
+# rows GLM-5.3-Flash's 512k probe set reads, in Qwen's own prompts at 524,288 tokens.
+#
+# About 28 GiB a prompt over 16 layers at 512k and 1.1 TiB for the 40 (arithmetic).
+#
+#     lsa distill targets configs/data/targets/qwen38_27b/ruler_probes_512k.yaml \
+#         --mem-gb 320 --workers 4
+#         (inside the site's reservation)
+defaults:
+- ruler_probes_128k
+- _self_
+data:
+  prepared:
+    length: 524288
+    source_rows:
+      niah_single_2: [33, 36, 48, 62, 75, 82, 86, 97]
+      niah_multikey_1: [24, 26, 39, 40, 52, 72, 84, 86]
+      niah_multikey_2: [21, 24, 28, 57, 69, 78, 93, 98]
+      niah_multikey_3: [25, 68, 73, 75, 77, 81, 90, 93]
+      cwe: [21, 34, 37, 42, 48, 68, 84, 91]
+run:
+  name: ruler_probes_512k
+  output: ${root:data/targets/qwen38_27b/ruler_probes_512k}

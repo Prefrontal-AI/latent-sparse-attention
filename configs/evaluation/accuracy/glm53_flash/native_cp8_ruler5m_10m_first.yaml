@@ -1,0 +1,14 @@
+# Block Sparse (Flat) on RULER at 5M and 10M tokens, the first battery's budgets - the 5M and 10M cells of the paper.
+#
+# The server and the lengths are `native_cp8_ruler10m.yaml`'s and `native_cp8_ruler5m.yaml`'s, which ran as two launches of one run; `_first_generation.yaml` says the budgets.
+
+defaults:
+  - native_cp8_ruler10m
+  - _first_generation
+  - _self_
+
+data:
+  lengths: [5000000, 10000000]
+
+run:
+  name: glm53_flash_native_cp8_ruler5m_10m_first

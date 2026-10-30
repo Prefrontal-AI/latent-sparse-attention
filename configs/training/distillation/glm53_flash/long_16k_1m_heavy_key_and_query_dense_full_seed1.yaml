@@ -1,0 +1,25 @@
+# The `long_16k_1m_heavy_key_and_query_d2048` recipe, the rest-bucket comparison's full arm at seed 1: the teacher's whole attention over every readable key, never cut to 2048.
+# The cache, the query rows, the steps, the rate, the index dim, the temperature calibration and the report are the truncate arm's; the target alone differs.
+# Each step computes the target from the cache's key latent and every head's query - see `objective.target: dense_full` - so the step is dearer than the cut target's.
+# The three seeds of each arm differ in `run.optim.seed` alone, the way a seed is overridden on the command line.
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_dense_full_seed1.yaml \
+#         --shards 11 --mem-gb 300 --hours 12 --partition <partition>
+
+defaults:
+  - long_16k_1m_heavy_key_and_query_d2048
+  - _self_
+
+run:
+  name: long_16k_1m_heavy_key_and_query_dense_full_seed1
+
+  objective:
+    target: dense_full
+    target_depth: null
+
+  optim:
+    seed: 1
+
+  wandb:
+    prefix: glm53flash-distill-heavy-key-and-query-dense-full-seed1
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, key_and_query, dense_full, rest_bucket_comparison, full, seed1]

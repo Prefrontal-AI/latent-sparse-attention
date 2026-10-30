@@ -1,0 +1,23 @@
+# Not a run - a scored selecting arm on one B300, laid over an LSA configuration as its last default.
+#
+# As [the B300 production timing](../../production/qwen38_27b/_tp1_b300_sparse.yaml): the triton backend at a page of one slot,
+# whose decode kernel reads the selection where neither FlashAttention can on sm_103, and FlashInfer's autotune off.
+
+defaults:
+  - _image_b300
+  - _self_
+
+run:
+  port: 0
+  serve:
+    context-length: 262144
+    chunked-prefill-size: 32768
+    mem-fraction-static: 0.85
+    max-running-requests: 16
+    attention-backend: triton
+    page-size: 1
+    disable-prefill-cuda-graph: true
+    disable-flashinfer-autotune: true
+    reasoning-parser: qwen3
+    enable-cache-report: true
+    grammar-backend: xgrammar

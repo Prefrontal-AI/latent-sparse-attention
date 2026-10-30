@@ -1,0 +1,7 @@
+defaults:
+  - dense_mqa8
+  - phase/pretrain_long@_global_
+  - _self_
+
+run:
+  name: dense-mqa8-long

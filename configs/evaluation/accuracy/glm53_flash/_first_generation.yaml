@@ -1,0 +1,11 @@
+# Not a run - the sampling budgets of the first battery, laid over a configuration.
+#
+# Graph walks and LongBench v2 were sampled up to 32,768 tokens then, where every current configuration gives them 163,840.
+# RULER decodes at its own 4,096, so a RULER cell does not read them.
+
+model:
+  generation:
+    graphwalks:
+      max_tokens: 32768
+    longbench2:
+      max_tokens: 32768

@@ -1,0 +1,25 @@
+# PISA past one card - [the one-card configuration](pisa_tp1_512k.yaml) at tensor parallel 2, for RULER's and PaperTrail's 1M
+# and the LongBench v2 documents near it.
+#
+# One card's pool falls short of RULER's 1M prompt with its budget once a prefill has room to run.
+# PaperTrail's contexts are sized in GLM-5.3-Flash's tokenizer, and Qwen's reads its 1M ones as up to 1,071,006
+# tokens, which with the 163,840 budget outgrow the one card's 1,100,000.
+# A rank holds two of the four key-value heads and their leaf means and pyramids, so tensor parallel 2 halves both the
+# KV a token takes and PISA's share a request-table row, as [QSA's](qsa_tp2_1m.yaml) does.
+# Four running requests keep that share near 7 GB a card at 1,300,000; sixteen, QSA's, would hold three times as much.
+
+defaults:
+  - pisa_tp1_512k
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_tp2_1m
+  tp: 2
+  # sglang binds each rank to its GPU's NUMA node by default and failed resolving rank 1 on some placements
+  # => off, as on the decode-context-parallel configurations
+  environment:
+    SGLANG_AUTO_NUMA_BIND: "0"
+  serve:
+    context-length: 1300000
+    mem-fraction-static: "0.90"
+    max-running-requests: 4

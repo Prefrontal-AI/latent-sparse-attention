@@ -1,0 +1,69 @@
+# The RULER probe set at 128k - GLM-5.3-Flash run once over fixed prompts, with what a selector is replayed and scored
+# on cached beside them: every sparse layer's key latent, the heads' queries and GLM's own picks.
+#
+# Five tasks - niah_single_2, niah_multikey_1, niah_multikey_2, niah_multikey_3 and cwe - and 8 rows of each, so 40
+# prompts a length. The rows are drawn from ids 20 to 99 and never from 0 to 19, which tuned LSA, with no filtering on
+# any outcome: `random.Random(f"ruler-probes-{task}-{length}").sample(range(20, 100), 8)`, sorted, one draw a task
+# and a length. The files are the shared ruler cell (`data/benchmarks/ruler`), read as the harness serves a prompt -
+# haystack and question joined by lm-eval's space, one user turn in the chat template, answered past a closed think block.
+#
+# `queries.targets: ruler` takes the query positions and what each is meant to find off the row. A needle task is
+# queried at its last 32 positions, the question and the assistant's opening, aimed at the needle's value tokens
+# and, separately, at the sentence it sits in. A cwe row is queried at its word list's items - each of the ten
+# answer words' occurrences but its first, and as many occurrences of other words that repeat, drawn by the row id -
+# each aimed at the first tokens of that word's earlier occurrences, and at its last 32 positions too, aimed at nothing.
+# A layer file keeps `query_kind`, `target_key_ids` and, on a needle task, `line_key_ids` beside the key and query.
+#
+# Each layer file keeps the key latent at every position [T, 512] bf16, each head's folded query at the sampled rows
+# [Q, 64, 512] bf16 and their sum, the teacher's 2048 strongest keys a query and GLM's own picks, taken live in the
+# same pass. A needle prompt is some 1 KiB a token a layer and 32 queries, a cwe prompt that and about 600 queries
+# of some 90 KiB a layer: about 1.4 GiB a prompt over 11 layers at 128k, some 57 GiB for the 40 (arithmetic).
+# The tokenized side every extraction plans first is one held-out games window cut to 4,096 tokens, which nothing scores.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/ruler_probes_128k.yaml \
+#         --mem-gb 175 --workers 4
+#         (inside the site's reservation)
+model:
+  name: glm53_flash
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: glm53_flash
+    sources:
+    - games
+    train: 0
+    evaluate: 1
+    length: 4096
+  prepared:
+    name: ruler
+    sources:
+    - niah_single_2
+    - niah_multikey_1
+    - niah_multikey_2
+    - niah_multikey_3
+    - cwe
+    length: 131072
+    source_rows:
+      niah_single_2: [29, 30, 34, 37, 52, 73, 78, 80]
+      niah_multikey_1: [33, 40, 61, 68, 81, 88, 90, 91]
+      niah_multikey_2: [21, 36, 45, 67, 69, 76, 79, 98]
+      niah_multikey_3: [24, 40, 41, 42, 49, 66, 69, 88]
+      cwe: [24, 30, 33, 44, 51, 80, 84, 86]
+    join: " "
+    chat: true
+  queries:
+    tail: 32
+    top: 2048
+    native: true
+    targets: ruler
+run:
+  name: ruler_probes_128k
+  output: ${root:data/targets/glm53_flash/ruler_probes_128k}
+  input: key_and_query
+  prefill: 65536
+  stages:
+  - 16
+  - 30

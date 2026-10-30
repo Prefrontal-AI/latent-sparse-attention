@@ -1,0 +1,120 @@
+The common-words generator sizes its context by binary search over the number of distinct words, with an
+upper bound of twice its estimate. Above about 4M tokens that bound passes the 370101 words of
+json/english_words.json and random.sample raises before the search can descend. The bound is clamped to
+the list - every size the search actually tests is unchanged.
+
+Every generator sizes a prompt by tokenizing all of it, at every step of its search and for every sample -
+about fifty full tokenizations of a 10M-token prompt per cell. The HF tokenizer's count is now taken in
+pieces: the prompt is cut at the spaces that follow a non-space, which GLM's pre-tokenizer never joins to
+the character before (no alternative of its pattern matches a non-space then a space, and none looks
+behind), the pieces are tokenized in batches on every core, and a piece seen before in the process - the
+haystack each step and sample repeats - is not tokenized again. The count is the one a single tokenization
+gives, so every comparison, prompt and sample is unchanged. Any other tokenizer, or a text holding a special
+token, is counted whole as before.
+
+--- a/scripts/data/synthetic/common_words_extraction.py
++++ b/scripts/data/synthetic/common_words_extraction.py
+@@ -145,6 +145,7 @@ def sys_word_pair_random(num_samples: int, max_seq_length: int, save_dir: str, i
+     # Binary search for optimal haystack size
+     lower_bound = incremental
+     upper_bound = max(estimated_max_words, incremental * 2)  # Ensure upper_bound is reasonable
++    upper_bound = min(upper_bound, len(randle_words))  # the word list is the hard ceiling
+
+     optimal_num_words = None
+
+--- a/scripts/data/tokenizer.py
++++ b/scripts/data/tokenizer.py
+@@ -14,6 +14,8 @@
+ 
+ 
+ import os
++import re
++import json
+ from typing import List
+ from tenacity import (
+     retry,
+@@ -71,6 +73,18 @@
+         return text
+ 
+ 
++# A pre-tokenizer of this pattern, with no normalizer, never puts a space that follows a non-space in the same
++# piece as the character before it: no alternative matches a non-space followed by a space, and none looks
++# behind. Its token count is then the sum of the counts of the text cut at such spaces, the pieces are counted
++# in batches on every core, and a piece seen before - the haystack every search step and sample repeats - is
++# not tokenized again. The callers only take the length.
++PIECEWISE_PATTERN = r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"
++ANCHOR = re.compile(r"(?<=\S)(?= [A-Z])")
++PIECE = 4096
++BATCH = 256
++CACHED = 1 << 30
++
++
+ class HFTokenizer:
+     """
+     Tokenizer from HF models
+@@ -78,8 +92,64 @@
+     def __init__(self, model_path) -> None:
+         from transformers import AutoTokenizer
+         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+-    
++        self.backend = getattr(self.tokenizer, "_tokenizer", None)
++        self.counts = {}
++        self.cached = 0
++        if not self.piecewise():
++            self.backend = None
++        else:
++            self.added = [token.content for token in self.backend.get_added_tokens_decoder().values()]
++
++    def piecewise(self) -> bool:
++        if self.backend is None:
++            return False
++        state = json.loads(self.backend.to_str())
++        pre_tokenizer = state.get("pre_tokenizer") or {}
++        steps = pre_tokenizer.get("pretokenizers", [])
++        return (
++            state.get("normalizer") is None
++            and state.get("truncation") is None
++            and state.get("padding") is None
++            and self.backend.truncation is None
++            and self.backend.padding is None
++            and pre_tokenizer.get("type") == "Sequence"
++            and len(steps) == 2
++            and steps[0] == {"type": "Split", "pattern": {"Regex": PIECEWISE_PATTERN}, "behavior": "Isolated", "invert": False}
++            and steps[1].get("type") == "ByteLevel"
++            and steps[1].get("use_regex") is False
++            and steps[1].get("add_prefix_space") is False
++        )
++
++    def pieces(self, text: str) -> List[str]:
++        cuts = [0] + [match.start() for match in ANCHOR.finditer(text)] + [len(text)]
++        pieces = []
++        for start, end in zip(cuts, cuts[1:]):
++            while end - start > 2 * PIECE:
++                cut = text.find(" ", start + PIECE, end)
++                while cut != -1 and text[cut - 1].isspace():
++                    cut = text.find(" ", cut + 1, end)
++                if cut == -1:
++                    break
++                pieces.append(text[start:cut])
++                start = cut
++            pieces.append(text[start:end])
++        return pieces
++
++    def count(self, text: str) -> int:
++        pieces = self.pieces(text)
++        if self.cached > CACHED:
++            self.counts, self.cached = {}, 0
++        missing = [piece for piece in dict.fromkeys(pieces) if piece not in self.counts]
++        for first in range(0, len(missing), BATCH):
++            batch = missing[first:first + BATCH]
++            for piece, encoding in zip(batch, self.backend.encode_batch(batch, add_special_tokens=False)):
++                self.counts[piece] = len(encoding.ids)
++                self.cached += len(piece)
++        return sum(self.counts[piece] for piece in pieces)
++
+     def text_to_tokens(self, text: str) -> List[str]:
++        if self.backend is not None and len(text) > 4 * PIECE and not any(token in text for token in self.added):
++            return range(self.count(text))
+         tokens = self.tokenizer.tokenize(text)
+         return tokens
+ 

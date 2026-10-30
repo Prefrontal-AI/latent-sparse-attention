@@ -1,0 +1,44 @@
+# QSA at 10M - [the QSA configuration](qsa_tp1.yaml) on the mesh [the dense baseline](full_dcp8.yaml) reaches 10M on,
+# tensor parallel 8 with decode context parallel 8, RULER 10M.
+#
+# Tensor parallel stops QSA at 4, one of its four key-value heads a card, and 10.86M tokens of one head over its 16
+# full-attention layers is about 174 GB a card; at 8 the heads are copied, not split.
+# Decode context parallel splits the pool by token instead: every rank keeps all four heads for its eighth of the
+# tokens, owner `slot % 8`, as the dense baseline and the LSA designs do on this mesh.
+# QSA's index is held whole on every rank, so every rank selects the blocks one card would; a rank scores an eighth
+# of a prefill chunk's rows and the ranks share their selections, then each reads the selected keys it owns and the
+# group merges the reads by their log-sum-exp (the serving fork's QSA decode context parallel path).
+# The server is the dense baseline's mesh with QSA's backend: the sparse backend replaces whichever one is named, so
+# none is.
+
+defaults:
+  - qsa_tp1
+  - _self_
+
+data:
+  suite: full
+  tasks: []
+  lengths: [10000000]
+
+run:
+  name: qwen38_27b_qsa_dcp8
+  note: QSA, indexer distilled on the frozen model, YaRN factor 40, tp 8 dcp 8
+  tp: 8
+  # The current image binds each rank to its GPU's NUMA node by default and fails resolving rank 4 under tp 8
+  # => off, as on the images Qwen was first served on this mesh with
+  environment:
+    SGLANG_AUTO_NUMA_BIND: "0"
+    # A 10.7M prefill held 128-131 GB a card with one spike to 142.6 of 143.8 GB near 7M, then back to 128
+    # => fragmentation, so the allocator grows segments in place
+    PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  serve:
+    context-length: 10485760
+    dcp-size: "${run.tp}"
+    dcp-comm-backend: ag_rs
+    # Two prompts in flight ran out of memory late in a 5M/10M prefill at 32,768 under GLM's CP
+    max-running-requests: 1
+    # sglang sizes the gated delta net state cache at 572 slots whatever the request cap
+    # => as many as one request and its cached prefixes use
+    max-mamba-cache-size: 16
+    watchdog-timeout: 1800
+  hours: 96

@@ -1,0 +1,13 @@
+# T1 - a sliding window of 1,024 keys and 4 sinks in all nineteen layers, with nothing recurrent to carry what it drops.
+
+defaults:
+  - base
+  - _self_
+
+run:
+  name: window
+
+attention:
+  kind: window
+  window_size: 1024
+  sink_size: 4

@@ -1,0 +1,21 @@
+# [pisa_tp1](pisa_tp1.yaml) timed one request at a time on one B300 node to 1M - the stock PISA, leaf blocks of 64 keys and a beam of 72.
+# The server is [the TP8 selecting server](_tp8_b300_sparse.yaml): PISA on Qwen reads its list a key-value head at a time through the
+# Triton decode kernel at a page of one slot, which is the read PISA serves on one card, and trtllm_mha reads no list.
+# The context is cut to the production base's 1,050,000 and the ladder to 512k and 1M, since PISA has no context parallel and
+# the 10M point is not asked of it. One rank holds one of the 4 key heads, so its leaf means and pyramid are a quarter of one card's.
+# The radix cache is off as in every timing, so the gated delta net cache is not sized from what the cache leaves and
+# `--max-mamba-cache-size 16`, which pisa_1m.yaml needs beside a radix cache, is not passed.
+
+defaults:
+  - pisa_tp1
+  - _tp8_b300_sparse
+  - _self_
+
+data:
+  lengths: [524288, 1048576]
+
+run:
+  name: qwen38_27b_pisa_tp8
+  hours: 4
+  serve:
+    context-length: 1050000

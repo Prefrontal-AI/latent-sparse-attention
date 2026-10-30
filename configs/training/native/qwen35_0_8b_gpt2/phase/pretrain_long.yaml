@@ -1,0 +1,17 @@
+# @package _global_
+# The long-document trunk reads about 18B tokens at 4k before its shared decay checkpoint.
+data:
+  name: gpt2
+  seq_len: 4096
+  seed: ${run.runtime.seed}
+run:
+  runtime:
+    seed: 42
+  optim:
+    schedule: wsd
+    steps: 17167
+    warmup_steps: 859
+    decay_ratio: 0.2
+    decay_shape: sqrt
+  checkpoint:
+    decay_start: true

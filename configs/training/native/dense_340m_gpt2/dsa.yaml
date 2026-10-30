@@ -1,0 +1,22 @@
+defaults:
+  - base
+  - _self_
+
+model:
+  attention_bias: true
+
+run:
+  name: dsa
+
+attention:
+  kind: dsa
+  index_input: attention_input
+  index_head_count: 8
+  index_dim: 64
+  index_detached: false
+  window_size: 128
+  sink_size: 4
+  top_k: 512
+  sparse_start_step: ${run.optim.steps}
+  index_loss_weight: 0.1
+  kl_query_count: 128

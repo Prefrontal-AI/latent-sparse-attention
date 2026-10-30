@@ -1,0 +1,60 @@
+# The short half of [the 16-key PISA set](pisa_c16_tp8_512k.yaml) - MMLU-Pro, GPQA Diamond, AIME25, MATH-500 and RULER at 4,096 and 32,768.
+# Leaf blocks of 16 keys and a keep count of 288 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/glm53_flash/pisa_c16_tp8_short.yaml`.
+#
+# It is one of five parts that together cover the tasks of the stock PISA record, with [the 128k and 512k RULER run](pisa_c16_tp8_512k.yaml).
+# The server is that run's in every argument but the ones named here.
+# RULER at 131,072 is that run's, so it is left out here.
+# The context is 167,000, which holds the longest prompt of the part, GPQA Diamond's 2,795 tokens, beside the 163,840 budget the reasoning tasks sample at.
+# The pool is sized from about 34.4 GiB a card at the 0.75 fraction, less the fp32 means and pyramid every layer keeps for each request-table row and one layer's 10 GiB selection peak.
+# Twelve running requests keep the fixed share at about 5.7 GiB at that context, which leaves a pool of about 1.79M slots - ten requests that each spend the whole budget.
+# Sixteen, the stock's, would leave 1.62M slots, nine.
+# RULER's 32,768-token prompts and the reasoning tasks' short ones hold far less than that, so twelve rarely wait.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_c16_tp8_512k
+  - _self_
+
+data:
+  suite: full
+  lengths: []
+  tasks:
+    - mmlu_pro
+    - gpqa_diamond
+    - aime25
+    - math500
+    - ruler_niah_single_1_4096
+    - ruler_niah_single_2_4096
+    - ruler_niah_single_3_4096
+    - ruler_niah_multikey_1_4096
+    - ruler_niah_multikey_2_4096
+    - ruler_niah_multikey_3_4096
+    - ruler_niah_multiquery_4096
+    - ruler_niah_multivalue_4096
+    - ruler_vt_4096
+    - ruler_cwe_4096
+    - ruler_fwe_4096
+    - ruler_qa_squad_4096
+    - ruler_qa_hotpot_4096
+    - ruler_niah_single_1_32768
+    - ruler_niah_single_2_32768
+    - ruler_niah_single_3_32768
+    - ruler_niah_multikey_1_32768
+    - ruler_niah_multikey_2_32768
+    - ruler_niah_multikey_3_32768
+    - ruler_niah_multiquery_32768
+    - ruler_niah_multivalue_32768
+    - ruler_vt_32768
+    - ruler_cwe_32768
+    - ruler_fwe_32768
+    - ruler_qa_squad_32768
+    - ruler_qa_hotpot_32768
+
+run:
+  name: glm53_flash_pisa_c16_tp8_short
+  serve:
+    context-length: 167000
+    max-running-requests: 12

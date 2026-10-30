@@ -1,0 +1,17 @@
+# The original PISA design timed one request at a time - leaf blocks of 64 keys under a binary mean-pooled pyramid, a beam of 72
+# blocks and the first, previous and current blocks forced, so a query reads 4,608 keys.
+#
+# Timed with the model block of [the scored configuration](../../accuracy/glm53_flash/pisa_tp8.yaml) of the same name, so the two
+# records describe one configuration. It reads no map.
+# A decode step's search is captured in the decode CUDA graph.
+# The server is the base's, chunk, prefill budget and static fraction included, so PISA is timed from every other design's budget.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+
+run:
+  name: glm53_flash_pisa_tp8

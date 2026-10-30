@@ -1,0 +1,8 @@
+# Game-playing agent runs from the team's own benchmark harness, which never left the cluster.
+
+name: games
+kind: source
+path: ${root:data/sources/games}
+about: in-house game-playing agent runs
+collected_from: in-house benchmark runs
+licence: internal

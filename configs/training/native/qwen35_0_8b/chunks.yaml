@@ -1,0 +1,15 @@
+# A4 - A2 with equal consecutive buckets of 8 keys in place of Ward, to ask whether the clustering is doing anything.
+
+defaults:
+  - branch_16k
+  - _self_
+
+run:
+  name: chunks
+
+attention:
+  kind: multires
+  coarse: true
+  variance: true
+  partition: chunks
+  rank: mass

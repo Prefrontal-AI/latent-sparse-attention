@@ -1,0 +1,9 @@
+# [full](full.yaml) timed on one B300, on [the B300 layer](_b300.yaml).
+
+defaults:
+  - full
+  - _b300
+  - _self_
+
+run:
+  name: qwen38_27b_kernels_full

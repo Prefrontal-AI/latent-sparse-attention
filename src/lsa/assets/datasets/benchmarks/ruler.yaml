@@ -1,0 +1,64 @@
+# RULER's thirteen synthetic retrieval tasks from NVIDIA's own generators, at every length of the grid,
+# rendered and measured with GLM-5.3-Flash's tokenizer.
+#
+# lm-eval's port of RULER stops where its corpus does - at 1M six of thirteen tasks were repeats of a shorter
+# point - and NVIDIA's current generators repeat the essays and the documents, so every length is reached.
+# They run as they are from a clone pinned to the revision below. 100 rows a file up to 1M and 20 above,
+# where one prompt is 20 minutes of prefill - a cell's binomial standard error is at most 5 points to 1M and
+# 11 above. The generators draw a cell's rows in order from one seeded stream, so a file's first 20 rows are
+# the 20 the grid held before 2026-10-03, and its first 10 past 1M the 10 it held there.
+#
+# The served evaluations read these files, and so does a teacher extraction, which reads a prompt as a
+# document and caches what the model's own attention did with it - natural prose averages away exactly the
+# case a bad partition loses the one key that carries the answer.
+#
+# A prompt's token count belongs to the tokenizer it was rendered against, so these files are GLM's and a
+# Qwen run needs its own.
+#
+# `input` is the haystack and `gen_prefix` the question that follows it. Neither carries the break between
+# them - an `input` ends "...in the provided text?" and its `gen_prefix` starts "The special magic number" -
+# so an extraction joins them with a newline rather than welding two words into a token boundary that never
+# occurs at read time.
+#
+# The generators are Apache-2.0. The haystacks they draw from are not all theirs: SQuAD and HotpotQA are
+# CC BY-SA 4.0, and the Paul Graham essays state no licence.
+
+name: ruler
+kind: benchmark
+preparer: ruler
+path: ${root:data/benchmarks/ruler}
+about: thirteen RULER tasks from NVIDIA's generators, rendered for GLM-5.3-Flash from 4,096 to 10M tokens
+generator: NVIDIA/RULER
+revision: c3f5e3b4f87f97e048793bb510a3a6b19a46bf3a
+licence: Apache-2.0
+tokenizer: glm53_flash
+file: "{task}_{length}.jsonl"
+
+tasks:
+  - niah_single_1
+  - niah_single_2
+  - niah_single_3
+  - niah_multikey_1
+  - niah_multikey_2
+  - niah_multikey_3
+  - niah_multiquery
+  - niah_multivalue
+  - vt
+  - cwe
+  - fwe
+  - qa_squad
+  - qa_hotpot
+
+lengths:
+  - { length: 4096, rows: 100 }
+  - { length: 32768, rows: 100 }
+  - { length: 131072, rows: 100 }
+  - { length: 524288, rows: 100 }
+  - { length: 1000000, rows: 100 }
+  - { length: 2000000, rows: 20 }
+  - { length: 5000000, rows: 20 }
+  - { length: 10000000, rows: 20 }
+
+seed: 42
+prompt: [input, gen_prefix]
+join: "\n"

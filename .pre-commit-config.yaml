@@ -1,0 +1,57 @@
+# Hooks run the project's own tools through uv, so a commit is checked against the same versions the lock
+# pins and CI installs - a pinned mirror would drift from `make check` without anyone noticing.
+#
+#   make hooks    install into .git/hooks
+#   make check    the same gates, over the whole tree
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # A patch's blank context lines are its content - stripping them corrupts the hunk, and a vendored file stays byte-identical to its release
+      - id: trailing-whitespace
+        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/
+      - id: end-of-file-fixer
+        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+
+  - repo: local
+    hooks:
+      # The annotations mypy would ask for and a tool can infer
+      - id: autotyping
+        name: autotyping
+        entry: uv run autotyping --safe
+        language: system
+        types_or: [python, pyi]
+        files: ^src/
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+
+      # Links and dashes, over the whole tree
+      # Every commit, since a dash can land in any file and the staged-file filter leaves out deletions
+      - id: repo-checks
+        name: repo checks
+        entry: uv run python tools/check_repo.py
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      # No autofix and no per-file runs - mypy needs the whole package to resolve
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false

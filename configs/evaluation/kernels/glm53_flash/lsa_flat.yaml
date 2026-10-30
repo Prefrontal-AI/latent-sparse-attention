@@ -1,0 +1,18 @@
+# The flat design - every bucket scored by one fused scan and a threshold select, the cost linear in the context.
+# It is the accuracy result the other designs are read against.
+#
+# Timed against [the native measurement](native.yaml), with the indexer settings of [the scored
+# lsa_flat.yaml](../../accuracy/glm53_flash/lsa_flat_tp8.yaml), so the layer being timed is the layer being scored.
+# Nothing is served here, so no serve argument applies. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+
+run:
+  name: glm53_flash_kernels_lsa_flat
+sweep:
+  data.phase: [prefill, decode]

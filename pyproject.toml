@@ -1,0 +1,300 @@
+[project]
+name = "lsa"
+description = "Latent Sparse Attention for ultra-long context"
+readme = "README.md"
+# 3.12 is the cluster python - capped so a lock made here reproduces there
+requires-python = ">=3.12,<3.13"
+dynamic = ["version"]
+
+# torch and the CuTeDSL compiler are the required deps - every backend beyond the reference is an extra.
+# The index kernels are Triton, which rides in on torch, and CuTeDSL where Triton cannot stage shared memory,
+# launched through TVM-FFI so a launch takes torch tensors as they are.
+# torch and the compiler are pinned to the serving image's, which installs this package without its deps: Triton's
+# order of adding a sum is the kernels' bits, so a test on any other torch proves nothing about what serves.
+# TVM-FFI only hands a launch its arguments, so it floors at the image's 0.1.11 - training's attn-gym wants 0.1.12
+dependencies = [
+    "apache-tvm-ffi>=0.1.11",
+    "nvidia-cutlass-dsl==4.6.2",
+    # the site file, which every path of the package is read from
+    "pyyaml>=6.0",
+    "torch==2.13.0",
+]
+
+# What this package does when it is not being imported - one command, whose subcommands route to the module
+# that owns each action. `python -m lsa` is the same entry point. The only other `python -m` targets are
+# what a job runs inside its container or against its server, which no person types.
+[project.scripts]
+lsa = "lsa.cli:main"
+
+# The accuracy harness and the trainer - a model, a task suite, the targets and the yaml that describes
+# a run. `import lsa` never reaches these, so they stay out of the required set.
+[project.optional-dependencies]
+evaluation = [
+    # device_map on from_pretrained goes through accelerate
+    "accelerate>=1.0",
+    # the suite talks to the server over http, many requests at once
+    "aiohttp>=3.10",
+    "lm-eval[ruler]>=0.4.12",
+    "math-verify>=0.8",
+    # PaperTrail's arXiv pages are converted by its own rules, which a paper's checksum holds to one lxml
+    "lxml==6.1.3",
+    "hydra-core>=1.3.2",
+    # The kernel measurement's selection statistics, and the production prompt builder
+    "numpy>=2.0",
+    # GLM-5.3-Flash is fp8 on disk and its MoE linears dequantise through a hub kernel, so loading it at all
+    # needs this. transformers pins the window it will accept and raises rather than falling back
+    "kernels>=0.16.0,<0.17.0",
+    "omegaconf>=2.3.0",
+    # Slurm submission as python - the job is a function, not a script to keep in step
+    "submitit>=1.5",
+    "transformers>=5.13.0",
+]
+
+# The whole training path: distillation fits the index space against a frozen teacher, and torchtitan is the
+# distributed trainer the rest of training runs on.
+# The targets are extracted through the evaluation adapter, so this carries most of the evaluation extra and adds the
+# tokenized corpus reader and the distributed trainer on top. It leaves out aiohttp and math-verify, which only the
+# scoring harness needs - a training run never scores a task. lm-eval is here because the native stage benchmarks its
+# own checkpoints in process, through lm-eval's tasks and no server.
+# torchtitan is pinned to a commit rather than a release, because it moves with torch and a float would
+# change the trainer under a run.
+training = [
+    "accelerate>=1.0",
+    # 34 of GLM-5.3-Flash's 45 layers are Kimi delta attention, and transformers binds these two packages at
+    # import time when they are present. Without them it falls back to a reference PyTorch kernel - correct,
+    # and slow enough that a step time measured on it describes the wrong stack. Pinned rather than floated
+    # for the reason torchtitan is: they must not move under a run.
+    "causal-conv1d==1.7.0",
+    # FlashAttention-3, the dense native arm's `varlen` kernel - 65k tokens/s per GPU against flex's 59k on the
+    # 4k trunk. No PyPI wheel and no nvcc here to build one, so a prebuilt wheel for exactly this torch and CUDA
+    "flash-attn-3 @ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn_3-3.0.0+cu126torch2.13gite2743ab-cp39-abi3-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    # FlashAttention-2, the read of the sparse arms' window and gated heads, from the same prebuilt index and for the
+    # same torch and CUDA as FlashAttention-3 above
+    "flash-attn @ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn-2.8.3+cu126torch2.13-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "flash-linear-attention==0.5.2",
+    "numpy>=2.0",
+    "hydra-core>=1.3.2",
+    # The teacher extraction loads the fp8 checkpoint through the evaluation adapter, so it needs the same
+    # dequantisation kernel that extra does
+    "kernels>=0.16.0,<0.17.0",
+    "lm-eval>=0.4.12",
+    # The native indexer kernel is compiled on first use through torch's inline C++ extension loader, which shells out to it
+    "ninja>=1.11",
+    "omegaconf>=2.3.0",
+    "pyarrow>=17",
+    "submitit>=1.5",
+    "torchtitan @ git+https://github.com/pytorch/torchtitan.git@56a721b649a9f2e343d9e67deef6958b53acb2dd",
+    "transformers>=5.13.0",
+    # A distillation run logs its losses here
+    "wandb>=0.30",
+]
+# FlashAttention-3 and the cu126 FlashAttention-2 wheel carry only sm_80 and sm_90(a) code, so on Blackwell the dense
+# `varlen` arm's kernel is FlashAttention-4, and NSA's window read goes through it too: torchtitan's
+# `get_cuda_flash_attention_impl` activates "FA4" from `flash_attn.cute.interface` on capability 10.0 and up.
+# A pure-Python CuTeDSL package that installs only `flash_attn/cute/`, so it sits beside the FlashAttention-2
+# wheel's files. Pinned exactly because it is a beta, for the reason the pins above are: kernels must not move
+# under a run. Use `uv sync --extra training --extra blackwell`.
+blackwell = [
+    "flash-attn-4==4.0.0b36",
+]
+
+# The driver is the ceiling, not the index: the H200 cluster is on driver 570, which takes any CUDA 12.x runtime
+# and will not load a cu130 wheel. cu129 is the last 12.x build of torch 2.13.0 and the first with Blackwell's
+# sm_100 and sm_103 kernels, so one lock serves the H200 and the B300 nodes alike.
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu129" }
+
+[dependency-groups]
+dev = [
+    "autotyping>=24.9.0",
+    "mypy>=2.3.1",
+    "hydra-core>=1.3.2",
+    "omegaconf>=2.3.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9",
+    "ruff>=0.16",
+    # `lsa.slurm` imports it at module level and test-core, a bare sync, tests it
+    "submitit>=1.5",
+]
+
+# Plots and notebooks over experiment results. Not a default group, so CI's sync never installs it.
+analysis = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.11.2",
+    "pandas>=3.0.5",
+    "seaborn>=0.13.2",
+]
+
+# sglang finds the serving backend through this, and calls `register` once per process before the engine
+# starts. It costs nothing where sglang is absent - an entry point is a line of metadata, not an import - so
+# it is declared unconditionally and `lsa.sglang` stays out of the required set.
+# The `lsa` block of the model config is what actually arms it.
+[project.entry-points."sglang.srt.plugins"]
+lsa = "lsa.sglang.plugin:register"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+# One source of truth for the version
+[tool.hatch.version]
+path = "src/lsa/__init__.py"
+
+# torchtitan is a git pin rather than a release, and an extra may name one only with this set
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# Scratch harnesses live here, so the gates do not reach into them
+# Pre-commit names files explicitly, which bypasses exclude
+# => force it
+exclude = ["experimental", "src/lsa/training/native/kernels/vendor"]
+force-exclude = true
+
+# Markdown is prose here, and its fences hold pseudo-code
+# => the formatter stays on python
+[tool.ruff.format]
+exclude = ["*.md"]
+
+[tool.ruff.lint]
+# S101 makes the no-assert rule in AGENTS.md a gate rather than prose. RUF100 catches a suppression naming a
+# rule that is not enabled, which reads as blessed and has never been checked. RUF012 and SIM115 are a
+# mutable class default and a file opened without a context manager.
+select = ["E", "F", "I", "UP", "B", "S101", "RUF100", "RUF012", "SIM115"]
+# The formatter owns line breaks
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# An invariant is a test, and a test states one with assert - the no-assert rule is about `src/`
+"tests/**" = ["S101"]
+
+[tool.mypy]
+files = ["src", "tests"]
+python_version = "3.12"
+# The package is fully annotated and stays that way
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# An override for a module nothing imports any more fails rather than lingering
+warn_unused_configs = true
+
+# The vendored CUDA kernels are the reference training code's sources with only their imports and build names changed, so a
+# reformat or a signature would be a second edit to keep in step
+# => the gates stay off the package
+[[tool.mypy.overrides]]
+module = ["lsa.training.native.kernels.vendor.*"]
+ignore_errors = true
+
+# Tests are exercise code - they are checked, but they do not owe a signature
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# CI runs a bare `uv sync`, so nothing an extra brings is installed when mypy runs.
+# Every package `src/lsa/evaluation/` or `src/lsa/training/` imports from an extra needs an entry here, or CI
+# fails where a local run with the extra passes. Reproduce CI with
+# `UV_PROJECT_ENVIRONMENT=/tmp/ci uv sync --locked && UV_PROJECT_ENVIRONMENT=/tmp/ci make check`, which
+# checks against a bare environment without tearing down the one the extras are installed in.
+[[tool.mypy.overrides]]
+module = [
+    # flash-linear-attention ships no py.typed, and a bare sync has no fla at all
+    "fla.*",
+    "flash_attn.*",
+    "huggingface_hub.*",
+    # The kernel hub's loader ships no py.typed, and the module it returns is whatever the hub's build exports
+    "kernels.*",
+    "lm_eval.*",
+    # PaperTrail's arXiv converter - lxml ships no stubs
+    "lxml.*",
+    "numpy.*",
+    "nltk.*",
+    "pyarrow.*",
+    # safetensors is named by no extra - it arrives under transformers, so a bare sync has neither and
+    # `inject` fails to type where a local run with the extra passes
+    "safetensors.*",
+    # tokenizers likewise arrives under transformers; the online teacher's test builds a tokenizer with it
+    "tokenizers.*",
+    "transformers.*",
+    "wandb.*",
+    # PyYAML ships no stubs, and NVIDIA's RULER config is read with it rather than through OmegaConf
+    "yaml.*",
+]
+ignore_missing_imports = true
+# pyarrow ships neither stubs nor a py.typed marker, so where it *is* installed mypy reports the import as
+# untyped rather than as missing - both readings have to be silenced or the gate depends on the extra
+follow_untyped_imports = true
+
+# torchtitan is the one that must not be followed. It ships no py.typed either, but its model specs are
+# assembled at runtime: `ModelConfig.model` is a base `Config` that the concrete flavour fills in, so following
+# the source types `vision_encoder` and `layers` as absent on code the smoke ladder runs. Left as `Any`,
+# which is what a bare environment sees anyway - the gate reads the same either way.
+# `spmd_types` is torchtitan's placement vocabulary, imported top-level rather than under its package, and
+# it arrives with the `training` extra for the same reason and on the same terms.
+[[tool.mypy.overrides]]
+module = ["torchtitan.*", "spmd_types"]
+ignore_missing_imports = true
+
+# The serving backend runs inside the sglang container and imports sglang, which no sync here installs - so
+# the gate reads its symbols as Any, which is what CI sees anyway. triton rides in on torch and is installed,
+# but it is exempted beside sglang because the kernels only reach it through that container's build.
+[[tool.mypy.overrides]]
+module = ["sglang.*", "triton.*"]
+ignore_missing_imports = true
+
+# CuTeDSL traces a kernel's Python into MLIR, so its annotations are DSL types the gate cannot follow -
+# read as Any, as the Triton kernels are
+[[tool.mypy.overrides]]
+module = ["cutlass.*"]
+follow_imports = "skip"
+ignore_missing_imports = true
+
+# The graders came out of the harness tree unchanged, so a run here scores what the published runs scored.
+# Annotating them would be a rewrite, and a rewrite of a grader is how numbers stop being comparable.
+[[tool.mypy.overrides]]
+module = ["lsa.evaluation.accuracy.grading.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# aiohttp and math_verify are the suite's, reached only behind the evaluation extra
+[[tool.mypy.overrides]]
+module = ["aiohttp.*", "math_verify.*"]
+ignore_missing_imports = true
+
+# datasets exports lazily, so mypy sees a module without `load_dataset` where the runtime has one
+[[tool.mypy.overrides]]
+module = ["datasets.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# What runs inside the serving container to time one layer came out of the fork's `python/sglang/benchmark/`
+# and is exempt on the same terms as the graders: this is the code that decides whether
+# a measurement is valid, and annotating it would be a rewrite of the thing the measurement is trusted against.
+# The harness, the module timer and the cut were scripts that were never type-checked, and joined it unannotated -
+# the cut is the kernels' data now, beside `measure` rather than in it, and keeps the exemption.
+# `lsa.sglang.index.probe` and the orchestration one level up are this repository's own and annotated like the rest of `src/`.
+[[tool.mypy.overrides]]
+module = ["lsa.evaluation.performance.kernels.measure.*", "lsa.evaluation.performance.kernels.data.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# The two things a CI runner cannot give a test. Each CI job deselects them by name and fails on any other
+# skip - see tests/conftest.py - so a test that needs a package its job did not install fails rather than
+# passing unseen
+markers = [
+    "gpu: needs a CUDA device",
+    "cluster: reads data mounted only on the cluster",
+]
+# torch imports numpy when it can and warns once when it cannot - nothing here needs it
+filterwarnings = ["ignore:Failed to initialize NumPy:UserWarning"]

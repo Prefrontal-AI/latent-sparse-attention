@@ -1,0 +1,9 @@
+defaults:
+  - dsa_detached_projected
+  - _self_
+
+run:
+  name: dsa_detached_projected_d64
+
+attention:
+  index_dim: 64

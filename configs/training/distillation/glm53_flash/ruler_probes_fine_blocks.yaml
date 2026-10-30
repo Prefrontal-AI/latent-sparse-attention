@@ -1,0 +1,27 @@
+# PISA's block pyramid at LSA's bucket granularity, over the RULER probe set - the leaf block shrinks from 64 keys to 32, 16
+# and 8 at the same 4,096 keys, so the unit a read keeps is the one LSA's buckets are. See `ruler_probes_served.yaml` for the
+# designs and how arms are read and scored; `ruler_probes_fine_blocks_{128k,512k,1m}.yaml` name the caches, one a length.
+#
+#     lsa distill served-read configs/training/distillation/glm53_flash/ruler_probes_fine_blocks_512k.yaml \
+#         --shards 8
+#         (inside the site's reservation)
+#
+# A0 is the design in torch and B3 is PISA in the index space at 64-key blocks, as in the selection study. F32, F16 and F8
+# are B3 at leaf blocks of 32, 16 and 8 keys, keeping 128, 256 and 512 blocks. The beam above the leaves is the keep count,
+# so F8 dots about what A0 does. F8w widens F8's beam to 1,024, and F8a reads F8 on GLM's own attention, as B1 does.
+
+defaults:
+  - ruler_probes_served
+  - _self_
+
+run:
+  report:
+    served:
+      arms:
+        - {name: A0, design: tree, agrees_with: tree_bf16}
+        - {name: B3, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 64, keep_count: 64}
+        - {name: F32, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 32, keep_count: 128}
+        - {name: F16, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 16, keep_count: 256}
+        - {name: F8, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 8, keep_count: 512}
+        - {name: F8w, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 8, keep_count: 512, beam_width: 1024}
+        - {name: F8a, kind: pisa, space: attention, block_size: 8, keep_count: 512}

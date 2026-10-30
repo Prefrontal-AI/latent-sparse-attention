@@ -1,0 +1,10 @@
+# Not a run - the context-parallel prefill the first GLM servers ran, laid over `_cp8.yaml`.
+#
+# Every server the paper's ultralong GLM cells were scored on prefilled on tilelang and gathered no sparse rows across the decode group.
+# `_cp8.yaml` prefills on flashmla_sparse and gathers, since the serving fork's fix that moved the prefill off tilelang, so a record from before it is not that layout's prefill.
+# This file takes the two settings back, and the files that name it say which build and which request budget go with them.
+
+run:
+  serve:
+    dsa-prefill-backend: tilelang
+    dcp-prefill-sparse-gather: null

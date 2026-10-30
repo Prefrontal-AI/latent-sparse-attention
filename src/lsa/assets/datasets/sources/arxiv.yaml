@@ -1,0 +1,18 @@
+# arXiv papers as Common Pile filtered them, one paper per document.
+#
+# Collected on 2026-07-17 by the pipeline that produced `lsa_attention`, which predates this repository, as
+# one folder of parquet shards with a `doc_id` and a `text` column and a `_DONE` marker. The collector
+# streamed `main` without recording a revision, so the one here is the head on that date - Common Pile has
+# not moved since 2025-06-06.
+#
+# A shard's `license` column is the collector's one label for the source and is wrong here: upstream holds
+# CC BY-SA and public-domain papers as well as CC BY. Each paper's own licence and url are in the
+# `manifest.parquet` beside the shards, joined back from this revision by `doc_id`.
+
+name: arxiv
+kind: source
+path: ${root:data/sources/arxiv}
+about: arXiv papers from Common Pile, one paper per document
+dataset: common-pile/arxiv_papers_filtered
+revision: 033cf7f53f9b348deec868c1a5a48484f3ee9e52
+licence: per-document

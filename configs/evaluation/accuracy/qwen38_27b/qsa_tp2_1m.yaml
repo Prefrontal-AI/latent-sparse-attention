@@ -1,0 +1,18 @@
+# QSA past one card - [the one-card 1M configuration](qsa_tp1_1m.yaml) at tensor parallel 2, for PaperTrail's 1M.
+#
+# PaperTrail's contexts are sized in GLM-5.3-Flash's tokenizer, and Qwen's reads its 1M ones as up to 1,071,006
+# tokens, which with the 163,840 budget outgrow the one card's 1,100,000.
+# QSA does not share LSA's one-card constraint - its indexer reads each key-value head's own keys - so tensor
+# parallel 2 splits the four heads over two cards and doubles the KV pool, with no decode context parallel, which
+# Qwen's sparse backend was never served under.
+
+defaults:
+  - qsa_tp1_1m
+  - _self_
+
+run:
+  name: qwen38_27b_qsa_tp2_1m
+  tp: 2
+  serve:
+    context-length: 1300000
+    mem-fraction-static: "0.90"

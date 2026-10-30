@@ -1,0 +1,34 @@
+# The 512k PaperTrail part of [the 16-key PISA set](pisa_c16_tp8_512k.yaml) - the three samples at 512,000 tokens and their not-in-corpus controls.
+# Leaf blocks of 16 keys and a keep count of 288 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/glm53_flash/pisa_c16_tp8_papertrail512k.yaml`.
+#
+# It is one of five parts that together cover the tasks of the stock PISA record, with [the 128k and 512k RULER run](pisa_c16_tp8_512k.yaml).
+# The server is that run's in every argument but the ones named here.
+# The longest request the stock record saw was 668,785 tokens, so the context is 676,000.
+# The pool is sized from about 34.4 GiB a card at the 0.75 fraction, less the fp32 means and pyramid every layer keeps for each request-table row and one layer's 10 GiB selection peak.
+# Three running requests keep the fixed share at about 7.1 GiB at that context, which leaves a pool of about 1.66M slots.
+# The questions of a context share its prefix through the radix cache, so three of them hold one context and three completions, and the pool covers one whole request with 0.98M over.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_c16_tp8_512k
+  - _self_
+
+data:
+  suite: full
+  lengths: []
+  tasks:
+    - papertrail_exoplanets_L512000
+    - papertrail_exoplanets_L512000_nic
+    - papertrail_ml_longctx_L512000
+    - papertrail_ml_longctx_L512000_nic
+    - papertrail_qec_L512000
+    - papertrail_qec_L512000_nic
+
+run:
+  name: glm53_flash_pisa_c16_tp8_papertrail512k
+  serve:
+    context-length: 676000
+    max-running-requests: 3

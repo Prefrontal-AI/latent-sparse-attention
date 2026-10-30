@@ -1,0 +1,26 @@
+# Qwen3.8-27B with Qwen's own sparse attention - the frozen checkpoint and the QSA indexers distilled on it.
+#
+# `lsa distill inject` writes it from `qwen38_27b` and the run `long_16k_1m_heavy_qsa`: the published shards untouched,
+# each full-attention layer's `indexer` beside its attention, and the `indexer_*` fields in `text_config` that make
+# the server build the indexer and its sparse backend. Everything else is `qwen38_27b`'s, the rotation it is served
+# under included.
+
+name: qwen38_27b_qsa
+about: Qwen3.8-27B with QSA indexers distilled on the frozen model - the baseline LSA is measured against
+path: ${root:models/qwen38_27b_qsa}
+repo: Qwen/Qwen3.8-27b
+revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+family: qwen3_5
+flavor: 27B
+rotary_end: prefix
+rotary_dim: 64
+rope_parameters:
+  mrope_interleaved: true
+  mrope_section: [11, 11, 10]
+  rope_type: yarn
+  rope_theta: 10000000
+  partial_rotary_factor: 0.25
+  factor: 40.0
+  original_max_position_embeddings: 262144
+# QSA - the indexer this checkpoint adds, which `native` serves
+attention: block_sparse

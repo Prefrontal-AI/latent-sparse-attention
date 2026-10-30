@@ -1,0 +1,10 @@
+# [pisa_tp1](pisa_tp1.yaml) scored on one B300 - [the B300 selecting server](_tp1_b300_sparse.yaml) with PISA's strict thinking, its list
+# read a key-value head at a time through the same Triton read.
+
+defaults:
+  - pisa_tp1
+  - _tp1_b300_sparse
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_tp1

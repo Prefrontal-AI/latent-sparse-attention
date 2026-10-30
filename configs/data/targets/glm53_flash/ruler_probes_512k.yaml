@@ -1,0 +1,24 @@
+# The RULER probe set at 512k - `ruler_probes_128k.yaml`'s five tasks, queries and layers over 524,288-token prompts,
+# 8 rows a task drawn the same way for this length: `random.Random(f"ruler-probes-{task}-524288").sample(range(20, 100), 8)`,
+# sorted, from ids 20 to 99 and with no filtering on any outcome.
+#
+# About 5.5 GiB a prompt over 11 layers at 512k, some 220 GiB for the 40 (arithmetic).
+#
+#     lsa distill targets configs/data/targets/glm53_flash/ruler_probes_512k.yaml \
+#         --mem-gb 175 --workers 4
+#         (inside the site's reservation)
+defaults:
+- ruler_probes_128k
+- _self_
+data:
+  prepared:
+    length: 524288
+    source_rows:
+      niah_single_2: [33, 36, 48, 62, 75, 82, 86, 97]
+      niah_multikey_1: [24, 26, 39, 40, 52, 72, 84, 86]
+      niah_multikey_2: [21, 24, 28, 57, 69, 78, 93, 98]
+      niah_multikey_3: [25, 68, 73, 75, 77, 81, 90, 93]
+      cwe: [21, 34, 37, 42, 48, 68, 84, 91]
+run:
+  name: ruler_probes_512k
+  output: ${root:data/targets/glm53_flash/ruler_probes_512k}

@@ -1,0 +1,27 @@
+# The dense baseline past one card without context parallel - tensor parallel 8, RULER 512k to 5M.
+#
+# Dense attention can split the key-value heads where LSA cannot, so this mesh is the dense model's alone and an
+# LSA configuration has no twin of it - its lengths past 262,144 wait on context parallel.
+# Eight ranks over four key-value heads keep one head a rank, 16 KiB of KV a token over the sixteen attention
+# layers, so the 110 GiB a card has left after its eighth of the weights holds about 6.8M tokens: one 5M prompt
+# and its answer, not a 10M one.
+# The lengths are the corpus's tiers that one card cannot hold and this mesh can, one or two requests at a time.
+# The context is the YaRN table, 262,144 x 40 positions, rather than a bound under the pool: the tiers are sized in
+# GLM tokens, a 5M prompt is 5.21M in Qwen's, and a context of 5,200,000 refused it. The pool still bounds what fits.
+
+defaults:
+  - full_tp1
+  - _self_
+
+data:
+  suite: full
+  tasks: []
+  lengths: [524288, 1000000, 2000000, 5000000]
+
+run:
+  name: qwen38_27b_full_tp8
+  tp: 8
+  serve:
+    context-length: 10485760
+    max-running-requests: 2
+  hours: 96

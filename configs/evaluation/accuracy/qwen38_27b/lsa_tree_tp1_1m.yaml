@@ -1,0 +1,19 @@
+# The tree design's long half on one card, to 1M - `_tp1_1m.yaml` says what it runs.
+#
+# [The flat long half's](lsa_flat_tp1_1m.yaml) server with the static fraction at 0.94, the value the design's first 1M
+# half ran at for a pool that held a 1M prompt (PR 202).
+
+defaults:
+  - lsa_tree_tp1
+  - _tp1_1m
+  - _self_
+
+model:
+  serving:
+    spare_contexts: 3
+
+run:
+  name: qwen38_27b_lsa_tree_tp1_1m
+  serve:
+    context-length: 1100000
+    mem-fraction-static: 0.94

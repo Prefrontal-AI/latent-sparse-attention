@@ -1,0 +1,18 @@
+# Qwen3.5's tokenizer over the nine collected sources. 15.3B tokens, and the dataset every Qwen run to date
+# has read.
+#
+# One contiguous span of one document per row, never two concatenated. A document gives
+# `floor(tokens / sample_length)` rows and its remainder is dropped, which is why fewer documents give a row
+# than were collected.
+#
+# Just over half of it is long-form prose - gutenberg 22%, usgpo 18%, doab 10%, hansard 7% - and the rest is
+# code 19%, swe 16%, arxiv 4% and wikimedia 4%. Nothing is upsampled: the shares are what collection
+# produced, and the rows behind them are in `corpus.json` beside the data.
+
+name: qwen3_5
+kind: tokenized
+path: ${root:data/tokenized/qwen3_5}
+about: Qwen3.5 ids over nine collected sources, 65,536 tokens per row
+sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia]
+tokenizer: qwen35_4b
+sample_length: 65536

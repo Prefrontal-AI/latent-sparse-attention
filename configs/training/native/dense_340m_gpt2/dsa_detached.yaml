@@ -1,0 +1,12 @@
+defaults:
+  - dsa
+  - _self_
+
+model:
+  attention_bias: false
+
+run:
+  name: dsa_detached
+
+attention:
+  index_detached: true

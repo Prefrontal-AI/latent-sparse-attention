@@ -1,0 +1,50 @@
+# Not a run - what every kernel measurement of GLM-5.3-Flash shares: the cut of the model, the prompt and the image.
+#
+# Not a run. It names no attention path, and the configurations whose `defaults` name it do - which is what
+# makes one measurement comparable with another, because the checkpoint and the prompt come from here
+# rather than from copies that can drift apart.
+#
+# This is [the scored base](../../accuracy/glm53_flash/_base.yaml)'s sibling and not its child. Nothing is served
+# here: the harness loads the checkpoint itself and times one layer, so every `serve` entry in that file
+# is about a server this never starts.
+#
+# `data.checkpoint` is a five-layer cut of the model with real weights, built by
+# [the cut](../../../../src/lsa/evaluation/performance/kernels/data/cut.py):
+#
+#     lsa kernels cut --layers 5 --weights --out <checkpoint>
+#
+# Five layers is 42 GiB and makes layer 3 the sparse one, which is why `data.layer` is 3. The full
+# checkpoint is not an option - 136 GiB of weights leaves an H200 nothing for a 10M KV pool.
+#
+# `tp` is 1, which is the mesh the harness validates on and the one the cut fits. It also decides the GPUs
+# the job reserves, so a kernel measurement holds one card rather than the eight a served configuration needs.
+#
+model:
+  name: zai-org/GLM-5.3-Flash
+  # The map every LSA configuration reads, over the design's input - GLM's key latent and every head's query summed,
+  # `model.indexer.input: key_and_query` with `query_heads: all`, the indexer's defaults. It is the freeze's heavy-mix
+  # run at a target depth of 2,048, re-exported for that input. Under `native` nothing reads it.
+  # The attention input x is a research option, not the design's: on RULER cwe 512k it lost about 0.15 against
+  # native where the key and query matched it.
+  serving:
+    projections: ${root:models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt}
+
+data:
+  checkpoint: ${root:models/glm53_flash_real5}
+  prompt: ${root:data/prompts/gutenberg_300k.txt}
+  layer: 3
+  chunk: 8192
+  window_chunks: 32
+  # To 10M, the ladder the ultralong RULER cells are scored on. The two long points are most of a ladder's
+  # wall clock, and they come last so an interrupted run keeps the short ones
+  contexts: [131072, 262144, 524288, 1048576, 2097152, 5242880, 10485760]
+
+run:
+  # The root every run lands under, shared with the scored runs so the viewer can hold both
+  output: results
+  # The image the served configurations run, since a measurement taken on another build of the kernels is not
+  # comparable with the scores taken on this one
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 1
+  runner: srun

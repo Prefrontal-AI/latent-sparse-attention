@@ -1,0 +1,22 @@
+# The long-16K-1M-heavy dataset's training side at the teacher's 2048 strongest keys a query.
+#
+# The long-16K-1M-heavy dataset gives 512k twice and 1M four times the balanced dataset's tokens and keeps 1,006 of
+# long-16K-1M's 1,016 training windows, so this adds 3,218 windows to a cache that starts as long-16K-1M's
+# 2048-key cache hardlinked, which leaves that one as the depth sweep read it. A window already cached is
+# skipped and keeps the rows it drew under long-16K-1M's plan, and a new one draws its rows from its place in
+# this dataset's plan. The held-out side is long-16K-1M's and is not extracted again - a run scores on that cache.
+#
+#     cp -al glm-5.3-flash-dataset-top2048/glm53_flash glm-5.3-flash-dataset-long-16k-1M-heavy-top2048/
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_heavy_top2048.yaml \
+#         --stage 0
+defaults:
+- long_16k_1m_top2048
+- _self_
+data:
+  selection:
+    tokens_per_tier: 0
+    tokens_per_length:
+      524288: 67108864
+      1048576: 134217728
+run:
+  output: ${root:data/targets/glm53_flash/long_16k_1m_heavy_top2048}

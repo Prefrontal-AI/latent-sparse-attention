@@ -1,0 +1,24 @@
+# [full](full.yaml) timed on one B300, on [the B300 layer](_b300.yaml) - GLM read densely, MLA over every key.
+#
+# The harness prefills it on trtllm_mla, sglang's dense MLA backend on Blackwell: fa3 is Hopper's, FlashInfer's MLA takes
+# no rope-free head, and triton prefilled a 128k chunk of 8,192 in 1965 ms against fa3's 113 on H200 (probe job 216).
+# trtllm_mla takes a bf16 latent only on a checkpoint sglang does not resolve as DSA's, so the cut is
+# `glm53_flash_real5_dense`, the five-layer cut's files with `index_topk: null` in its config - what the harness's model
+# override sets for a dense read anyway.
+# Its decode runs on triton, sglang's triton dense MLA decode: FlashMLA's dense decode is SM90's and trtllm_mla's decode
+# takes no rope-free latent. It is captured under a CUDA graph and validated replay by replay (job 407's
+# record, glm53_flash_kernels_full_phasedecode_b300__2026-10-21__19-10-47, graph_validated at all 7 contexts).
+# Both phases take chunks of 32,768, the protocol's, as the H200 records do.
+
+defaults:
+  - full
+  - _b300
+  - _self_
+
+data:
+  checkpoint: ${root:models/glm53_flash_real5_dense}
+  chunk: 32768
+
+run:
+  name: glm53_flash_kernels_full
+  hours: 20

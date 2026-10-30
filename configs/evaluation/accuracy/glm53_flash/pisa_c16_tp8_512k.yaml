@@ -1,0 +1,36 @@
+# The third PISA set beside [the stock PISA baseline](pisa_tp8.yaml) and [the 8-key set](pisa_c8_tp8_512k.yaml) - leaf blocks of 16 keys and a
+# keep count of 288, so a query still reads 4,608 keys, the stock list's width.
+# The beam is left at the keep count, so a level above the leaves keeps 288 blocks and a search step ranks 576 candidates.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/glm53_flash/pisa_c16_tp8_512k.yaml`.
+#
+# It serves RULER at 128k and 512k alone, so the context is 528,384 - 524,288 and RULER's 4,096-token budget.
+# The longer lengths are skipped and the record says why.
+# The server is the stock PISA's in every other argument, the chunk and memory fraction included.
+# The request table is 4 rows against the stock's 16, as the 8-key set's is, and that is the one other change.
+# Every layer keeps the fp32 means and pyramid of each row's context, and at 16 keys a block there are 4 times as many as the stock's, half the 8-key set's.
+# At 528,384 they take about 12.5 GiB of a card at 8 rows and 7.0 GiB at 4, against the stock's 11.7 GiB at 1M and 16 - the 8-key set's 24.9 and 13.9 GiB halved.
+# The pool is sized from about 34 GiB a card, less those and one layer's 10 GiB selection peak, so 8 rows leave about 11 GiB.
+# At 4 rows about 17 GiB is left, near 1.7M slots, so three 512k prompts fit at once.
+# The sizing is the 8-key set's unchanged, which is safe with half the index and leaves the one variable the block size.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_tp8
+  - _self_
+
+model:
+  pisa:
+    block_size: 16
+    keep_count: 288
+
+data:
+  suite: ruler
+  lengths: [131072, 524288]
+
+run:
+  name: glm53_flash_pisa_c16_tp8_512k
+  serve:
+    context-length: 528384
+    max-running-requests: 4

@@ -1,0 +1,22 @@
+# Not a run - the dense timing on one B300, laid over [full_tp1](full_tp1.yaml) as its last default.
+#
+# The image is [GLM's B300 image](../glm53_flash/b300.yaml).
+# The dense model runs as sglang ships it on Blackwell, on trtllm_mha at a page of 64, named here so the record says so.
+# Forced onto triton, the backend the LSA arms read through, it decoded a 512k context at 152 ms a token against
+# 11-14 ms for every other arm (job 56, cancelled) - not a baseline sglang would serve.
+# FlashInfer's autotune forwards a dummy batch with no request ids on sm_100 and up, which LSA's maintenance refuses, so it is
+# off for every arm.
+
+defaults:
+  - _image_b300
+  - _self_
+
+run:
+  # A B300 node holds eight one-card servers, and the fixed port would put two on one address
+  port: 0
+  serve:
+    context-length: 1050000
+    mem-fraction-static: 0.86
+    max-running-requests: 4
+    attention-backend: trtllm_mha
+    watchdog-timeout: null

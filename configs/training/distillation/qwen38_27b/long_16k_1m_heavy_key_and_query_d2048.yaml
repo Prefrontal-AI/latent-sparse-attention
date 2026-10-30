@@ -1,0 +1,73 @@
+# The GLM battery map's recipe on Qwen3.8-27B, taught online - no cache is read or written.
+#
+# The recipe is `glm53_flash/long_16k_1m_heavy_key_and_query_d2048.yaml`'s: the key and every head's query summed,
+# a 64-dim map, the forward KL to the teacher's dense attention cut to its 2048 strongest visible keys, 48,000 steps
+# at 3e-4, batch 128, steps drawn by token, the temperature calibrated per layer. On Qwen the key and query is the
+# position-free part of the logit - the 192 of each key head's 256 dims the rotation leaves alone, the four key heads
+# side by side, and each group's six query heads summed beside them - so the maps read 768 dims.
+#
+# The teacher is the extraction `data.teacher` names, read as the run goes: the frozen model under YaRN to 10M on
+# every card but the trainer's, each document of the heavy mix read once for all sixteen layers. A layer's steps go
+# round the sixteen, so the run is one job, not a shard a layer - a shard would read every document again.
+# The held-out sets are read once at the start and kept in host memory, so the long ones score a few documents.
+#
+#     lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048.yaml \
+#         --gpus 8 --cpus 64 --mem-gb 1200 --hours 24 --partition <partition>
+
+defaults:
+  - base
+  - _self_
+
+model:
+  indexer:
+    window_size: 512
+    sink_size: 4
+    top_k: 2048
+    index_dim: 64
+    input: key_and_query
+    query_heads: all
+
+data:
+  teacher:
+    extraction: configs/data/targets/qwen38_27b/long_16k_1m_heavy.yaml
+  # Host memory the documents waiting for the card may fill, beside the held-out sets and the teacher's read-ahead
+  pool_gb: 400
+  train:
+    - {name: natural, source: qwen38_27b, sources: &natural [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia], split: train}
+    - {name: trajectories, source: qwen38_27b, sources: [edgebench], split: train}
+  evaluate:
+    - {name: 16k, source: qwen38_27b, sources: *natural, split: eval, lengths: [16384], limit: 4}
+    - {name: 32k, source: qwen38_27b, sources: *natural, split: eval, lengths: [32768], limit: 4}
+    - {name: 64k, source: qwen38_27b, sources: *natural, split: eval, lengths: [65536], limit: 4}
+    - {name: 128k, source: qwen38_27b, sources: *natural, split: eval, lengths: [131072], limit: 4}
+    - {name: 256k, source: qwen38_27b, sources: *natural, split: eval, lengths: [262144], limit: 4}
+    - {name: 512k, source: qwen38_27b, sources: *natural, split: eval, lengths: [524288], limit: 2}
+    - {name: 1m, source: qwen38_27b, sources: *natural, split: eval, lengths: [1048576], limit: 2}
+    - {name: 512k-trajectories, source: qwen38_27b, sources: [edgebench], split: eval, lengths: [524288], limit: 2}
+    - {name: 1m-trajectories, source: qwen38_27b, sources: [edgebench], split: eval, lengths: [1048576], limit: 2}
+
+run:
+  name: long_16k_1m_heavy_key_and_query_d2048
+
+  objective:
+    target: dense
+    target_depth: 2048
+
+  optim:
+    steps: 48000
+    batch: 128
+    lr: 0.0003
+    tau_lr: 0.01
+    grad_clip: 1.0
+    seed: 0
+    draw: token
+
+  report:
+    every: 8000
+    log_every: 100
+
+  wandb:
+    enabled: true
+    prefix: qwen38-27b-distill-heavy-key-and-query-d2048
+    tags: [qwen38_27b, distill, long_16k_1m_heavy, key_and_query, online]
+    log_every: 10

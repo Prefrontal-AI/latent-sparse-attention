@@ -1,0 +1,16 @@
+# Not a run - PaperTrail at 1M, 2M and 5M tokens on the server of the paper's first PaperTrail cells, laid over `_cp8_10m.yaml`.
+#
+# The server is `_cp8_10m.yaml`'s context and token budget on `_cp8_tilelang.yaml`'s prefill, with the radix cache and the cached-token report on.
+# The image is the site's papertrail5m build.
+# A configuration says its memory fraction, the requests it keeps in flight and the scale of its client, since the three differ by design.
+
+defaults:
+  - _cp8_tilelang
+  - _self_
+
+data:
+  suite: papertrail
+  lengths: [1000000, 2000000, 5000000]
+
+run:
+  image: ${site.images.papertrail5m}

@@ -1,0 +1,13 @@
+# [lsa_tree](lsa_tree.yaml) timed on one B300, on [the B300 layer](_b300.yaml).
+
+defaults:
+  - lsa_tree
+  - _b300
+  - _self_
+
+model:
+  serving:
+    kernels: cutedsl
+
+run:
+  name: glm53_flash_kernels_lsa_tree

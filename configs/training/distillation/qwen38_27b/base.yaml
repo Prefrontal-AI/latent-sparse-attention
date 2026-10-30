@@ -1,0 +1,8 @@
+# Not a run - what every Qwen3.8-27B distillation run shares: the model its teacher reads, and where its runs write.
+# A run here names it first in its `defaults`.
+
+model:
+  name: qwen38_27b
+
+run:
+  output: ${root:training/distillation/qwen38_27b}

@@ -1,0 +1,20 @@
+# The gated delta net layer beside the attention layer, timed - the other three in every four of the stack.
+#
+# A constant state rather than a growing cache, so what it costs is
+# what the attention layers have to be worth. Layer 4 is the linear layer right after the cut's attention layer.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: gdn
+
+data:
+  layer: 4
+
+run:
+  name: qwen38_27b_kernels_gdn
+
+sweep:
+  data.phase: [prefill, decode]

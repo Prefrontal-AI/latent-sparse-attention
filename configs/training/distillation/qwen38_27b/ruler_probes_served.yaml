@@ -1,0 +1,53 @@
+# The offline PISA study on Qwen3.8-27B - PISA's positional blocks against LSA, on the RULER probe set Qwen was run
+# over once (`configs/data/targets/qwen38_27b/ruler_probes_*.yaml`), with the map the Qwen configurations serve, on the
+# key and query - the key heads' position-free dims side by side, each group's queries summed, one list for every head.
+# `ruler_probes_served_{128k,512k,1m}.yaml` name the caches, one a length.
+#
+#     lsa distill served-read configs/training/distillation/qwen38_27b/ruler_probes_served_128k.yaml \
+#         --shards 8 --partition <partition>
+#
+# LSA and PISA as they are. The designs are LSA's two the paper reports, as the Qwen configurations serve them: `flat`,
+# and `tree` at its sizes with its node centroids in fp8 - each read through the served selection. There is no native
+# row: the checkpoint reads every key.
+#
+# `pisa` is the paper's selection on the model's own attention - each key-value head's rotated keys and the query
+# heads that read it, one selection a key-value head, blocks of 64 under a binary pyramid with the first, previous and
+# current blocks forced, at the layer's softmax scale. It keeps 64 blocks, 4,096 keys, the long-range budget both
+# designs read, and its read is that and the same window and sinks. Each head's list is scored and the heads averaged,
+# beside `pisa_union`, what the heads read between them.
+
+defaults:
+  - base
+  - _self_
+
+model:
+  space:
+    init: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt}
+  indexer:
+    window_size: 512
+    sink_size: 4
+    index_dim: 64
+    input: key_and_query
+    query_heads: all
+
+# The map was distilled online, so there is no cache it trained on to read the layers and the rotation off - the probe
+# cache at 128k holds every full-attention layer and records the rotation, read as the run's train set
+data:
+  root: ${root:data/targets/qwen38_27b/ruler_probes_128k}
+  train:
+    - {name: probes-128k, source: ruler, split: eval}
+
+run:
+  name: ruler_probes_served
+
+  report:
+    served:
+      # Every probe row, which is 1,024 at most
+      rows: 1024
+      designs:
+        - name: flat
+        - name: tree
+          indexer: {top_k: 4096, top_p: 1024, top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
+          serving: {node_centroid_precision: fp8}
+      arms:
+        - {name: pisa, kind: pisa, space: attention, block_size: 64, keep_count: 64}

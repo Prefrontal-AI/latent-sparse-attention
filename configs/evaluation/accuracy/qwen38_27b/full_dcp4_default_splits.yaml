@@ -1,0 +1,11 @@
+# Full Attention on PaperTrail at 5M on tensor parallel 4 with decode context parallel 4 - the PaperTrail cells of the paper.
+#
+# The server split the triton decode by its default, as `_no_kv_splits.yaml` says.
+
+defaults:
+  - full_dcp4
+  - _no_kv_splits
+  - _self_
+
+run:
+  name: qwen38_27b_full_dcp4_default_splits

@@ -1,0 +1,66 @@
+# Not a run - what every production timing of GLM-5.3-Flash shares: the checkpoint, the server, and the ladder it is timed over.
+#
+# Not a run. It names no attention path, and the configurations whose `defaults` name it do - so a native and
+# an LSA timing differ in the indexer and in nothing about how the server is started or what is asked of it.
+#
+# The serve arguments are the ones the reference production records were served with on one node - four running
+# requests, and `--enable-metrics` for the server's own TTFT histogram as a cross-check on the client's - except
+# the image and the chunk and prefill budget, 32768 where the reference records ran 8192.
+# 32768 is what every one-node layout prefills in: at 8192 every design's first token took 1.6-2.1 times as long
+# under context parallel and 1.2-1.3 times under tensor parallel.
+# So a first token here is not comparable with a reference record's.
+# The context is 1M plus a 4096-token margin, so a 1M prompt and its 256-token answer both fit.
+# The layout is TP=8 / CP=1 / PP=1 on one node, and the MoE runs sglang's stock tensor-parallel runner.
+# Expert parallel 8 on DeepGEMM, which context parallel needs ([_cp8.yaml](_cp8.yaml)), unlocks no mesh here and is not
+# every arm's best: at 1M on one node it took 7-9% off the first token and added 14-15% to every decode step, for
+# native (42.24 against 45.14 s, 7.39 against 6.33 ms) and flat alike (32.55 against 35.38 s, 7.19 against 6.10 ms)
+# (stock against expert parallel).
+# So the tensor-parallel timings run stock, chosen 2026-10-17.
+# There is no strict thinking and no grammar backend - the client sends token ids to `/generate` and no
+# request asks for either, so they are nothing but a difference from the served records being compared with.
+#
+# 2M to 10M needs two pipeline stages - [_tp8pp2.yaml](_tp8pp2.yaml) - and the one-node ladder stops at 1M.
+
+model:
+  name: glm53_flash
+  # The map every LSA configuration reads, over the design's input - GLM's key latent and every head's query summed,
+  # `model.indexer.input: key_and_query` with `query_heads: all`, the indexer's defaults. It is the freeze's heavy-mix
+  # run at a target depth of 2,048, re-exported for that input. Under `native` nothing reads it.
+  # The attention input x is a research option, not the design's: on RULER cwe 512k it lost about 0.15 against
+  # native where the key and query matched it.
+  serving:
+    projections: ${root:models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt}
+
+data:
+  # Real text - gutenberg rows of the GLM tokenized dataset, three entries a length, the reference records'
+  # files byte for byte (their sha256 are in the workload's manifest)
+  workload: production
+  lengths: [131072, 262144, 524288, 1048576]
+  requests: 3
+  output_tokens: 256
+  warmup: 1
+
+run:
+  # The root every run lands under, shared with the scored runs so the viewer can hold both
+  output: results
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 8
+  runner: srun
+  # Every layout prefills on sglang's default DSA kernel, flashmla_sparse, which runs fa3 for this checkpoint on H200
+  # TP8 decodes on fa3, CP decodes on tilelang - the fork's split-KV decode, the one decode context parallel takes
+  # => a TP8-vs-CP8 comparison also compares decode kernels
+  # Tilelang costs TP8 LSA +19-23% first token and +1.9 ms decode, native +7-13% and +0.9 ms
+  serve:
+    context-length: 1052672
+    chunked-prefill-size: 32768
+    max-prefill-tokens: 32768
+    # 0.75: below 0.85 because the indexer's index keys, bucket caches and selection buffers sit outside the pool
+    # sglang sizes, and above 0.70, where fixed's 32768-token buffers left its pool under a 1M prompt.
+    # Every design takes the same fraction, so every design is served from the same budget.
+    mem-fraction-static: 0.75
+    max-running-requests: 4
+    attention-backend: dsa
+    reasoning-parser: glm45
+    disable-radix-cache: true
+    enable-metrics: true
