@@ -1,0 +1,11 @@
+# [lsa_tree_tp1](lsa_tree_tp1.yaml) scored on one B300, on [the B300 selecting server](_tp1_b300_sparse.yaml).
+
+defaults:
+  - lsa_tree_tp1
+  - _tp1_b300_sparse
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_tree_tp1
+  serve:
+    enable-strict-thinking: null

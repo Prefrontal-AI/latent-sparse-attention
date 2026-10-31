@@ -1,0 +1,18 @@
+# Qwen3.8-27B's attention layer as it ships - FA3 over every key, the baseline every LSA number is read against.
+#
+# Qwen has no indexer of its own, so this is its `native` as well as its `full`. The ladder is quadratic in the
+# context.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: full
+
+run:
+  name: qwen38_27b_kernels_full
+  hours: 20
+
+sweep:
+  data.phase: [prefill, decode]

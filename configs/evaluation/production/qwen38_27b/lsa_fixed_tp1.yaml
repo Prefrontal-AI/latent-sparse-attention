@@ -1,0 +1,18 @@
+# The fixed design on Qwen3.8-27B timed - [the flat timing](lsa_flat_tp1.yaml) with the design's knobs changed, and the static
+# fraction at 0.925, the least whose pool holds the ladder's 1M step.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+model:
+  indexer:
+    top_level: 1
+    node_bucket_size: 4
+    node_cluster_block_size: 1024
+    beam_width: 2048
+
+run:
+  name: qwen38_27b_lsa_fixed_tp1
+  serve:
+    mem-fraction-static: 0.925

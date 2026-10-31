@@ -1,0 +1,16 @@
+defaults:
+  - window_mqa8
+  - phase/pretrain_fineweb@_global_
+  - _self_
+
+run:
+  name: nsam8
+
+attention:
+  kind: nsa
+  window_size: 512
+  sink_size: 0
+  compress_block_size: 32
+  compress_stride: 16
+  select_block_size: 64
+  select_block_count: 16

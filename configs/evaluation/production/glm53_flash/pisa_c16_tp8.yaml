@@ -1,0 +1,18 @@
+# The third PISA set beside [the stock PISA timing](pisa_tp8.yaml) and [the 8-key set](pisa_c8_tp8.yaml) - leaf blocks of 16 keys and a keep count of 288, so a
+# query still reads 4,608 keys. Only the pyramid differs, so the server is the base's with its four running requests.
+# At 1,052,672 the fp32 means and pyramid take about 13.8 GiB of a card at four rows, which by count still leaves a pool past a 1M prompt.
+#
+# Timed with the model block of [the scored 16-key set](../../accuracy/glm53_flash/pisa_c16_tp8_512k.yaml), so the two records describe one
+# configuration.
+
+defaults:
+  - pisa_tp8
+  - _self_
+
+model:
+  pisa:
+    block_size: 16
+    keep_count: 288
+
+run:
+  name: glm53_flash_pisa_c16_tp8

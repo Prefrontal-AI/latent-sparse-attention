@@ -1,0 +1,10 @@
+# `lsa_tree_tp1.yaml`'s indexer on `lsa_flat_dcp8.yaml`'s layout - tp 8, decode context parallel 8, the ladder to 10M,
+# as the scored tree configuration under dcp lays it.
+
+defaults:
+  - lsa_tree_tp1
+  - lsa_flat_dcp8
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_tree_dcp8

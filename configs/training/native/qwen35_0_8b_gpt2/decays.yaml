@@ -1,0 +1,12 @@
+# Override run.init_from to branch another arm or trunk at its decay-start checkpoint.
+defaults:
+  - dense_mqa8
+  - phase/decay32k@_global_
+  - _self_
+
+run:
+  name: dense-mqa8-decay
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/dense-mqa8-long/checkpoint/step-13733}
+
+sweep:
+  data.seq_len: [32768, 65536, 131072]

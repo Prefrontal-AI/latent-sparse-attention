@@ -1,0 +1,12 @@
+defaults:
+  - pisam8
+  - _self_
+
+run:
+  name: pisam8-historical-budget
+
+attention:
+  local_block_count: 2
+
+sweep:
+  attention.level_block_count: [40, 72]

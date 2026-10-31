@@ -1,0 +1,15 @@
+# [pisa](pisa.yaml) timed on one B300, on [the B300 layer](_b300.yaml) - the stock PISA, leaf blocks of 64 keys, prefill and decode.
+#
+# The contexts stop at 1M, where a served PISA run is held (no context parallel), so 2M to 10M of the layer cards' ladder are not asked.
+# The list is read on the triton backend at a page of one slot, as the B300 server reads it.
+
+defaults:
+  - pisa
+  - _b300
+  - _self_
+
+data:
+  contexts: [131072, 524288, 1048576]
+
+run:
+  name: qwen38_27b_kernels_pisa

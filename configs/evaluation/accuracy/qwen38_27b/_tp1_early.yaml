@@ -1,0 +1,16 @@
+# Not a run - the single-card Qwen server of the first battery, laid over a configuration.
+#
+# It prefills 8192 tokens a chunk, keeps the radix cache off and reports no cached prompt tokens, where a current server prefills 32768 a chunk, shares prefixes between requests and reports them.
+# It also holds no spare contexts, which the prefix-reusing designs now keep a few of under tensor parallel 1.
+# The scores do not depend on those settings, but the cells of the first battery were scored on this server, so a file that names it reproduces them.
+
+model:
+  serving:
+    spare_contexts: 0
+
+run:
+  serve:
+    chunked-prefill-size: 8192
+    disable-radix-cache: true
+    enable-cache-report: null
+    max-mamba-cache-size: null

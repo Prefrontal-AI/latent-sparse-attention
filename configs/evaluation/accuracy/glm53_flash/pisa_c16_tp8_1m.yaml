@@ -1,0 +1,27 @@
+# The 1M RULER part of [the 16-key PISA set](pisa_c16_tp8_512k.yaml) - the thirteen tasks at 1,000,000 tokens, one request at a time.
+# Leaf blocks of 16 keys and a keep count of 288 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/glm53_flash/pisa_c16_tp8_1m.yaml`.
+#
+# It is one of five parts that together cover the tasks of the stock PISA record, with [the 128k and 512k RULER run](pisa_c16_tp8_512k.yaml).
+# The server is that run's in every argument but the ones named here.
+# The prompts are 1,000,000 tokens and the answer budget 4,096, and the longest request the stock record saw was 1,004,069, so the context is 1,008,000.
+# The pool is sized from about 34.4 GiB a card at the 0.75 fraction, less the fp32 means and pyramid every layer keeps for each request-table row and one layer's 10 GiB selection peak.
+# One running request keeps the fixed share at about 5.3 GiB at that context, which leaves a pool of about 1.83M slots - one request, and 0.83M over.
+# A second row would take the pool to 1.32M, which holds a prompt, but the part keeps the 8-key part's one request so the block size is the only change.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_c16_tp8_512k
+  - _self_
+
+data:
+  suite: ruler
+  lengths: [1000000]
+
+run:
+  name: glm53_flash_pisa_c16_tp8_1m
+  serve:
+    context-length: 1008000
+    max-running-requests: 1

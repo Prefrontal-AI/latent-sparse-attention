@@ -1,0 +1,10 @@
+# `lsa_tree_tp8.yaml` timed one request at a time on one node under context parallel - `_cp8.yaml` says what that
+# changes.
+
+defaults:
+  - lsa_tree_tp8
+  - _cp8
+  - _self_
+
+run:
+  name: glm53_flash_lsa_tree_cp8

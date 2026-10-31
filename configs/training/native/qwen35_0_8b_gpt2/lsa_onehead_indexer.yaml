@@ -1,0 +1,17 @@
+# The one-head learned family uses a 128-to-64 projection and the language-model gradient.
+defaults:
+  - lsa_onehead
+  - _self_
+
+attention:
+  index_input: key_and_query
+  index_training: ste
+  index_dim: 64
+  index_norm: l2
+  index_rotary_dim: 0
+  index_detached: true
+  index_loss_weight: 1.0
+  index_query_heads: concat
+
+run:
+  name: lsa1-indexer

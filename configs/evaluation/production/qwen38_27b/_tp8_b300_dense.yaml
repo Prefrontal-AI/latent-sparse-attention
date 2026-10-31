@@ -1,0 +1,23 @@
+# Not a run - Qwen3.8-27B's dense baseline under tensor parallel 8 without decode context parallel on one B300 node to
+# 10M, laid over [full_tp1](full_tp1.yaml) as its last default - a reference row beside the DCP8 baseline.
+#
+# Decode context parallel serves a dense model on the triton backend alone (sglang refuses trtllm_mha with --dcp-size),
+# and triton prefilled a 512k request in 60.5 s on B300 against FA3's 21.7 s on H200 (b300_e2e_qwen_dcp_full, job 215).
+# So the DCP8 baseline is slower than H200's for a backend reason, and this row serves the model on trtllm_mha,
+# sglang's own Blackwell choice, as [the one-card B300 server](_tp1_b300_dense.yaml) does.
+# Under tensor parallel 8 each rank holds one of the 4 key heads, 16 attention layers of 1 KiB a token: 168 GB a GPU at
+# 10.5M, inside a B300's budget at 0.85, so it serves the whole ladder on one node.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  port: 0
+  tp: 8
+  hours: 24
+  serve:
+    attention-backend: trtllm_mha

@@ -1,0 +1,12 @@
+# Wikimedia projects' pages, as Common Pile filtered them.
+#
+# The revision is the head on 2026-07-17, the day it was collected. Each page's licence is in the
+# `manifest.parquet` beside the shards.
+
+name: wikimedia
+kind: source
+path: ${root:data/sources/wikimedia}
+about: Wikimedia pages from Common Pile
+dataset: common-pile/wikimedia_filtered
+revision: 0641bb84bd9b7162bcddf8be7836822161a9a342
+licence: per-document

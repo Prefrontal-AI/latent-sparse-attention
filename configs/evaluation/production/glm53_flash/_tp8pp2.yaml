@@ -1,0 +1,42 @@
+# Not a run - [_base.yaml](_base.yaml) on two nodes, for the 1M to 10M lengths - a mesh and a ladder laid over a configuration.
+#
+# A configuration's file names this after its own one-node file, so the pair differs in where the server runs
+# and what it is asked, and in nothing about the indexer.
+#
+# Past 1M the weights and the KV cache no longer fit on one node, so the server is two pipeline stages of tp 8 -
+# TP=8 / CP=1 / PP=2 / EP=1, each stage's MoE on sglang's stock tensor-parallel runner as base runs it.
+# Expert parallel 8 on DeepGEMM splits here as on one node: at 2M the stock runner is 4.0% (native, 70.36 against
+# 67.67 s) and 7.2% (flat, 39.23 against 36.59 s) slower to the first token and 7.2% (10.16 against 10.95 ms) and
+# 7.9% (9.59 against 10.42 ms) faster a decode step, so expert parallel is not every arm's
+# best and the timings run stock, as on one node (chosen 2026-10-18).
+# The serve arguments are the ones the reference two-node production records reported: context 10.5M, 10.52M
+# tokens of KV, two running requests, decode graphs to batch 2 and a 30-minute watchdog - all but the chunk and
+# the expert flags.
+# The chunk and prefill budget are 32768, as on every one-node layout. The reference records' 4096 was swept at 2M
+# against 8192, 16384, 32768 and 12288 with dynamic chunking, and 32768 was both arms'
+# best: native's first token 67.9 s against 82.6 s at 4096, D-LSA (Flat)'s 36.7 s against 65.2 s, a decoded token
+# unchanged. At 10M it fits and took native's prefill from 1424 s to 1274 s and D-LSA (Flat)'s from 414 s to 209 s.
+# Pipeline overlap stays at sglang's default of 0: depth 1 and 2 cost native 8% at 2M.
+# The context holds the 10,485,760-token prompt and its 256-token answer - [the scored
+# _tp8pp2.yaml](../../accuracy/glm53_flash/_tp8pp2_10m.yaml) sizes for RULER's 10M rows and is 400K short of that.
+#
+# 1M is measured on both deployments, as the reference records do - pipelining the prefill across two nodes
+# and sending every decode token between them both move the numbers, so a 1M point on two nodes is a
+# different point from the one on one.
+#
+# Pin `run.id` to a configuration's one-node run and these lengths land beside its one-node ones.
+
+data:
+  lengths: [1048576, 2097152, 5242880, 10485760]
+
+run:
+  pp: 2
+  serve:
+    context-length: 10500000
+    max-total-tokens: 10520000
+    mem-fraction-static: 0.85
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2
+    watchdog-timeout: 1800
+  # Native's 10M first token took 22 minutes on this mesh, and each length sends four
+  hours: 5

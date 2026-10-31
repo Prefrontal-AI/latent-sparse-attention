@@ -1,0 +1,36 @@
+# The fair PISA set beside [the stock PISA timing](pisa_tp1.yaml), at LSA's bucket granularity - leaf blocks of 8 keys and a keep count of 576, so a query still reads 4,608 keys.
+# Only the pyramid differs, so the server is the stock's with its two running requests, a context sized for the shorter ladder below, and the fraction that context needs.
+#
+# Timed with the model block of [the scored fair set](../../accuracy/qwen38_27b/pisa_c8_tp1.yaml), so the two records describe one configuration.
+#
+# One card does not hold the 1M rung at 8 keys a block.
+# Every request-table row keeps the fp32 means and pyramid of the context for each key head and layer, which at 1,050,000 is 16.0 GiB a row.
+# One running request is two rows, 32.0 GiB, and the 1,048,832-slot pool its prompt needs is another 64.0 GiB, with 6 GiB for one layer's selection peak.
+# That is about 102 GiB against about 77 GiB a card at the stock's 0.95 fraction.
+# So the ladder stops at 524,288, and the 1M rung is not timed here.
+# The context is 525,000, the ladder's 524,288 and its 256-token answer, with the allowance the stock's 1,050,000 leaves.
+# The share at that context is 24.0 GiB at two running requests, and the pool its prompt needs is 32.0 GiB.
+# At 0.90 the budget is about 70 GiB a card, which leaves a pool of about 0.66M slots - one request, and 0.13M over.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+  pisa:
+    block_size: 8
+    keep_count: 576
+
+data:
+  lengths: [131072, 262144, 524288]
+
+run:
+  name: qwen38_27b_pisa_c8_tp1
+  serve:
+    context-length: 525000
+    mem-fraction-static: "0.90"
+    max-running-requests: 2
+    attention-backend: fa3
+    page-size: 1
+    disable-prefill-cuda-graph: true

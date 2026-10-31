@@ -1,0 +1,17 @@
+# Full Attention on one card, the first battery's short half - the AIME25, GPQA-Diamond and MATH500 reasoning cells of the paper.
+# The first battery also ran graph walks, which the paper does not use.
+
+defaults:
+  - full_tp1
+  - _tp1_first
+  - _self_
+
+model:
+  serving:
+    projections: ""
+
+run:
+  name: qwen38_27b_full_tp1_first
+  serve:
+    # The rotation went to the server as a flag of this config, where a current launch adds it from `model.rope_parameters`
+    json-model-override-args: '{"text_config": {"rope_parameters": {"mrope_interleaved": true, "mrope_section": [11, 11, 10], "rope_type": "yarn", "rope_theta": 10000000, "partial_rotary_factor": 0.25, "factor": 40.0, "original_max_position_embeddings": 262144}}}'

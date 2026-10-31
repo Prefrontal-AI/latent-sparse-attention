@@ -1,0 +1,15 @@
+# [The tree configuration on tensor parallel 2 with decode context parallel 2](lsa_tree_dcp2.yaml) with the decode
+# descending, the mesh the tree's RULER 2M and PaperTrail 512k and 1M were scored on.
+# The descend is captured in the decode CUDA graph, as in [the 10M mesh's](lsa_tree_descend_dcp8.yaml).
+
+defaults:
+  - lsa_tree_dcp2
+  - _self_
+
+model:
+  serving:
+    decode: descend
+
+run:
+  name: qwen38_27b_lsa_tree_descend_dcp2
+  note: tree, descending decode, key and query input, YaRN factor 40, tp 2 dcp 2

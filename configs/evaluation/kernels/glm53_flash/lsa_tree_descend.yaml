@@ -1,0 +1,26 @@
+# Tree decoding through the beam as well, so the whole read is tree.
+#
+# Timed against [the native measurement](native.yaml), with the indexer settings of [the scored
+# lsa_tree_descend.yaml](../../accuracy/glm53_flash/lsa_tree_descend_tp8.yaml), so the layer being timed is the layer being scored.
+# Nothing is served here, so no serve argument applies. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+  indexer:
+    top_level: 16
+    node_bucket_size: 4
+    node_cluster_block_size: 4096
+    beam_width: 2048
+    start_nodes: 32768
+  serving:
+    node_centroid_precision: fp8
+    decode: descend
+
+run:
+  name: glm53_flash_kernels_lsa_tree_descend
+sweep:
+  data.phase: [prefill, decode]

@@ -1,0 +1,50 @@
+# The 512k half of [the fair PISA set at 8-key blocks](pisa_c8_tp1.yaml) - RULER's thirteen tasks at 524,288 tokens and PaperTrail's three samples at 512,000 with their not-in-corpus controls, on one card.
+# Leaf blocks of 8 keys and a keep count of 576 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/qwen38_27b/pisa_c8_tp1_512k.yaml`.
+#
+# It is one of three parts - the short half, the 512k half and the 1M half - that together cover the tasks of the stock PISA record.
+# The server is [the one-card PISA configuration's](pisa_tp1_512k.yaml) at the same 0.93 fraction and one running request, with a context of 710,000.
+# PaperTrail's longest request the stock record saw was 606,589 tokens, and its longest prompt, 545,427, with the 163,840 budget makes 709,267.
+# At 8 keys a block the means and pyramid of a row take 21.7 GiB of a card at that context and two rows, against the stock's 1.1 GiB.
+# The pool is the 73 GiB budget less that and one layer's 6 GiB selection peak, about 0.74M slots - one request, and 0.14M over.
+# A second row would take the pool to 0.57M, short of one request, so there is one.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_tp1_512k
+  - _self_
+
+model:
+  pisa:
+    block_size: 8
+    keep_count: 576
+
+data:
+  lengths: []
+  tasks:
+    - ruler_niah_single_1_524288
+    - ruler_niah_single_2_524288
+    - ruler_niah_single_3_524288
+    - ruler_niah_multikey_1_524288
+    - ruler_niah_multikey_2_524288
+    - ruler_niah_multikey_3_524288
+    - ruler_niah_multiquery_524288
+    - ruler_niah_multivalue_524288
+    - ruler_vt_524288
+    - ruler_cwe_524288
+    - ruler_fwe_524288
+    - ruler_qa_squad_524288
+    - ruler_qa_hotpot_524288
+    - papertrail_exoplanets_L512000
+    - papertrail_exoplanets_L512000_nic
+    - papertrail_ml_longctx_L512000
+    - papertrail_ml_longctx_L512000_nic
+    - papertrail_qec_L512000
+    - papertrail_qec_L512000_nic
+
+run:
+  name: qwen38_27b_pisa_c8_tp1_512k
+  serve:
+    context-length: 710000

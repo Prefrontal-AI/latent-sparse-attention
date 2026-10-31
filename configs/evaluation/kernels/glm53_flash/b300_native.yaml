@@ -1,0 +1,9 @@
+# [native](native.yaml) timed on one B300, on [the B300 layer](_b300.yaml).
+
+defaults:
+  - native
+  - _b300
+  - _self_
+
+run:
+  name: glm53_flash_kernels_native

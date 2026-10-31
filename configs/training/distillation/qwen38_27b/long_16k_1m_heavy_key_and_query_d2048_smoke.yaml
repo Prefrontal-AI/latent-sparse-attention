@@ -1,0 +1,30 @@
+# The online recipe for a few hundred steps, to time the teacher and the trainer together - not a map to keep.
+#
+# Two short held-out sets in place of nine, so the first step is not an hour of reading held-out documents, and no
+# second copy of the numbers. A step draws a document in proportion to its tokens - half a million on average - so
+# 480 steps ask the teacher for some 200M tokens, and the run is the teacher's pace until the time runs out.
+#
+#     lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048_smoke.yaml \
+#         --gpus 8 --cpus 64 --mem-gb 1200 --hours 4 --partition <partition>
+
+defaults:
+  - long_16k_1m_heavy_key_and_query_d2048
+  - _self_
+
+data:
+  evaluate:
+    - {name: 16k, source: qwen38_27b, sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia], split: eval, lengths: [16384], limit: 2}
+    - {name: 1m, source: qwen38_27b, sources: [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia], split: eval, lengths: [1048576], limit: 1}
+
+run:
+  name: long_16k_1m_heavy_key_and_query_d2048_smoke
+
+  optim:
+    steps: 480
+
+  report:
+    every: 480
+    log_every: 16
+
+  wandb:
+    enabled: false

@@ -1,0 +1,19 @@
+# What a production run of Qwen 3.8 27B sends - [the production workload](production.yaml) in Qwen's own tokens.
+#
+# The text is gutenberg rows of Qwen 3.8's tokenized dataset, 65,536 tokens a row and a book's rows in a run,
+# decoded once, so every length is counted in the tokens the model reads rather than GLM-5.3-Flash's.
+# The longest is 10,485,504, not 10,485,760: Qwen's YaRN factor 40 holds 10,485,760 positions and no more,
+# and the prompt and its 256-token answer have to fit in them.
+# Each file is ShareGPT-shaped, entries nested across lengths, as the production workload's.
+#
+# The production records time these files byte for byte, and their sha256 are in the manifest beside them.
+
+name: production_qwen38
+kind: workload
+path: ${root:data/workloads/production_qwen38}
+about: three nested gutenberg prompts at each of nine lengths from 16k to 10M Qwen3.8-27B tokens
+tokenized: qwen38_27b
+source: gutenberg
+file: "gutenberg_{length}.json"
+lengths: [16384, 32768, 131072, 262144, 524288, 1048576, 2097152, 5242880, 10485504]
+entries: 3

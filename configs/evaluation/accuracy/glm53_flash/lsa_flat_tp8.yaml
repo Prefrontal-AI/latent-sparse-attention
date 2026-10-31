@@ -1,0 +1,18 @@
+# The flat design - every bucket scored by one fused scan and a threshold select, the cost linear in the context.
+# It is the accuracy result the other designs are read against.
+#
+# Written as a delta on the base, so this run differs from the baseline in the attention path and the indexer
+# alone. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+
+data:
+  suite: full
+
+run:
+  name: glm53_flash_lsa_flat_tp8

@@ -1,0 +1,25 @@
+# PISA's long half on one card, to 512k - `_tp1_1m.yaml` says what it runs, and the 1M cells go to
+# [tensor parallel 2](pisa_tp2_1m.yaml).
+#
+# The server is [the PISA configuration's](pisa_tp1.yaml) with the context of
+# [the flat design's long half](lsa_flat_tp1_1m.yaml), and one running request rather than sixteen - every request-table
+# row keeps the fp32 means and pyramid of a 1M context for each key head and layer.
+# One row at a static fraction of 0.93 leaves a pool of 1,030,949 slots, which holds a 512k prompt with its budget.
+# RULER's 1M prompt with its budget needs 1,052,672: two rows at 0.96 left 1,064,984 but ran out of memory in the
+# first prefill, and one at 0.94 leaves 1,053,757 with less room than that for activations.
+
+defaults:
+  - pisa_tp1
+  - _tp1_1m
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_tp1_512k
+  serve:
+    context-length: 1100000
+    mem-fraction-static: 0.93
+    max-running-requests: 1
+    # sglang sizes the gated delta net state cache from what is left once the radix cache is on - 244 slots and 34 GB
+    # left a pool of 369,409 slots
+    # => as many as a request and its cached prefixes use, as on the other long Qwen configurations
+    max-mamba-cache-size: 16

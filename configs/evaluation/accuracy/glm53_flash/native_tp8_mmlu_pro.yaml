@@ -1,0 +1,14 @@
+# Block Sparse (Flat) on MMLU-Pro - the MMLU-Pro cells of the paper.
+#
+# The server did not report cached prompt tokens yet, as `_no_cache_report.yaml` says.
+
+defaults:
+  - native_tp8
+  - _no_cache_report
+  - _self_
+
+data:
+  tasks: [mmlu_pro]
+
+run:
+  name: glm53_flash_native_tp8_mmlu_pro

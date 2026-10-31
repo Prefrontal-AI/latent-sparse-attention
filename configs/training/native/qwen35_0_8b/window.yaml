@@ -1,0 +1,13 @@
+# A1 - a sliding window of the multi-resolution arms' whole key budget: 4 sinks and 512 recent keys and 1,024 selected keys, as 1,540 recent keys. What reading that many keys costs when they are all nearby.
+
+defaults:
+  - branch_16k
+  - _self_
+
+run:
+  name: window
+
+attention:
+  kind: window
+  window_size: 1540
+  sink_size: 0

@@ -1,0 +1,15 @@
+# Not a run - one Qwen3.8-27B layer timed on one B300, laid over a design's configuration as its last default.
+#
+# The image is [the B300 production server's](../../production/qwen38_27b/_tp1_b300_dense.yaml).
+# The dense layer runs on trtllm_mha and the design's list on the triton backend at a page of one slot, as the B300
+# servers serve them, since fa3 does not run on sm_103 - the harness picks both by the GPU.
+# The contexts are the layer cards' ladder, the paper's figure reading 512k, 1M and 10M of it; the chunk and window
+# are the base's.
+# The design arms run their CuTeDSL kernels, whose Blackwell paths are the ones written for the B300.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  contexts: [131072, 524288, 1048576, 2097152, 5242880, 10485760]

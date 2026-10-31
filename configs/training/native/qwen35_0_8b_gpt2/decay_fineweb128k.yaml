@@ -1,0 +1,14 @@
+# The source 128k FineWeb branch doubles the global batch and uses its shorter corpus budget.
+defaults:
+  - decays_fineweb
+  - _self_
+
+run:
+  name: dense-mqa8-fineweb-decay128k
+  optim:
+    steps: 5866
+    warmup_steps: 48
+    tokens_per_step: 2097152
+
+sweep:
+  data.seq_len: [131072]

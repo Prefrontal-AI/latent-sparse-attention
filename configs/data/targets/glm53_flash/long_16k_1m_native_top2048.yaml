@@ -1,0 +1,20 @@
+# Long-16K-1M's training side again at a 2048-key dense target, keeping DSA's own selection beside it.
+#
+# One side of the whole long-16K-1M plan, so every window keeps its place in it and draws the training rows the
+# long-16K-1M and its 2048-key re-extraction drew. A map trained here on the target restricted to DSA's picks then
+# differs from the 2048-key dense cell in the target alone. The held-out side is the long-16K-1M cache's, linked in.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_native_top2048.yaml \
+#         --stage 0
+defaults:
+- long_16k_1m
+- _self_
+data:
+  tokenized:
+    splits:
+    - train
+  queries:
+    top: 2048
+    native: true
+run:
+  output: ${root:data/targets/glm53_flash/long_16k_1m_native_top2048}

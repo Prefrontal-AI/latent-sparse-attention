@@ -1,0 +1,10 @@
+defaults:
+  - dsa_detached
+  - _self_
+
+run:
+  name: dsa_detached_sliced
+
+attention:
+  index_input: sliced_key_and_query
+  index_dim: 32

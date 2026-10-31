@@ -1,0 +1,36 @@
+# Learned flat LSA, with the language-model or self-distillation gradient and optional summary annealing.
+defaults:
+  - dense
+  - _self_
+
+model:
+  query_head_count: 8
+  kv_head_count: 2
+  head_dim: 256
+  rotary_dim: 64
+
+attention:
+  kind: lsa
+  coarse: false
+  fast_read: true
+  window_size: 512
+  sink_size: 4
+  block_size: 512
+  pool_size: 4
+  bucket_size: 8
+  bucket_cap: 16
+  index_input: key_and_query
+  index_dim: 64
+  index_detached: true
+  index_loss_weight: 1.0
+  index_query_heads: concat
+
+run:
+  name: lsa8-indexer
+
+sweep:
+  attention.top_k: [1024, 2048, 4096]
+  attention.index_training: [kl, ste]
+  attention.summaries: [false, true]
+  attention.index_norm: [l2, rms]
+  attention.index_rotary_dim: [0, 16]

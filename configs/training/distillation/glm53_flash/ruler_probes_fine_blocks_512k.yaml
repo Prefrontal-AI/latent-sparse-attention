@@ -1,0 +1,21 @@
+# The fine-block arms over the RULER probe set at 512k - the five tasks of `configs/data/targets/glm53_flash/ruler_probes_512k.yaml`,
+# 8 prompts each. See `ruler_probes_fine_blocks.yaml` for the designs, the arms and how they are read and scored.
+#
+#     lsa distill served-read configs/training/distillation/glm53_flash/ruler_probes_fine_blocks_512k.yaml \
+#         --shards 8
+#         (inside the site's reservation)
+
+defaults:
+  - ruler_probes_fine_blocks
+  - _self_
+
+data:
+  evaluate:
+    - name: probes-512k
+      source: ruler
+      sources: [niah_single_2, niah_multikey_1, niah_multikey_2, niah_multikey_3, cwe]
+      split: eval
+      root: "${root:data/targets/glm53_flash/ruler_probes_512k}"
+
+run:
+  name: ruler_probes_fine_blocks_512k

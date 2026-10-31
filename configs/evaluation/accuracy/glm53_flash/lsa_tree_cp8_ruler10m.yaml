@@ -1,0 +1,16 @@
+# `lsa_tree_tp8.yaml` on RULER at 10M tokens, on the first context-parallel server - `_cp8_10m_early.yaml` says what that is.
+#
+# The server serves 10.5M tokens, so the 10M cells were scored on the same server as the 10M ones.
+# The first battery ran each length's tasks as separate launches of one run, a task at a time, which is the same server and the same suite.
+
+defaults:
+  - lsa_tree_tp8
+  - _cp8_10m
+  - _cp8_10m_early
+  - _self_
+
+data:
+  lengths: [10000000]
+
+run:
+  name: glm53_flash_lsa_tree_cp8_ruler10m

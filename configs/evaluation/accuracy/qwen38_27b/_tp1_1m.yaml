@@ -1,0 +1,74 @@
+# Not a run - the battery's long half on one card, to 1M - the tasks laid over a configuration.
+#
+# A `<design>_1m.yaml` names this after its own short configuration, so the pair differs from it in the tasks and in
+# the server's context, and in nothing about the model or the indexer. The short half is RULER at 4,096, 32,768
+# and 131,072 with GPQA Diamond, MATH-500 and AIME25; this half is the rest one card holds.
+#
+# RULER's thirteen tasks at 524,288 and 1,000,000, counted in Qwen's tokenizer (the base's root), so every 1M prompt
+# fits a 1,100,000 context beside its answer. LongBench v2's 60 rows, prepared to 935,136 tokens for a 163,840 budget.
+#
+# PaperTrail's three samples at 512k, 700k and 1M, the not-in-corpus questions at 512k, and the four controls, whose
+# contexts of up to about 430,000 tokens outgrow the short half's 262,144. Its contexts are sized in GLM's tokenizer
+# and Qwen reads the 1M ones as up to 1,071,006 tokens, which with the 163,840 budget outgrow this card's 1,100,000.
+# A one-card server skips them and the record says why, and `qsa_tp2_1m.yaml` holds them.
+
+data:
+  lengths: []
+  tasks:
+    - longbench2
+    - papertrail_exoplanets_L512000
+    - papertrail_exoplanets_L700000
+    - papertrail_exoplanets_L1000000
+    - papertrail_exoplanets_L512000_nic
+    - papertrail_exoplanets_C1
+    - papertrail_exoplanets_C2_hosts
+    - papertrail_exoplanets_C3_synthetic
+    - papertrail_exoplanets_C4_background
+    - papertrail_ml_longctx_L512000
+    - papertrail_ml_longctx_L700000
+    - papertrail_ml_longctx_L1000000
+    - papertrail_ml_longctx_L512000_nic
+    - papertrail_ml_longctx_C1
+    - papertrail_ml_longctx_C2_hosts
+    - papertrail_ml_longctx_C3_synthetic
+    - papertrail_ml_longctx_C4_background
+    - papertrail_qec_L512000
+    - papertrail_qec_L700000
+    - papertrail_qec_L1000000
+    - papertrail_qec_L512000_nic
+    - papertrail_qec_C1
+    - papertrail_qec_C2_hosts
+    - papertrail_qec_C3_synthetic
+    - papertrail_qec_C4_background
+    - ruler_niah_single_1_524288
+    - ruler_niah_single_2_524288
+    - ruler_niah_single_3_524288
+    - ruler_niah_multikey_1_524288
+    - ruler_niah_multikey_2_524288
+    - ruler_niah_multikey_3_524288
+    - ruler_niah_multiquery_524288
+    - ruler_niah_multivalue_524288
+    - ruler_vt_524288
+    - ruler_cwe_524288
+    - ruler_fwe_524288
+    - ruler_qa_squad_524288
+    - ruler_qa_hotpot_524288
+    - ruler_niah_single_1_1000000
+    - ruler_niah_single_2_1000000
+    - ruler_niah_single_3_1000000
+    - ruler_niah_multikey_1_1000000
+    - ruler_niah_multikey_2_1000000
+    - ruler_niah_multikey_3_1000000
+    - ruler_niah_multiquery_1000000
+    - ruler_niah_multivalue_1000000
+    - ruler_vt_1000000
+    - ruler_cwe_1000000
+    - ruler_fwe_1000000
+    - ruler_qa_squad_1000000
+    - ruler_qa_hotpot_1000000
+
+run:
+  serve:
+    # The radix cache keeps a state slot per cached request, and at the default count the pool falls short of the context
+    # => capped at what a request and its cached prefixes use
+    max-mamba-cache-size: 16

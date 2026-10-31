@@ -1,0 +1,17 @@
+# The fair PISA set beside [the stock PISA kernel timing](pisa.yaml), at LSA's bucket granularity - leaf blocks of 8 keys and a keep count of 576, so a query still reads 4,608 keys.
+#
+# The harness arms the layer from the model block, which writes `model.pisa` into the settings file it reads, so this times the layer the scored fair set serves.
+# See [the scored fair set](../../accuracy/glm53_flash/pisa_c8_tp8_512k.yaml).
+# The ladder is the base's, to 10M, and the leaf means and pyramid are the one index the layer holds, 8 times as many blocks as the stock's.
+
+defaults:
+  - pisa
+  - _self_
+
+model:
+  pisa:
+    block_size: 8
+    keep_count: 576
+
+run:
+  name: glm53_flash_kernels_pisa_c8

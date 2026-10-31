@@ -1,0 +1,40 @@
+# The shared dense trunk the long-context arms branch from: dense attention at 4,096 tokens, warmup then a flat
+# learning rate with no decay, so every checkpoint is a mid-schedule model an arm can continue and decay at 16,384.
+#
+# Two nodes, eight sequences a GPU: 524,288 tokens a step, 15,000 steps, about 7.9B tokens. A checkpoint every
+# 1,500 steps (about 0.8B tokens), ten in all, which is torchtitan's default retention - so an arm can branch at
+# several trunk lengths and the trunk length becomes a variable rather than a guess.
+#
+# Compiled, which measured 59k tokens/s per GPU against 40k uncompiled and 57 GiB against 101 (one node, 60 steps), on FlashAttention-3, 65k against flex's 59k compiled. Resumed at step 1,500
+# on FlashAttention-3 after its first 1,500 steps ran on flex. Weights shard within a node and replicate across the two, so only the gradient average
+# crosses nodes.
+#
+#   lsa native train configs/training/native/qwen35_0_8b/trunk_4k.yaml --nodes 2 --hours 12
+
+defaults:
+  - base
+  - _self_
+
+data:
+  seq_len: 4096
+
+run:
+  name: trunk-4k
+  checkpoint_every: 1500
+  dp_replicate: 2
+  dp_shard: 8
+  optim:
+    steps: 15000
+    warmup_steps: 500
+    decay_ratio: 0.0
+    tokens_per_rank: 32768
+  runtime:
+    compile: model
+  evaluation:
+    every: 500
+    # One batch of eight sequences on each of the sixteen ranks
+    sequences: 128
+
+attention:
+  kind: dense
+  backend: varlen

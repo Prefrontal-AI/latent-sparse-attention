@@ -1,0 +1,19 @@
+# The baseline - GLM-5.3-Flash's own DSA indexer, and the ceiling every LSA run on this stack is read against.
+# There is no indexer block because nothing reads it under native - nor the base's map.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: native
+
+data:
+  # The shipped numbers are this suite restricted to 4096, 32768 and 131072 with a `data.tasks` filter,
+  # which is what each record's own `run.plans` carries. Unfiltered it is every length one node holds, 4096 to 1000000, about a day per
+  # configuration.
+  suite: full
+
+run:
+  name: glm53_flash_native_tp8
+  note: baseline

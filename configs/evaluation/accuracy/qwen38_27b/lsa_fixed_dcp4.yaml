@@ -1,0 +1,18 @@
+# RULER 5M for the fixed design on the least mesh it fits - tensor parallel 4 with decode context parallel 4.
+#
+# [The 10M mesh](lsa_fixed_dcp8.yaml) on 4 cards: a 5M prompt holds 320 GiB of KV at 64 KiB a token, 80 GiB a rank.
+# A smaller mesh packs beside other jobs and gathers across fewer ranks; the scores do not depend on it.
+
+defaults:
+  - lsa_fixed_dcp8
+  - _self_
+
+data:
+  lengths: [5000000]
+
+run:
+  name: qwen38_27b_lsa_fixed_dcp4
+  note: fixed, key and query input, YaRN factor 40, tp 4 dcp 4
+  tp: 4
+  serve:
+    dcp-size: 4

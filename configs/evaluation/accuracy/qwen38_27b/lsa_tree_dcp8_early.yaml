@@ -1,0 +1,11 @@
+# D-LSA (Tree) at 10M on tensor parallel 8 with decode context parallel 8, on the first battery's server - the 10M RULER cells of the paper.
+#
+# The server reported no cached prompt tokens, as `_no_cache_report.yaml` says.
+
+defaults:
+  - lsa_tree_dcp8
+  - _no_cache_report
+  - _self_
+
+run:
+  name: qwen38_27b_lsa_tree_dcp8_early

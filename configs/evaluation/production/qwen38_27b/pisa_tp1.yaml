@@ -1,0 +1,23 @@
+# The original PISA design on Qwen3.8-27B timed one request at a time, read against [the dense timing](full_tp1.yaml).
+#
+# The same model block as [the scored configuration](../../accuracy/qwen38_27b/pisa_tp1_512k.yaml), and its server at the ladder's
+# context: the base's with FlashAttention named, a page of one token and the prefill out of CUDA graphs.
+# Every request-table row keeps the leaf means and the pyramid above them for each key head and layer, so two running
+# requests at a static fraction of 0.95 are what leave the pool a 1M context - four at 0.92 leave it 942k slots.
+# It reads no map.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+
+run:
+  name: qwen38_27b_pisa_tp1
+  serve:
+    mem-fraction-static: 0.95
+    max-running-requests: 2
+    attention-backend: fa3
+    page-size: 1
+    disable-prefill-cuda-graph: true

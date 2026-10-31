@@ -1,0 +1,38 @@
+# Qwen's own sparse attention on Qwen3.8-27B, distilled the way the LSA map beside it is - the baseline it is measured against.
+#
+# `long_16k_1m_heavy_key_and_query_d2048.yaml` with a QSA indexer in place of the map, and nothing else changed: the same
+# documents, query rows and teacher, 48,000 steps at 3e-4, batch 128, steps drawn by token, the temperature calibrated
+# per layer. The indexer is Qwen3.8-Next's - four query heads and one key head of 128 on `x`, the keys mean-pooled into
+# blocks of four before the rotation, the 512 best closed blocks and the open block's keys read - and the loss is QSA's
+# own dense distillation: the KL from the teacher's attention, max-pooled to blocks over the blocks a query has closed,
+# to the softmax of the block scores. The model stays frozen, which is lighter than QSA's own recipe, whose second
+# stage trains the model under the sparse read.
+#
+# The teacher keeps each block's mean `x` and `x` at the sampled rows rather than the key and query, and its target is
+# the full attention on the closed blocks rather than the attention past the sinks and window, renormalised.
+#
+#     lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_qsa.yaml \
+#         --gpus 8 --nodes 2 --cpus 64 --mem-gb 1200 --hours 12 --partition <partition>
+
+defaults:
+  - long_16k_1m_heavy_key_and_query_d2048
+  - _self_
+
+model:
+  qsa:
+    query_head_count: 4
+    head_dim: 128
+    rotary_dim: 64
+    block_size: 4
+    top_k: 2048
+
+run:
+  name: long_16k_1m_heavy_qsa
+
+  report:
+    served:
+      designs: []
+
+  wandb:
+    prefix: qwen38-27b-distill-heavy-qsa
+    tags: [qwen38_27b, distill, long_16k_1m_heavy, qsa, online]

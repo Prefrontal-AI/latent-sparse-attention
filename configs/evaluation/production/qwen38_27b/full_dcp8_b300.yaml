@@ -1,0 +1,12 @@
+# [full_dcp8](full_dcp8.yaml) timed on one B300 node - [_dcp8_b300_dense.yaml](_dcp8_b300_dense.yaml) says what that changes.
+
+defaults:
+  - full_dcp8
+  - _dcp8_b300_dense
+  - _self_
+
+run:
+  name: qwen38_27b_full_dcp8
+  serve:
+    prefill-attention-backend: null
+    decode-attention-backend: null

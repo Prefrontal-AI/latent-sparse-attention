@@ -1,0 +1,30 @@
+# QSA on the key and query - Qwen's own sparse attention reading what the LSA map reads, to separate the input from the method.
+#
+# QSA's indexer reads the layer input `x`, as Qwen3.8-Next's does, and the LSA map reads the attention's own key and
+# query. So `long_16k_1m_heavy_qsa.yaml` against the LSA map compares two methods on two inputs; this run is the QSA
+# method on the LSA input, and nothing else changes - the documents, the rows, the teacher, the steps, the rate, the
+# blocks of four, the 512 closed blocks and the open block, QSA's block-max KL and the calibrated temperature.
+#
+# The input is the LSA map's exactly: every key head's position-free dims side by side - the 192 of 256 the rotation
+# leaves alone, after the key norm, four heads, 768 dims - and each group's six query heads summed onto the slice of the
+# key head they read. QSA's own rotation still places the blocks and the queries. The teacher keeps each block's mean
+# key input and the rows' summed queries, 384 bytes a token a layer against `x`'s 2,560.
+#
+#     lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_qsa_key_and_query.yaml \
+#         --gpus 8 --nodes 6 --cpus 64 --mem-gb 1200 --hours 12
+#         (inside the site's reservation)
+
+defaults:
+  - long_16k_1m_heavy_qsa
+  - _self_
+
+model:
+  qsa:
+    input: key_and_query
+
+run:
+  name: long_16k_1m_heavy_qsa_key_and_query
+
+  wandb:
+    prefix: qwen38-27b-distill-heavy-qsa-key-and-query
+    tags: [qwen38_27b, distill, long_16k_1m_heavy, qsa, key_and_query, online]

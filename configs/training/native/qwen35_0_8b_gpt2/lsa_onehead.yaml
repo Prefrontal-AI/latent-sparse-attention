@@ -1,0 +1,17 @@
+# The upstream one-head position-free family, including optional annealed summaries.
+defaults:
+  - lsa_mqa8
+  - _self_
+
+model:
+  query_head_count: 1
+
+attention:
+  query_head_reduction: sum
+
+run:
+  name: lsa1
+
+sweep:
+  attention.top_k: [512, 1024]
+  attention.summaries: [false, true]

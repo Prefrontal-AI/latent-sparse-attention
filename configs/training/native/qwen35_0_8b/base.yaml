@@ -1,0 +1,22 @@
+# Not a run - what every Qwen3.5-0.8B native run shares: the model from random init, the corpus, where it writes and
+# the held-out pass. `trunk_4k` names it first in its `defaults`, and so does `branch_16k`, which the arms name.
+#
+# The corpus is Qwen3.5's own nine sources at 65,536 tokens a row, so every sequence is a contiguous span of one long
+# document at any length that divides the row.
+
+model:
+  flavor: 0.8B
+
+data:
+  name: qwen3_5
+
+run:
+  output: ${root:training/native/qwen35_0_8b}
+  optim:
+    lr: 6.0e-4
+    min_lr_factor: 0.1
+  runtime:
+    activation_checkpoint: none
+    seed: 0
+  evaluation:
+    sequences: 64

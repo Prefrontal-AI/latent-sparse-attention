@@ -1,0 +1,86 @@
+# The freeze's heavy-d2048-lr3e-4 recipe, retrained from the cache it was trained on - the map the evaluation battery
+# serves (`glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt`), by the trainer on main.
+#
+# The cache is an index-vector cache: no `x`, but each position's index key `rownorm(latent @ L)` and each query row's
+# index query `rownorm(summed_query @ L^-T)`, the dense target cut to the teacher's 2048 strongest keys, written under the
+# closed-block rule with a cluster block of 8192 keys. A key counts only once the block it sits in has closed before
+# the query's own, past 4 sinks, and a query row with no closed block behind it is not trained on, so the target holds
+# mass on the keys a served read can select and no other. The file names its block, and `closed_block` below says it
+# again, so a reader sees the rule here.
+#
+# The indexer reads the key latent and every head's query summed, `input: key_and_query` with `query_heads: all`, in the
+# latent bases the freeze distilled in - `L` for the key, `L^-T` for the summed query - starting at the PCA of the carried
+# keys. The cache's vectors are taken back through `L^-1` and `L^T`, which every projection normalizes away, and the maps
+# are saved with the bases folded in, so `lsa distill export` writes what the server reads off the plain latent.
+#
+# The recipe is the dense target cut to 2048 under the forward KL, 48,000 steps at 3e-4, batch 128, steps drawn by
+# token, the temperature calibrated per layer. The held-out sets are the pilot cache's, `long_16k_1m`, which the freeze
+# scored on, and the `seen` sets are training rows of this cache.
+#
+# A layer's share of the cache is some 400 GiB and a shard holds it in host memory, as the freeze did:
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_index_vectors_d2048.yaml \
+#         --shards 11 --mem-gb 1100 --hours 12 --partition <partition>
+#     lsa distill export $LSA_ROOT/training/distillation/glm53_flash/long_16k_1m_heavy_index_vectors_d2048 \
+#         $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-index-vectors-d2048.pt
+
+defaults:
+  - base
+  - _self_
+
+model:
+  indexer:
+    input: key_and_query
+    query_heads: all
+    window_size: 512
+    sink_size: 4
+    top_k: 2048
+    index_dim: 64
+
+data:
+  root: ${root:data/targets/glm53_flash/long_16k_1m_heavy_top2048}
+  # The eleven MLA layers, which are the only ones carrying an indexer
+  layers: [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43]
+  train:
+    - {name: natural, source: tokens_glm, split: train}
+    - {name: trajectories, source: edgebench_glm, split: train}
+  evaluate:
+    - {name: 16k, source: tokens_glm, split: eval, lengths: [16384], root: &pilot "${root:data/targets/glm53_flash/long_16k_1m}"}
+    - {name: 32k, source: tokens_glm, split: eval, lengths: [32768], root: *pilot}
+    - {name: 64k, source: tokens_glm, split: eval, lengths: [65536], root: *pilot}
+    - {name: 128k, source: tokens_glm, split: eval, lengths: [131072], root: *pilot}
+    - {name: 256k, source: tokens_glm, split: eval, lengths: [262144], root: *pilot}
+    - {name: 512k, source: tokens_glm, split: eval, lengths: [524288], root: *pilot}
+    - {name: 1m, source: tokens_glm, split: eval, lengths: [1048576], root: *pilot}
+    - {name: 512k-trajectories, source: edgebench_glm, split: eval, lengths: [524288], root: *pilot}
+    - {name: 1m-trajectories, source: edgebench_glm, split: eval, lengths: [1048576], root: *pilot}
+    - {name: 64k-seen, source: tokens_glm, split: train, lengths: [65536], rows: train, limit: 8}
+    - {name: 256k-seen, source: tokens_glm, split: train, lengths: [262144], rows: train, limit: 4}
+    - {name: 1m-seen, source: tokens_glm, split: train, lengths: [1048576], rows: train, limit: 2}
+
+run:
+  name: long_16k_1m_heavy_index_vectors_d2048
+
+  objective:
+    target: dense
+    target_depth: 2048
+    closed_block: 8192
+
+  optim:
+    steps: 48000
+    batch: 128
+    lr: 0.0003
+    tau_lr: 0.01
+    grad_clip: 1.0
+    seed: 0
+    draw: token
+
+  report:
+    every: 8000
+    log_every: 100
+
+  wandb:
+    enabled: true
+    prefix: glm53flash-distill-heavy-index-vectors-d2048
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, key_and_query, target_depth, closed_block]
+    log_every: 10

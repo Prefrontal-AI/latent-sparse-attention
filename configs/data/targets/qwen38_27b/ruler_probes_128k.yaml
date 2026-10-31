@@ -1,0 +1,65 @@
+# The RULER probe set at 128k on Qwen3.8-27B - GLM-5.3-Flash's probe set (`glm53_flash/ruler_probes_128k.yaml`) run
+# again over the same rows in Qwen's own prompts, for the offline PISA study on a model with key-value heads.
+#
+# The same five tasks and the same 8 rows of each - the draw is seeded by task and length, not by model. The files are
+# the RULER grid generated in Qwen's tokenizer (`data/benchmarks-qwen38`), read as the harness serves
+# Qwen's RULER - one user turn rendered with `enable_thinking: false`, which closes the think block in the template.
+#
+# Each of the sixteen full-attention layers' files keeps, beside the probes' kinds and targets and the teacher's 2048
+# strongest keys a query:
+# - the key heads' position-free dims side by side [T, 768] bf16 and each group's queries summed, LSA's input
+# - under `queries.attention`, the model's own rotated keys [T, 4, 256] bf16, each head's rotated query at the sampled
+#   rows [Q, 24, 256] bf16 and the layer's softmax scale - what PISA reads
+# There is no native selection - the checkpoint reads every key.
+#
+# About 3.5 KiB a token a layer, some 7 GiB a prompt over 16 layers at 128k and 280 GiB for the 40 (arithmetic).
+# One H200 a worker - the model is some 54 GiB and the prefill a chunk of 32,768 at a time.
+#
+#     lsa distill targets configs/data/targets/qwen38_27b/ruler_probes_128k.yaml \
+#         --mem-gb 320 --workers 4
+#         (inside the site's reservation)
+model:
+  name: qwen38_27b
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: qwen38_27b
+    sources:
+    - games
+    train: 0
+    evaluate: 1
+    length: 4096
+  prepared:
+    name: ruler
+    root: ${root:data/benchmarks-qwen38}
+    sources:
+    - niah_single_2
+    - niah_multikey_1
+    - niah_multikey_2
+    - niah_multikey_3
+    - cwe
+    length: 131072
+    source_rows:
+      niah_single_2: [29, 30, 34, 37, 52, 73, 78, 80]
+      niah_multikey_1: [33, 40, 61, 68, 81, 88, 90, 91]
+      niah_multikey_2: [21, 36, 45, 67, 69, 76, 79, 98]
+      niah_multikey_3: [24, 40, 41, 42, 49, 66, 69, 88]
+      cwe: [24, 30, 33, 44, 51, 80, 84, 86]
+    join: " "
+    chat: true
+    chat_template_kwargs:
+      enable_thinking: false
+  queries:
+    tail: 32
+    top: 2048
+    attention: true
+    targets: ruler
+run:
+  collection: qwen38_27b
+  name: ruler_probes_128k
+  output: ${root:data/targets/qwen38_27b/ruler_probes_128k}
+  input: key_and_query
+  prefill: 32768

@@ -1,0 +1,19 @@
+# The flat design with no training - D-LSA (Training-Free), the map left at the PCA of the carried keys it starts from.
+#
+# A delta on lsa_flat: only the map differs. It is step 0 of the run that reproduces the served map's recipe in the
+# same latent bases, so the two maps share the index space and differ by the distillation alone.
+
+defaults:
+  - lsa_flat_tp8
+  - _self_
+
+model:
+  serving:
+    projections: ${root:models/maps/glm53_flash__long-16k-1M-heavy-key-and-query-pca-step0.pt}
+    # The CuTe kernels, and four contexts of bucket-cache pages beyond the KV pool's, for requests that share a cached prefix in the pool
+    kernels: cutedsl
+    spare_contexts: 4
+
+run:
+  name: glm53_flash_lsa_flat_pca_tp8
+  note: flat, training-free PCA map (distillation step 0), key and query input

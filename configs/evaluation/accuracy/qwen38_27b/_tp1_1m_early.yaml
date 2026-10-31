@@ -1,0 +1,38 @@
+# Not a run - the first battery's long half on one card, to 1M, laid over a configuration.
+#
+# It is `_tp1_early.yaml`'s server with the 27 tasks of the long half the paper uses: LongBench v2 and RULER's thirteen tasks at 524,288 and 1,000,000.
+# The first battery also ran graph walks at 128k and 256k, which the paper does not use and a current suite no longer has.
+
+defaults:
+  - _tp1_early
+  - _self_
+
+data:
+  tasks:
+  - longbench2
+  - ruler_niah_single_1_524288
+  - ruler_niah_single_2_524288
+  - ruler_niah_single_3_524288
+  - ruler_niah_multikey_1_524288
+  - ruler_niah_multikey_2_524288
+  - ruler_niah_multikey_3_524288
+  - ruler_niah_multiquery_524288
+  - ruler_niah_multivalue_524288
+  - ruler_vt_524288
+  - ruler_cwe_524288
+  - ruler_fwe_524288
+  - ruler_qa_squad_524288
+  - ruler_qa_hotpot_524288
+  - ruler_niah_single_1_1000000
+  - ruler_niah_single_2_1000000
+  - ruler_niah_single_3_1000000
+  - ruler_niah_multikey_1_1000000
+  - ruler_niah_multikey_2_1000000
+  - ruler_niah_multikey_3_1000000
+  - ruler_niah_multiquery_1000000
+  - ruler_niah_multivalue_1000000
+  - ruler_vt_1000000
+  - ruler_cwe_1000000
+  - ruler_fwe_1000000
+  - ruler_qa_squad_1000000
+  - ruler_qa_hotpot_1000000

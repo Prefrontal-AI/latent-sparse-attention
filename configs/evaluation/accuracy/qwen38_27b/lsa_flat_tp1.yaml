@@ -1,0 +1,28 @@
+# The flat design on Qwen3.8-27B - every bucket scored by one fused scan and a threshold select, read against
+# [the dense baseline](full_tp1.yaml) on the same card, tasks and YaRN.
+#
+# Written as a delta on the baseline, so this run differs from it in the attention path and the indexer alone.
+# The indexer reads the key and query, the design's input: every key head's 192 position-free dims side by side and
+# each group's six queries summed beside them, through the map the base names.
+#
+# The server is the baseline's with three flags more. The sixteen full-attention layers read their lists through
+# FlashAttention's paged read, named rather than left to the default, at a page of one token, since a list is a set
+# of single slots; a prefill selects on the host, so the prefill is not captured in a CUDA graph. Decode still is.
+
+defaults:
+  - full_tp1
+  - _self_
+
+model:
+  attention: lsa
+  serving:
+    # Radix cache on, prefix_reuse off, and RULER rows share haystacks - each running row can index a full context
+    spare_contexts: 16
+
+run:
+  name: qwen38_27b_lsa_flat_tp1
+  note: flat, key and query input, YaRN factor 40
+  serve:
+    attention-backend: fa3
+    page-size: 1
+    disable-prefill-cuda-graph: true

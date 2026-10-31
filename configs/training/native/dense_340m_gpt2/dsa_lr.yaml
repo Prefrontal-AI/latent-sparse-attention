@@ -1,0 +1,7 @@
+defaults:
+  - dsa_detached_projected_d64_sparse
+  - _self_
+
+sweep:
+  run.optim.lr: [1.0e-4, 3.0e-4, 1.0e-3]
+  run.runtime.seed: [42, 43]

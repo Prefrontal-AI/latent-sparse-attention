@@ -1,0 +1,14 @@
+# Qwen3.8-27B's dense attention timed one request at a time - the ceiling an LSA timing is read against.
+#
+# The same model block as [the scored baseline](../../accuracy/qwen38_27b/full_tp1.yaml), so the two records
+# describe one configuration.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: native
+
+run:
+  name: qwen38_27b_full_tp1

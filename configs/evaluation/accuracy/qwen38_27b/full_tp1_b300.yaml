@@ -1,0 +1,11 @@
+# [full_tp1](full_tp1.yaml) scored on one B300, on [the dense B300 server](_tp1_b300_dense.yaml).
+
+defaults:
+  - full_tp1
+  - _tp1_b300_dense
+  - _self_
+
+run:
+  name: qwen38_27b_full_tp1
+  serve:
+    enable-strict-thinking: null

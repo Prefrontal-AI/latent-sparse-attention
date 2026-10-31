@@ -1,0 +1,18 @@
+# [native_tp8](native_tp8.yaml) on one B300 node under TP8 as SGLang recommends serving it on B300 - a reference row, not a table row.
+#
+# [_tp8_b300.yaml](_tp8_b300.yaml)'s server but for the KV cache and the sparse kernels, which take the cookbook's B300 TP8
+# recipe (sglang docs/src/snippets/configs/zai-org/glm-5.3-flash.jsx): an fp8 latent, read by trtllm in both phases.
+# Every design row reads a bf16 latent, which LSA needs, so this row says how far the bf16 baseline is from the
+# fastest stock B300 server. The fp8 latent is half the bytes, so 10M fits as the bf16 one does.
+
+defaults:
+  - native_tp8
+  - _tp8_b300
+  - _self_
+
+run:
+  name: glm53_flash_native_tp8_fp8
+  serve:
+    kv-cache-dtype: fp8_e4m3
+    dsa-prefill-backend: trtllm
+    dsa-decode-backend: trtllm

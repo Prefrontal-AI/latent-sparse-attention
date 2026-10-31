@@ -1,0 +1,13 @@
+# `lsa_tree_cp8.yaml` with the decode descending as `lsa_tree_descend_tp8.yaml` does, to about 2.1M under context parallel.
+# The descend is captured in the decode CUDA graph, batched across the requests in flight.
+
+defaults:
+  - lsa_tree_cp8
+  - _self_
+
+model:
+  serving:
+    decode: descend
+
+run:
+  name: glm53_flash_lsa_tree_descend_cp8

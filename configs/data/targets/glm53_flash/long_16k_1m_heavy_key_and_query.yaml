@@ -1,0 +1,33 @@
+# The long-16K-1M-heavy dataset, both sides, with each sparse layer's key and query cached in place of its input `x` -
+# what the GLM battery map's recipe (`configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048.yaml`)
+# reads, and the cache to extract to reproduce it.
+#
+# The targets are the teacher's 2048 strongest keys a query, over what the design's read may select: past the 4 sinks
+# and outside the 512-key window, which is the whole rule because the cluster block is the window. The 8192-key coarse
+# block the earlier caches were written under hid the keys between 512 and 8192 back, so nothing is reused from them,
+# and the held-out side is extracted here too. Query positions start past the sinks and the window, at 516.
+#
+# A layer file keeps GLM's key latent at every position [T, 512] bf16, every head's query folded into it at the
+# sampled rows [Q, 64, 512] bf16 and their sum [Q, 512] fp32 - the tensors a run on `indexer.input: key_and_query`
+# reads off the attention's input `x` (4096 dims), bit for bit - at about 1.6 KiB a token a layer where `x` is 8: some
+# 7 TiB over the 403M tokens and 11 layers (arithmetic).
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_heavy_key_and_query.yaml \
+#         --mem-gb 175 --workers 8
+#         (inside the site's reservation)
+#
+# The cache under `data/targets/glm53_flash/long_16k_1m_heavy_key_and_query` was not extracted from this: it is the
+# same dataset's cache of `x`, rewritten in place and renamed (2026-10-07), every file checked against the run's own
+# reading of its `x`.
+defaults:
+- long_16k_1m_heavy_top2048
+- _self_
+data:
+  tokenized:
+    splits:
+    - train
+    - eval
+run:
+  name: long_16k_1m_heavy_key_and_query
+  output: ${root:data/targets/glm53_flash/long_16k_1m_heavy_key_and_query}
+  input: key_and_query

@@ -1,0 +1,14 @@
+# `lsa_tree_tp8.yaml` on PaperTrail, on the server of the paper's 1M-5M cells - `_cp8_papertrail5m.yaml` says what that is.
+
+defaults:
+  - lsa_tree_tp8
+  - _cp8_10m
+  - _cp8_papertrail5m
+  - _self_
+
+run:
+  name: glm53_flash_lsa_tree_cp8_papertrail5m
+  serve:
+    mem-fraction-static: 0.80
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2

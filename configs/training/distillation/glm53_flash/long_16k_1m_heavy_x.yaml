@@ -1,0 +1,80 @@
+# The settled recipe on the x cache - index keys and index queries projected from the attention's input.
+#
+# `configs/data/targets/glm53_flash/long_16k_1m_heavy_x.yaml` writes the cache this reads: `x` at every position
+# and the teacher's 2048 strongest keys a query, over what the design reads - past the 4 sinks and outside the
+# 512-key window. A layer's share of it is some 3 TiB, so a shard streams its documents through a pool of host
+# memory sized from `--mem-gb` rather than holding them.
+#
+# The recipe is the one settled on for the key latent - depth 256, a rate of 1e-3, the heavy mix, 24,000 steps
+# with a report every 4,000 - at an index of 64 dims. It plateaued by 16-24k at 1e-3. Steps rotate over the eleven
+# layers, so a shard of one layer trains about 2,180 of them.
+#
+# The dataset holds the same tokens at every length, so a step draws a document in proportion to its length -
+# drawn uniformly, the 16k bucket would take half the steps and the 1M bucket under one in a hundred.
+#
+# Scoring reads one set per length bucket, because a map that routes a 16k window well and a 1M one badly
+# should not average out to looking fine. Every scored window is a held-out document, and the report is the exact
+# top-k read in the learned space and, on a GPU, flat's served read at 256 rows a document.
+#
+#     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_x.yaml \
+#         --shards 11 --mem-gb 300 --hours 12 --partition <partition>
+#
+# The x cache was rewritten under the key and query on 2026-10-07 - `long_16k_1m_heavy_key_and_query`, which the key
+# and query recipes read. This one, and the others on `x` that name this root, need the x cache extracted again.
+
+defaults:
+  - base
+  - _self_
+
+model:
+  indexer:
+    input: attention_input
+    window_size: 512
+    sink_size: 4
+    top_k: 2048
+    index_dim: 64
+
+data:
+  root: ${root:data/targets/glm53_flash/long_16k_1m_heavy_x}
+  # The eleven MLA layers, which are the only ones carrying an indexer
+  layers: [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43]
+  train:
+    - {name: natural, source: glm53_flash, sources: &natural [arxiv, code, doab, games, gutenberg, hansard, swe, usgpo, wikimedia], split: train}
+    - {name: trajectories, source: glm53_flash, sources: [edgebench], split: train}
+  # The trajectories are a source of their own, so they score as their own rows - the held-out ones are
+  # long enough for the two longest buckets only
+  evaluate:
+    - {name: 16k, source: glm53_flash, sources: *natural, split: eval, lengths: [16384]}
+    - {name: 32k, source: glm53_flash, sources: *natural, split: eval, lengths: [32768]}
+    - {name: 64k, source: glm53_flash, sources: *natural, split: eval, lengths: [65536]}
+    - {name: 128k, source: glm53_flash, sources: *natural, split: eval, lengths: [131072]}
+    - {name: 256k, source: glm53_flash, sources: *natural, split: eval, lengths: [262144]}
+    - {name: 512k, source: glm53_flash, sources: *natural, split: eval, lengths: [524288]}
+    - {name: 1m, source: glm53_flash, sources: *natural, split: eval, lengths: [1048576]}
+    - {name: 512k-trajectories, source: glm53_flash, sources: [edgebench], split: eval, lengths: [524288]}
+    - {name: 1m-trajectories, source: glm53_flash, sources: [edgebench], split: eval, lengths: [1048576]}
+
+run:
+  name: long_16k_1m_heavy_x
+
+  objective:
+    target_depth: 256
+
+  optim:
+    steps: 24000
+    batch: 128
+    lr: 0.001
+    tau_lr: 0.01
+    grad_clip: 1.0
+    seed: 0
+    draw: token
+
+  report:
+    every: 4000
+    log_every: 100
+
+  wandb:
+    enabled: true
+    prefix: glm53flash-distill-long_16k_1m_heavy_x
+    tags: [glm53_flash, distill, long_16k_1m, long_16k_1m_heavy, x]
+    log_every: 10

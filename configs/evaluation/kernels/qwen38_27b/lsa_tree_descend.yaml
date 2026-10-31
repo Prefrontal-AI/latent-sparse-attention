@@ -1,0 +1,14 @@
+# Tree decoding through the beam as well, so the whole read is tree.
+#
+# [The tree configuration](lsa_tree.yaml) with the decode descending, timed under its CUDA graph.
+
+defaults:
+  - lsa_tree
+  - _self_
+
+model:
+  serving:
+    decode: descend
+
+run:
+  name: qwen38_27b_kernels_lsa_tree_descend

@@ -1,0 +1,48 @@
+# The GLM-5.3-Flash targets - both datasets, in one extraction.
+#
+# Which documents train the index map and which score it is decided here and written into the cache, as a
+# `train` or `eval` directory under each collection. A training run then names a side rather than a range of
+# indices, so it cannot read across the boundary however it is written.
+#
+# The side is a hash of the document id, salted apart from the held-out hash. Every window of a document
+# therefore lands on one side, and raising the counts below never moves a document that is already cached.
+#
+# `windows: 1` is deliberate. A second window is another 65,536 tokens of a document already read, which is
+# the most correlated data available - the corpus holds 2,676 held-out documents and this takes 108, so
+# breadth is bought by raising the counts rather than by reading further into the same documents.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/published.yaml --device auto --gpus 8
+#
+# The evaluation documents alone, which is the short path to a first training run:
+#
+#     lsa distill targets configs/data/targets/glm53_flash/published.yaml --device auto --gpus 8 data.tokenized.train=0
+model:
+  name: glm53_flash
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: glm53_flash
+    train: 9
+    evaluate: 3
+    windows: 1
+    length: 65536
+  prepared:
+    name: ruler
+    sources:
+    - niah_single_1
+    - niah_multikey_2
+    - cwe
+    - qa_squad
+    samples: 2
+    length: 65536
+  queries:
+    train: 512
+    tail: 32
+    top: 256
+    seed: 1000
+run:
+  name: published
+  output: ${root:data/targets/glm53_flash/published}

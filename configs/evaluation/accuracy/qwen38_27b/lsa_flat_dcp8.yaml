@@ -1,0 +1,55 @@
+# The flat design past one card - tensor parallel 8 with decode context parallel 8, the mesh
+# [the dense baseline](full_dcp8.yaml) reaches 10M on, RULER 10M. 2M and 5M run on the least mesh each fits,
+# `_dcp2` and `_dcp4`, the decode context parallel size following `tp`.
+#
+# [The flat configuration](lsa_flat_tp1.yaml) with the dense baseline's mesh, and the indexer unchanged.
+# Every rank keeps all four key-value heads for its eighth of the tokens, owner `position % 8`, so an index key is
+# whole on the rank that owns it; a forward gathers the group's query heads, so the summed query is every head's.
+# The index is the one a single card builds, held whole on every rank, and every rank selects the same lists with the
+# single card's budget - each reads the selected keys it owns, and the group merges the reads by their log-sum-exp.
+# The replicated bucket cache counts eight times a rank's row, about 3 KiB beside the row's 64 KiB of KV: at 0.80
+# the pool is 1.44M rows a rank, 11.5M tokens across the group against 12.9M with none of it counted - room for the
+# 10.4M prompt.
+#
+# The server is the dense baseline's with the flat configuration's three flags: a page of one token, an eager
+# prefill, and both backends named - fa3 prefills, and triton decodes, the one the image shards a grouped-query pool
+# for at decode. The plugin arms both and reads through FlashAttention's paged kernel on either.
+# The prefill chunk is the flat configuration's 32,768, so a chunk is indexed as on one card.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+data:
+  suite: full
+  tasks: []
+  lengths: [10000000]
+
+model:
+  serving:
+    # The context runs to millions across eight ranks, and a full context a row would cost gigabytes
+    spare_contexts: 0
+
+run:
+  name: qwen38_27b_lsa_flat_dcp8
+  note: flat, key and query input, YaRN factor 40, tp 8 dcp 8
+  tp: 8
+  # The current image binds each rank to its GPU's NUMA node by default and fails resolving rank 4 under tp 8
+  # => off, as on the images Qwen was first served on this mesh with
+  environment:
+    SGLANG_AUTO_NUMA_BIND: "0"
+  serve:
+    context-length: 10485760
+    prefill-attention-backend: fa3
+    decode-attention-backend: triton
+    dcp-size: "${run.tp}"
+    dcp-comm-backend: ag_rs
+    mem-fraction-static: "0.80"
+    # Two prompts in flight ran out of memory late in a 5M/10M prefill at 32,768 under GLM's CP
+    max-running-requests: 1
+    # sglang sizes the gated delta net state cache at 572 slots whatever the request cap - 41 GB a rank at tp 2
+    # => as many as one request and its cached prefixes use, or a 2M prompt outgrows the pool
+    max-mamba-cache-size: 16
+    watchdog-timeout: 1800
+    attention-backend: null
+  hours: 96

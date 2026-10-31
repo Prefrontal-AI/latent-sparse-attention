@@ -1,0 +1,19 @@
+# @package _global_
+# The FineWeb trunk holds its peak until the final one percent of 100B tokens.
+data:
+  name: fineweb_edu_100bt
+  seq_len: 4096
+  seed: ${run.runtime.seed}
+run:
+  runtime:
+    seed: 42
+  optim:
+    schedule: wsd
+    steps: 95368
+    warmup_steps: 954
+    decay_ratio: 0.01
+    decay_shape: sqrt
+  checkpoint:
+    decay_start: true
+  evaluation:
+    every: 0

@@ -1,0 +1,9 @@
+# [full_tp1](full_tp1.yaml) on one B300 node under tensor parallel 8 on trtllm_mha - [_tp8_b300_dense.yaml](_tp8_b300_dense.yaml) says why.
+
+defaults:
+  - full_tp1
+  - _tp8_b300_dense
+  - _self_
+
+run:
+  name: qwen38_27b_full_tp8

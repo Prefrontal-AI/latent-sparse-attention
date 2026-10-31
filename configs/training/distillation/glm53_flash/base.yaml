@@ -1,0 +1,8 @@
+# Not a run - what every GLM-5.3-Flash distillation run shares: the model its targets were extracted from,
+# and where its runs write. A run here names it first in its `defaults`.
+
+model:
+  name: glm53_flash
+
+run:
+  output: ${root:training/distillation/glm53_flash}

@@ -1,0 +1,10 @@
+# Block Sparse (Flat) on one card, the first battery's short half - the AIME25, GPQA-Diamond and MATH500 reasoning cells of the paper.
+# The first battery also ran graph walks, which the paper does not use.
+
+defaults:
+  - qsa_tp1
+  - _tp1_first
+  - _self_
+
+run:
+  name: qwen38_27b_qsa_tp1_first

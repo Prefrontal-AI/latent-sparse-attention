@@ -1,0 +1,72 @@
+# The offline selection study - LSA's semantic grouping against positional blocks, on the RULER probe set GLM-5.3-Flash was run
+# over once, with the heavy-d2048-lr3e-4 map the battery serves, on the key and query, one list of every head summed.
+#
+# Each prompt's layers are scored at the rows its probes name, and every read is scored on what it holds of the keys the probe
+# was meant to find - the needle's value tokens and its sentence, or a cwe word's earlier occurrences - beside the exact top-k,
+# GLM's own picks and the served designs. `ruler_probes_served_{128k,512k,1m}.yaml` name the caches, one a length.
+#
+#     lsa distill served-read configs/training/distillation/glm53_flash/ruler_probes_served_512k.yaml \
+#         --shards 8
+#         (inside the site's reservation)
+#
+# The designs are the served reads the reference arms are held to. Both read the tree design's sizes, the battery's
+# - window 512, sinks 4, pools of 4, buckets of 8 up to 16, 4,096 keys from the best 1,024 buckets, node buckets of 4 over node
+# cluster blocks of 4,096, a beam of 2,048 from at most 32,768 nodes. `tree` keeps its node centroids in fp8 as the
+# battery serves it, `tree_bf16` in bf16 as the reference scores them.
+#
+# Arms read over the same rows, one list a row - the window and the sinks are in every arm's read as they are in a served one,
+# and every probe metric counts only the keys past them, so no arm is scored on a key every arm holds.
+#
+# A0 is the design itself in torch: Ward's buckets and node buckets, the centroid score - held to `tree_bf16` by
+# `agrees_with`. A1 pairs adjacent node buckets, A2 also groups keys into positional runs, A3 ranks node buckets by a
+# LogSumExp of their children, A4 is A1 with it, and A5 is A2 with a LogSumExp at both levels - the closest the reference
+# comes to PISA in the index space. B1 is PISA on GLM's own attention, the 512-dim key latent as one KV head and the 64
+# heads' queries folded through the key map, blocks of 64 and 64 kept (4,096 keys), at the softmax scale of the nope dims;
+# B2 widens its beam; B3 is PISA in the index space, one head, at 1 / tau.
+#
+# `tau` is the temperature a LogSumExp score and B3 read at, the map's own from its sidecar - `lsa distill calibrate-tau` records
+# one for a map that has none, which the battery's map needs, and a read without it refuses to start. `tau_scale` reads an arm
+# once at each multiple of it, as `A3@tau0.5`, `A3@tau1` and `A3@tau2`, so the LogSumExp arms report how much the temperature
+# moves them; an arm's `tau` fixes it instead, and `taus` sweeps explicit ones as `A3@tau=0.05`.
+#
+# The torch reference runs on the host, a prompt's buckets and levels built once for every arm that groups alike.
+
+defaults:
+  - long_16k_1m_heavy_x_dense_on_native_served
+  - _self_
+
+model:
+  space:
+    init: ${root:models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt}
+  indexer:
+    input: key_and_query
+    query_heads: all
+
+# The layers and the rotation are read off the cache the map was trained on - the heavy mix, kept as key and query since the
+# x cache it was extracted as was rewritten (`long_16k_1m_heavy_x` is gone)
+data:
+  root: ${root:data/targets/glm53_flash/long_16k_1m_heavy_key_and_query}
+
+run:
+  name: ruler_probes_served
+
+  report:
+    served:
+      # Every probe row, which is 1,024 at most
+      rows: 1024
+      designs:
+        - name: tree
+          indexer: {top_k: 4096, top_p: 1024, top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
+          serving: {node_centroid_precision: fp8}
+        - name: tree_bf16
+          indexer: {top_k: 4096, top_p: 1024, top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
+      arms:
+        - {name: A0, design: tree, agrees_with: tree_bf16}
+        - {name: A1, design: tree, node_cluster_algorithm: position}
+        - {name: A2, design: tree, cluster_algorithm: position, node_cluster_algorithm: position}
+        - {name: A3, design: tree, tau_scale: [0.5, 1, 2], node_bucket_score: lse}
+        - {name: A4, design: tree, tau_scale: [0.5, 1, 2], node_cluster_algorithm: position, node_bucket_score: lse}
+        - {name: A5, design: tree, tau_scale: [0.5, 1, 2], cluster_algorithm: position, node_cluster_algorithm: position, node_bucket_score: lse, bucket_score: lse}
+        - {name: B1, kind: pisa, space: attention, block_size: 64, keep_count: 64}
+        - {name: B2, kind: pisa, space: attention, block_size: 64, keep_count: 64, beam_width: 1024}
+        - {name: B3, kind: pisa, space: index, design: tree, tau_scale: [0.5, 1, 2], block_size: 64, keep_count: 64}

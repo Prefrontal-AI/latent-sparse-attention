@@ -1,0 +1,36 @@
+# PaperTrail at 10M on [the qsa_dcp configuration](qsa_dcp8.yaml), read at YaRN factor 42 - the one cell of Qwen3.8-27B
+# not read at factor 40.
+# The context is factor 42's 11,010,048 positions, past the longest 10M prompt with its 163,840-token budget; every
+# other setting is the parent's.
+
+defaults:
+  - qsa_dcp8
+  - _self_
+
+data:
+  suite: full
+  lengths: []
+  tasks:
+    - papertrail_exoplanets_L10000000
+    - papertrail_ml_longctx_L10000000
+    - papertrail_qec_L10000000
+
+model:
+  # The card's rotation with the factor at 42, the least that holds PaperTrail's 10M prompts with their budget in
+  # Qwen3.8-27B's tokens - the
+  # block replaces the card's whole, so all of it is spelled out
+  rope_parameters:
+    mrope_interleaved: true
+    mrope_section: [11, 11, 10]
+    rope_type: yarn
+    rope_theta: 10000000
+    partial_rotary_factor: 0.25
+    factor: 42.0
+    original_max_position_embeddings: 262144
+
+run:
+  name: qwen38_27b_qsa_dcp8_yarn42
+  note: QSA, PaperTrail 10M, YaRN factor 42, tp 8 dcp 8
+  serve:
+    context-length: 11010048
+  hours: 96

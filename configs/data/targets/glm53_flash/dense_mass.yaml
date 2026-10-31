@@ -1,0 +1,46 @@
+# The dense attention mass of GLM-5.3-Flash's 11 sparse layers on the held-out documents of long-16K-1M-heavy, at
+# 16,384 / 32,768 / 131,072 / 524,288 and 1,048,576 tokens - the mass every head pays all causal keys, its shared top
+# 4096 keys, the sinks and the window, and the key and every head's query to recompute it from.
+#
+# The documents are the eval side of the long-16K-1M-heavy mix (`long_16k_1m_heavy_key_and_query`'s own, 161 of them), and
+# `tokenized.nest` reads each at every shorter length from its first token, so a 1M document is also read at 512k and below
+# and the lengths are comparable on the same text: 161 windows at 16k, 133 at 32k, 77 at 128k, 31 at 512k and 12 at 1M.
+# The rows are the last `queries.tail` positions of each window, which see the whole of it.
+#
+# The format is in `src/lsa/training/distillation/data/teacher_mass.py`. Layer files are not written.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/dense_mass.yaml --stage 0
+model:
+  name: glm53_flash
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: glm53_flash
+    documents: ${root:data/targets/glm53_flash/mixes/glm53_flash_long_16k_1m_heavy.json}
+    lengths:
+    - 16384
+    - 32768
+    - 131072
+    - 524288
+    - 1048576
+    splits:
+    - eval
+    nest: true
+  queries:
+    train: 0
+    tail: 256
+  mass:
+    top: 4096
+    head_tops:
+    - 2048
+    - 4096
+run:
+  name: dense_mass
+  output: ${root:data/targets/glm53_flash/dense_mass}
+  prefill: 65536
+  stages:
+  - 16
+  - 30

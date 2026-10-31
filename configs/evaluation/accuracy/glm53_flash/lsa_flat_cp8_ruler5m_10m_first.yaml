@@ -1,0 +1,11 @@
+# D-LSA (Flat) on RULER at 5M and 10M tokens in one launch, the first battery's budgets - the 5M and 10M cells of the paper.
+#
+# The server is `lsa_flat_cp8_ruler5m_10m.yaml`'s; `_first_generation.yaml` says the budgets.
+
+defaults:
+  - lsa_flat_cp8_ruler5m_10m
+  - _first_generation
+  - _self_
+
+run:
+  name: glm53_flash_lsa_flat_cp8_ruler5m_10m_first

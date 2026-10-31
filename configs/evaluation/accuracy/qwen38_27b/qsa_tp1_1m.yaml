@@ -1,0 +1,24 @@
+# QSA on Qwen3.8-27B past one card's native context - the long half of the battery, on the same one-card mesh as
+# [the short half](qsa_tp1.yaml), the dense baseline and the LSA designs. `_tp1_1m.yaml` says what it runs.
+#
+# The server is QSA's with the context at 1,100,000 and the static fraction at 0.92, the dense and LSA flat value -
+# not the 0.94 LSA tree took, since QSA's prefill gathers the prefix's values and runs out of memory there at 1M.
+# `--max-running-requests` stays at 16, as for dense and LSA: sglang reserves the 48 linear layers' recurrent state
+# for every running request, and at its default of 243 the pool is 631,488 tokens and a 1M prompt is refused;
+# capped at 16, the cap every other run used, it is 1,156,480 on an H200, past the context.
+# The server allocates in expanding segments: QSA's prefill gathers the prefix's values into one buffer, and under the
+# battery's load - 512K prompts two to the pool, one after another - the cached blocks fragment until a 1.33 GiB
+# gather finds 1.31 GiB free beside 3.56 GiB reserved and unused, where a single 1M request fits.
+
+defaults:
+  - qsa_tp1
+  - _tp1_1m
+  - _self_
+
+run:
+  name: qwen38_27b_qsa_tp1_1m
+  environment:
+    PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  serve:
+    context-length: 1100000
+    mem-fraction-static: 0.92

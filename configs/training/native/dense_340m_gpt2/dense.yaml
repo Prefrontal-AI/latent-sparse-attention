@@ -1,0 +1,12 @@
+# T0 - dense causal attention in all nineteen layers. The ceiling every other arm is read against.
+
+defaults:
+  - base
+  - _self_
+
+run:
+  name: dense
+
+attention:
+  kind: dense
+  backend: varlen

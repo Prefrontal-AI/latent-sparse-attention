@@ -1,0 +1,22 @@
+# [qsa_tp1](qsa_tp1.yaml) timed on one B300 node under tensor parallel 8 without decode context parallel - the mesh of
+# [the dense TP8 reference](full_tp8_b300.yaml), so every Qwen B300 row shares one mesh.
+#
+# [qsa_dcp8_b300](qsa_dcp8_b300.yaml)'s server less --dcp-size and --dcp-comm-backend: the QSA backend the fork builds for
+# the checkpoint, the same ladder, FlashInfer's autotune off. One rank holds all ~10.5M slots, as in the TP8 reference
+# at 0.85 (168 GB a GPU for the dense pool).
+
+defaults:
+  - qsa_tp1
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  name: qwen38_27b_qsa_tp8
+  port: 0
+  tp: 8
+  hours: 24
+  serve:
+    max-mamba-cache-size: 16

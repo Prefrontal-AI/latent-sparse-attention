@@ -1,0 +1,19 @@
+# The instruction-tuned 4B, and the bottom rung of the distillation ladder.
+#
+# Same architecture and same rotary layout as the base model - what differs is the weights and that this one
+# ties its embedding to its output projection where the 27B does not, which is read off `config.json` at
+# load rather than recorded here.
+#
+# The ladder extracts from this rather than from [the base model](qwen35_4b_base.yaml) because it is the
+# only flavour the 9B and the 27B are published in: both carry a chat template where the base 4B does not,
+# so a base bottom rung would vary flavour and scale together.
+
+name: qwen35_4b
+about: Qwen3.5-4B - the bottom rung of the distillation ladder
+repo: Qwen/Qwen3.5-4B
+revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+family: qwen3_5
+flavor: 4B
+rotary_end: prefix
+rotary_dim: 64
+attention: full

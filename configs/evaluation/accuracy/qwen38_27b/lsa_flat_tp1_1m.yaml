@@ -1,0 +1,19 @@
+# The flat design's long half on one card, to 1M - `_tp1_1m.yaml` says what it runs.
+#
+# The server is [the flat configuration's](lsa_flat_tp1.yaml) with the context at 1,100,000 and the static fraction at
+# 0.92, where the pool holds 1.11M slots beside the bucket cache. `--max-running-requests` stays at 16, as for dense.
+
+defaults:
+  - lsa_flat_tp1
+  - _tp1_1m
+  - _self_
+
+model:
+  serving:
+    spare_contexts: 3
+
+run:
+  name: qwen38_27b_lsa_flat_tp1_1m
+  serve:
+    context-length: 1100000
+    mem-fraction-static: 0.92

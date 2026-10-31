@@ -1,0 +1,12 @@
+defaults:
+  - pisam8
+  - _self_
+
+run:
+  name: pisam8-window-budget
+
+attention:
+  local_block_count: 8
+
+sweep:
+  attention.level_block_count: [25, 41, 73]

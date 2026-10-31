@@ -1,0 +1,9 @@
+defaults:
+  - dsa_detached_projected_d64_sparse
+  - _self_
+
+run:
+  name: dsa_detached_projected_d64_sparse_selection
+
+attention:
+  kl_on_selection: true

@@ -1,0 +1,18 @@
+# The fair PISA set beside [the stock PISA timing](pisa_tp8.yaml), at LSA's bucket granularity - leaf blocks of 8 keys and a keep count of 576, so a
+# query still reads 4,608 keys. Only the pyramid differs, so the server is the base's with its four running requests.
+# At 1,052,672 the fp32 means and pyramid take 27.6 GiB of a card at four rows, which by count still leaves a pool past a 1M prompt.
+#
+# Timed with the model block of [the scored fair set](../../accuracy/glm53_flash/pisa_c8_tp8_512k.yaml), so the two records describe one
+# configuration.
+
+defaults:
+  - pisa_tp8
+  - _self_
+
+model:
+  pisa:
+    block_size: 8
+    keep_count: 576
+
+run:
+  name: glm53_flash_pisa_c8_tp8

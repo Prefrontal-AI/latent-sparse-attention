@@ -1,0 +1,42 @@
+# The served read of the map every LSA configuration serves - the dense_on_native run's, exported - scored offline on
+# the held-out documents of the cache it trained on, against the exact top-k and GLM's own picks.
+#
+# Each design is its accuracy config's `model.indexer` and `model.serving` blocks
+# (`configs/evaluation/accuracy/glm53_flash/lsa_<design>.yaml`), and a test holds the two to each other. The exact
+# read is at the served budget of 4096 keys, and at flat_k2048's 2048 beside it. GLM's own picks are the `_native.pt`
+# sidecars `lsa distill native-picks` wrote beside the cache.
+#
+#     lsa distill served-read configs/training/distillation/glm53_flash/long_16k_1m_heavy_x_dense_on_native_served.yaml \
+#         --shards 8
+#         (inside the site's reservation)
+
+defaults:
+  - long_16k_1m_heavy_x_dense_on_native
+  - _self_
+
+model:
+  indexer:
+    top_k: 4096
+  space:
+    init: ${root:models/maps/glm53_flash__long-16k-1M-heavy-x-dense-on-native.pt}
+
+run:
+  name: long_16k_1m_heavy_x_dense_on_native_served
+
+  report:
+    served:
+      rows: 1024
+      designs:
+        - {name: flat}
+        - name: fixed
+          indexer: {top_level: 1, node_bucket_size: 4, node_cluster_block_size: 1024, beam_width: 2048}
+        - name: tree
+          indexer: {top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
+          serving: {node_centroid_precision: fp8}
+        - name: flat_k2048
+          indexer: {top_k: 2048, top_p: 512}
+        - name: flat_no_pooling
+          indexer: {pool_size: null}
+
+  wandb:
+    enabled: false

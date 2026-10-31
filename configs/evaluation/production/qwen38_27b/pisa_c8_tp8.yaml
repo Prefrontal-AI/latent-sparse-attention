@@ -1,0 +1,14 @@
+# The fair PISA on [the stock PISA's H200 TP8 server](pisa_tp8.yaml) - leaf blocks of 8 keys and a keep count of 576, so a query still reads 4,608 keys.
+# The model block is [pisa_c8_tp1](pisa_c8_tp1.yaml)'s.
+# The server is unchanged: a rank holds one of the 4 key heads, so its means and pyramid at 1M are 8 times a quarter of one card's stock share, about 4 GiB a row, which the 0.80 fraction holds beside the 1M pool.
+# Served gates 273355 and 273356 checked the fair set's lists under this mesh.
+
+defaults:
+  - pisa_c8_tp1
+  - pisa_tp8
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_c8_tp8
+  serve:
+    context-length: 1050000

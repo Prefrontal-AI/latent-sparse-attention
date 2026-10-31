@@ -1,0 +1,14 @@
+# Not a run - the first context-parallel GLM server at 10.5M tokens, laid over `_cp8_10m.yaml`.
+#
+# `_cp8_early.yaml` is the server; this file is the request budget it ran 5M and 10M RULER at.
+# A chunk of 8192 and two requests in flight, where `_cp8_10m.yaml` sends one 32768-token chunk of one request at a time.
+
+defaults:
+  - _cp8_early
+  - _self_
+
+run:
+  serve:
+    chunked-prefill-size: 8192
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2

@@ -1,0 +1,12 @@
+# Not a run - `_cp8_10m_early.yaml` with the chunk every one-node layout uses, laid over `_cp8_10m.yaml`.
+#
+# The first battery's D-LSA (Flat) and Block Sparse (Flat) RULER cells at 5M and 10M tokens were scored on this server.
+# It is the server `_cp8_10m_early.yaml` describes, prefilling 32768 tokens a chunk where that file prefills 8192.
+
+defaults:
+  - _cp8_10m_early
+  - _self_
+
+run:
+  serve:
+    chunked-prefill-size: 32768

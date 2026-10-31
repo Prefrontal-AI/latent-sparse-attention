@@ -1,0 +1,13 @@
+defaults:
+  - dsa
+  - _self_
+
+model:
+  attention_bias: false
+
+run:
+  name: dsa_projected
+
+attention:
+  index_input: key_and_query
+  index_dim: 32

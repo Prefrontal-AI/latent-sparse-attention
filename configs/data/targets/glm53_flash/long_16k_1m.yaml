@@ -1,0 +1,69 @@
+# Select balanced GLM documents from 16k to 1M and extract their teacher targets in one job.
+# The smaller 8M-token training tier is rebalanced from a 32M-token-per-length selection.
+# Selection and measured provenance are written as JSON beside the targets.
+#
+#     lsa distill targets configs/data/targets/glm53_flash/long_16k_1m.yaml \
+#         'data.tokenized.lengths=[16384,32768,65536]'
+model:
+  name: glm53_flash
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: glm53_flash
+  selection:
+    datasets:
+    - glm53_flash
+    lengths:
+    - 16384
+    - 32768
+    - 65536
+    - 131072
+    - 262144
+    - 524288
+    - 1048576
+    tokens_per_bucket: 33554432
+    domains:
+      books:
+      - gutenberg
+      academic:
+      - doab
+      - arxiv
+      code:
+      - code
+      agentic:
+      - swe
+      - games
+      - edgebench
+      government:
+      - usgpo
+      parliament:
+      - hansard
+      discussion:
+      - wikimedia
+    min_length:
+      edgebench: 262144
+    from_start:
+    - edgebench
+    group_by:
+      edgebench: ':'
+    scoring_per_domain: 4
+    exclude_from_scoring:
+    - ${root:data/targets/glm53_flash/published/glm53_flash}
+    tokens_per_tier: 8388608
+  queries:
+    train: 128
+    density: 0.008934
+    tail: 32
+    top: 256
+    seed: 1000
+run:
+  collection: glm53_flash
+  name: long_16k_1m
+  output: ${root:data/targets/glm53_flash/long_16k_1m}
+  prefill: 65536
+  stages:
+  - 16
+  - 30

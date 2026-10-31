@@ -1,0 +1,24 @@
+# [pisa_tp8](pisa_tp8.yaml) timed one request at a time on one B300 node to 1M - [_tp8_b300.yaml](_tp8_b300.yaml)'s server at the ladder's
+# 512k and 1M. The stock PISA, leaf blocks of 64 keys and a beam of 72, is the reference of the two PISA timings.
+#
+# PISA has no context parallel, so its ladder stops where a served run holds it, 1M, and the 10M point of the TP8 block is not
+# asked of it. The server is b300_tp8's - bf16 latent, flashmla_sparse in both phases, FlashInfer's autotune off, two running
+# requests - with the context cut from 10.5M to the base's 1,052,672: 1M and a 256-token answer, and the pool left to sglang's own
+# sizing at that context, as the base's. Two rows rather than the base's four, since the timing sends one request at a time and the
+# 8-key sibling's means grow with every row (about 6.9 GiB a row at 1M against 0.7 for this one).
+# The fp32 means and the pyramid are replicated on every rank, since the search gathers the group's queries, so TP8 shards none of them.
+
+defaults:
+  - pisa_tp8
+  - _tp8_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576]
+
+run:
+  name: glm53_flash_pisa_tp8
+  hours: 4
+  serve:
+    context-length: 1052672
+    max-total-tokens: null

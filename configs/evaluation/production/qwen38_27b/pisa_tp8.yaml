@@ -1,0 +1,22 @@
+# [pisa_tp1](pisa_tp1.yaml) timed one request at a time on one H200 node at 512k and 1M under tensor parallel 8 - the stock PISA, leaf blocks of 64 keys and a keep count of 72.
+#
+# Every other Qwen arm on H200 is timed on tensor parallel 8 with decode context parallel 8 ([lsa_flat_dcp8](lsa_flat_dcp8.yaml), [full_dcp8](full_dcp8.yaml)).
+# PISA has no context parallel, so this is tensor parallel 8 alone, the mesh [the B300 PISA cell](pisa_tp8_b300.yaml) serves.
+# Each key head sits on two ranks holding three of its six query heads, and the pair's block scores are summed at every pyramid level, so both ranks select the list one card selects (served gates 273353 and 273354).
+# The server is [pisa_tp1](pisa_tp1.yaml)'s on FlashAttention at a page of one slot, with the DCP arms' static fraction of 0.80 and watchdog.
+# The context stays the production base's 1,050,000, since the 10M point is not asked of PISA.
+
+defaults:
+  - pisa_tp1
+  - _self_
+
+data:
+  lengths: [524288, 1048576]
+
+run:
+  name: qwen38_27b_pisa_tp8
+  tp: 8
+  hours: 4
+  serve:
+    mem-fraction-static: "0.80"
+    watchdog-timeout: 1800

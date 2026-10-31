@@ -1,0 +1,14 @@
+# What a concurrency run of Qwen 3.8 27B sends - [the concurrency workload](concurrency.yaml) in Qwen's own tokens.
+#
+# It stops at 5M: one 10M request is all a node holds, and a 10M prompt with a 1,024-token answer would pass the
+# 10,485,760 positions Qwen's YaRN factor 40 holds.
+
+name: concurrency_qwen38
+kind: workload
+path: ${root:data/workloads/concurrency_qwen38}
+about: distinct gutenberg prompts for one concurrent wave at each of five lengths from 128k to 5M Qwen3.8-27B tokens
+tokenized: qwen38_27b
+source: gutenberg
+file: "gutenberg_{length}.json"
+lengths: [131072, 524288, 1048576, 2097152, 5242880]
+entries: {131072: 256, 524288: 32, 1048576: 16, 2097152: 8, 5242880: 3}

@@ -1,0 +1,20 @@
+# Not a run - a Qwen3.8-27B design scored under tensor parallel 8 and decode context parallel 8 on one B300 node,
+# laid over its DCP8 configuration as its last default.
+#
+# The output check [the B300 DCP8 timings](../../production/qwen38_27b/_dcp8_b300_sparse.yaml) are gated on: a timing cannot
+# see a read of the wrong rows, a score can. The mesh and server are the DCP8 configuration's on the B300 image, the
+# selection read through the triton backend in both phases as the B300 timings read it, FlashInfer's autotune off.
+# The suite is RULER's cwe and niah_multikey_2 at 128k, the cells the one-card B300 gate scored.
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  suite: ruler
+  tasks: [ruler_cwe_131072, ruler_niah_multikey_2_131072]
+  lengths: []
+
+run:
+  port: 0
+  hours: 12

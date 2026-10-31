@@ -1,0 +1,17 @@
+# Not a run - the B300 server image, named by every B300 configuration here as a default so its digest is written once.
+# Hopper's image cannot serve a B300, its FA3 is sm_90a alone.
+# The flags the B300 configurations here share are written once as well - a configuration sets only where it differs.
+
+run:
+  image: ${site.images.b300}
+  serve:
+    disable-flashinfer-autotune: true
+    chunked-prefill-size: 32768
+    max-prefill-tokens: 32768
+    reasoning-parser: qwen3
+    disable-radix-cache: true
+    enable-metrics: true
+    context-length: 10485760
+    max-running-requests: 2
+    mem-fraction-static: 0.85
+    watchdog-timeout: 1800

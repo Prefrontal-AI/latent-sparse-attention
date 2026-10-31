@@ -1,0 +1,24 @@
+# LongBench v2 under the official template, truncated in the middle to a context and prepared once.
+#
+# lm-eval's longbench2 tasks score by log-likelihood, which a chat endpoint cannot provide. The official
+# evaluation is generative and truncates the context in the middle to the model's length, so the prompt
+# depends on the tokenizer and the limit and is built once and stored, one file per context.
+#
+# A run asks a fixed 60 of the 503 questions, 20 from each length class drawn with the seed below - the ids
+# are in the suites' `subsets.json`.
+#
+# The revision is the one the shared datasets cache holds, which is what the prepared file was built from.
+
+name: longbench2
+kind: benchmark
+preparer: longbench
+path: ${root:data/benchmarks/longbench2}
+about: LongBench v2's 503 questions under the official template, truncated to 884,736 GLM-5.3-Flash tokens - what a 1,048,576 server leaves over a 163,840 budget
+dataset: THUDM/LongBench-v2
+revision: 2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9
+split: train
+licence: Apache-2.0
+tokenizer: glm53_flash
+file: "longbench2_{context}.jsonl"
+context: 884736
+seed: 0

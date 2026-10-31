@@ -1,0 +1,24 @@
+# The original PISA design, timed - leaf blocks of 64 keys under a binary mean-pooled pyramid, searched coarse to fine, so a
+# query reads 4,608 keys. The selector the served run scores in [pisa.yaml](../../accuracy/glm53_flash/pisa_tp8.yaml).
+#
+# Timed against [the native measurement](native.yaml), with the knobs of the scored run, which are `PisaConfig`'s defaults, so the layer
+# being timed is the layer being scored. It reads no map, which `model.serving.projections` of the base is for LSA's.
+# The selection is one component, `index k select` - the search scores and keeps in one call, so it has no query scan beside it.
+# Its lists are held to a reference by the served run's strict check, so this times without checking them.
+#
+# The ladder is the base's, to 10M, though a served run holds PISA only to 1M - it has no context parallel - so the layer is
+# timed where the other selectors are.
+# A prefill's search is eager, and a decode step's is captured in the decode CUDA graph, which the decode phase compares.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+
+run:
+  name: glm53_flash_kernels_pisa
+
+sweep:
+  data.phase: [prefill, decode]

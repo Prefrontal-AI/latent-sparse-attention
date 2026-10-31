@@ -1,0 +1,24 @@
+# The fixed design - one level of node buckets over each block of 1,024 buckets, and a beam of 2,048.
+# Flat's accuracy - on one card at 10M 22.86 ms a chunk, flat 23.25 and tree 20.79 (kernel-ladders.md, one card).
+# The earlier ladders that put it first at 10M compare runs on different nodes, 0.5-1.5 ms apart.
+#
+# Written as a delta on the base, so this run differs from the baseline in the attention path and the indexer
+# alone. The indexer's input and the map it reads are the base's.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+  indexer:
+    top_level: 1
+    node_bucket_size: 4
+    node_cluster_block_size: 1024
+    beam_width: 2048
+
+data:
+  suite: full
+
+run:
+  name: glm53_flash_lsa_fixed_tp8

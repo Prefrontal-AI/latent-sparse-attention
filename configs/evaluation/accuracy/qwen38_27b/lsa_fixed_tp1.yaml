@@ -1,0 +1,19 @@
+# The fixed design on Qwen3.8-27B - one level of node buckets over each block of 1,024 buckets, and a beam of 2,048.
+#
+# [The flat configuration](lsa_flat_tp1.yaml) with the design's knobs changed and nothing else - its server, map and
+# tasks.
+
+defaults:
+  - lsa_flat_tp1
+  - _self_
+
+model:
+  indexer:
+    top_level: 1
+    node_bucket_size: 4
+    node_cluster_block_size: 1024
+    beam_width: 2048
+
+run:
+  name: qwen38_27b_lsa_fixed_tp1
+  note: fixed, key and query input, YaRN factor 40

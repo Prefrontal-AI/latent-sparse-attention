@@ -1,0 +1,62 @@
+# Not a run - the first battery's short half on one card, laid over a configuration.
+#
+# It is `_tp1_early.yaml`'s server with the 42 tasks of the short half the paper uses: GPQA-Diamond, MATH500, AIME25 and RULER's thirteen tasks at 4,096, 32,768 and 131,072.
+# The first battery also ran graph walks at 128k, which the paper does not use and a current suite no longer has.
+# The data root is left to the suite's default, and graph walks and LongBench v2 sampled up to 32,768 tokens where a current run gives them 163,840.
+
+defaults:
+  - _tp1_early
+  - _self_
+
+data:
+  root: ""
+  tasks:
+  - gpqa_diamond
+  - math500
+  - aime25
+  - ruler_niah_single_1_4096
+  - ruler_niah_single_2_4096
+  - ruler_niah_single_3_4096
+  - ruler_niah_multikey_1_4096
+  - ruler_niah_multikey_2_4096
+  - ruler_niah_multikey_3_4096
+  - ruler_niah_multiquery_4096
+  - ruler_niah_multivalue_4096
+  - ruler_vt_4096
+  - ruler_cwe_4096
+  - ruler_fwe_4096
+  - ruler_qa_squad_4096
+  - ruler_qa_hotpot_4096
+  - ruler_niah_single_1_32768
+  - ruler_niah_single_2_32768
+  - ruler_niah_single_3_32768
+  - ruler_niah_multikey_1_32768
+  - ruler_niah_multikey_2_32768
+  - ruler_niah_multikey_3_32768
+  - ruler_niah_multiquery_32768
+  - ruler_niah_multivalue_32768
+  - ruler_vt_32768
+  - ruler_cwe_32768
+  - ruler_fwe_32768
+  - ruler_qa_squad_32768
+  - ruler_qa_hotpot_32768
+  - ruler_niah_single_1_131072
+  - ruler_niah_single_2_131072
+  - ruler_niah_single_3_131072
+  - ruler_niah_multikey_1_131072
+  - ruler_niah_multikey_2_131072
+  - ruler_niah_multikey_3_131072
+  - ruler_niah_multiquery_131072
+  - ruler_niah_multivalue_131072
+  - ruler_vt_131072
+  - ruler_cwe_131072
+  - ruler_fwe_131072
+  - ruler_qa_squad_131072
+  - ruler_qa_hotpot_131072
+
+model:
+  generation:
+    graphwalks:
+      max_tokens: 32768
+    longbench2:
+      max_tokens: 32768

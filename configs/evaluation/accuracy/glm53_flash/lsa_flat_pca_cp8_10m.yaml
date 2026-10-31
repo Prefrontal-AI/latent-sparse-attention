@@ -1,0 +1,14 @@
+# `lsa_flat_pca_tp8.yaml` under `_cp8_10m.yaml`, which says what that changes.
+
+defaults:
+  - lsa_flat_pca_tp8
+  - _cp8_10m
+  - _self_
+
+model:
+  serving:
+    # No context beyond the pool's pages - one request at a time at 10M
+    spare_contexts: 0
+
+run:
+  name: glm53_flash_lsa_flat_pca_cp8_10m

@@ -1,0 +1,8 @@
+# Not a run - the B300 server image, named by every B300 configuration here as a default so its digest is written once.
+# Hopper's image cannot serve a B300, its FA3 is sm_90a alone.
+# It is the site's b300 image, and the context-parallel configurations name it too.
+# Its DCP split-KV decode tiles 32 heads on Blackwell, where a 64-head tile of the latent asks 262,688 B of shared memory
+# against a B300's 232,448 at two stages and faults at one, and it refuses the trtllm DSA prefill under DCP.
+
+run:
+  image: ${site.images.b300}

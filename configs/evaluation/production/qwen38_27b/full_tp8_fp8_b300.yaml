@@ -1,0 +1,15 @@
+# [full_tp1](full_tp1.yaml) on one B300 node under TP8 on trtllm_mha with an fp8 KV cache, as SGLang's cookbook recipes pin
+# it - a reference row beside [the bf16 TP8 reference](full_tp8_b300.yaml), not a table row.
+#
+# [_tp8_b300_dense.yaml](_tp8_b300_dense.yaml)'s server but for the KV dtype, so the two references differ in it alone. The fp8 pool
+# is half the bytes, so 10M fits as the bf16 one does.
+
+defaults:
+  - full_tp1
+  - _tp8_b300_dense
+  - _self_
+
+run:
+  name: qwen38_27b_full_tp8_fp8
+  serve:
+    kv-cache-dtype: fp8_e4m3

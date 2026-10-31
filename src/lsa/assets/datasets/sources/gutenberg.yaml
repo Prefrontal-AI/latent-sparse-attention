@@ -1,0 +1,12 @@
+# Public-domain books from Project Gutenberg, as Common Pile filtered them.
+#
+# The revision is the head on 2026-07-17, the day it was collected. Each book's licence is in the
+# `manifest.parquet` beside the shards.
+
+name: gutenberg
+kind: source
+path: ${root:data/sources/gutenberg}
+about: Project Gutenberg books from Common Pile, one book per document
+dataset: common-pile/project_gutenberg_filtered
+revision: 3cdf6879c807f4e4e063f2ceb23bc268d8c29ab7
+licence: per-document

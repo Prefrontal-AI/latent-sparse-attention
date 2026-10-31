@@ -1,0 +1,44 @@
+# RULER's thirteen tasks at one prepared length, keeping DSA's own selection beside a 2048-key dense target.
+#
+# The scored rows of a prompt are its last 32 positions, which are the question and the answer prefix - the
+# queries that have to find the needle - and its rows are the served records' `doc_id`s, so a served sample's
+# score can be read beside what the read held of it. A prepared prompt's name does not carry its length, so
+# each length is its own cache:
+#
+#     lsa distill targets configs/data/targets/glm53_flash/ruler_native.yaml \
+#         --stage 0 prepared.length=131072 \
+#         out=${LSA_ROOT}/data/targets/glm53_flash/ruler_native
+#
+# An extraction always plans tokenized documents first, so the tokenized side is one held-out games window, which
+# nothing scores.
+model:
+  name: glm53_flash
+  dtype: bfloat16
+  indexer:
+    window_size: 512
+    sink_size: 4
+data:
+  tokenized:
+    name: glm53_flash
+    sources:
+    - games
+    train: 0
+    evaluate: 1
+  prepared:
+    name: ruler
+    samples: 4
+    length: 131072
+  queries:
+    train: 128
+    density: 0.0
+    tail: 32
+    top: 2048
+    seed: 1000
+    native: true
+run:
+  name: ruler_native
+  output: ${root:data/targets/glm53_flash/ruler_native}
+  prefill: 65536
+  stages:
+  - 16
+  - 30

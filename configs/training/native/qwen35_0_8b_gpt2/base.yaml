@@ -1,0 +1,40 @@
+# Not a run - what every 0.8B hybrid run at the GPT-2 vocabulary shares: Qwen3.5-0.8B's text decoder from random init, three
+# Gated DeltaNet layers to one full-attention layer, tied embeddings, 0.55B parameters.
+#
+# One node, 32,768 tokens a GPU and four passes of them to a step: 1,048,576 tokens a step, 17,167 steps, about 18B
+# tokens, warmup over the first 0.9B. The step is a token count and not a node count, so a run on more GPUs makes up the
+# same step with fewer passes. The schedule is the one the reference training code ran these models on, a 5e-4 peak, with a square-root decay.
+#
+# Pretrains on the GPT-2 long-document corpus at 4,096. FineWeb pretrains and long-context decays use phase overlays.
+# The tokenizer is the corpus's own, GPT-2's.
+
+model:
+  flavor: 0.8B-gpt2
+
+data:
+  name: gpt2
+  seed: ${run.runtime.seed}
+  seq_len: 4096
+
+run:
+  output: ${root:training/native/qwen35_0_8b_gpt2}
+  dp_shard: 8
+  checkpoint:
+    decay_start: true
+  optim:
+    weight_decay_scope: matrices
+    steps: 17167
+    lr: 5.0e-4
+    min_lr_factor: 0.1
+    warmup_steps: 859
+    decay_ratio: 0.2
+    decay_shape: sqrt
+    schedule: wsd
+    tokens_per_rank: 32768
+    tokens_per_step: 1048576
+  runtime:
+    autocast_bf16: true
+    activation_checkpoint: none
+    seed: 42
+  evaluation:
+    every: 0

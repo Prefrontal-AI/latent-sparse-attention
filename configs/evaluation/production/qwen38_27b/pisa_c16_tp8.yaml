@@ -1,0 +1,13 @@
+# The 16-key PISA on [the stock PISA's H200 TP8 server](pisa_tp8.yaml) - leaf blocks of 16 keys and a keep count of 288, so a query still reads 4,608 keys.
+# The model block is [pisa_c16_tp1](pisa_c16_tp1.yaml)'s.
+# The server is unchanged: a rank holds one of the 4 key heads, so its means and pyramid at 1M are 4 times a quarter of one card's stock share, about 2 GiB a row, which the 0.80 fraction holds beside the 1M pool.
+
+defaults:
+  - pisa_c16_tp1
+  - pisa_tp8
+  - _self_
+
+run:
+  name: qwen38_27b_pisa_c16_tp8
+  serve:
+    context-length: 1050000

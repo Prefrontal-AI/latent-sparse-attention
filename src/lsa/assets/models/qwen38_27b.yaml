@@ -1,0 +1,31 @@
+# Qwen3.8-27B, the dense-attention model LSA is carried to after GLM-5.3-Flash. 64 layers - 48 Gated DeltaNet
+# and 16 full attention, every fourth - GQA of 24 query heads on 4 key-value heads of 256 dims, 64 of them
+# rotated, and 262,144 tokens native.
+#
+# The model is frozen and served with YaRN to 10M, so it is distilled under the same rotation: an index map is
+# trained on the q, k and attention it is later served with. `rope_parameters` is that one setting, merged
+# over the checkpoint's own at load by every harness that reads this card - the teacher extraction, the
+# online teacher in distillation and the server, which passes it as `--json-model-override-args`.
+# A factor of 40 on the native 262,144 is 10,485,760 positions, the shortest round factor past a 10M prompt
+# and its answer. The rest is the checkpoint's own block, which the override replaces whole.
+#
+# `output_gate_type: swish` in its config is the Gated DeltaNet norm's activation, which transformers already
+# applies as silu; the full-attention output gate is a sigmoid either way.
+
+name: qwen38_27b
+about: Qwen3.8-27B - the dense-attention model, served and distilled with YaRN to 10M
+repo: Qwen/Qwen3.8-27b
+revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+family: qwen3_5
+flavor: 27B
+rotary_end: prefix
+rotary_dim: 64
+rope_parameters:
+  mrope_interleaved: true
+  mrope_section: [11, 11, 10]
+  rope_type: yarn
+  rope_theta: 10000000
+  partial_rotary_factor: 0.25
+  factor: 40.0
+  original_max_position_embeddings: 262144
+attention: full

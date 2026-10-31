@@ -1,0 +1,16 @@
+# The fair PISA set beside [the stock PISA kernel timing](pisa.yaml), at LSA's bucket granularity - leaf blocks of 8 keys and a keep count of 576, so a query still reads 4,608 keys.
+#
+# The harness arms the layer from the model block, which writes `model.pisa` into the settings file it reads, so this times the layer [the scored fair set](../../accuracy/qwen38_27b/pisa_c8_tp1.yaml) serves.
+# The ladder is the base's, and the leaf means and pyramid are the one index a key head holds, 8 times as many blocks as the stock's.
+
+defaults:
+  - pisa
+  - _self_
+
+model:
+  pisa:
+    block_size: 8
+    keep_count: 576
+
+run:
+  name: qwen38_27b_kernels_pisa_c8

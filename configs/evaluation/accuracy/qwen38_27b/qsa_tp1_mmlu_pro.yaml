@@ -1,0 +1,14 @@
+# Block Sparse (Flat) on one card, on MMLU-Pro - the MMLU-Pro cells of the paper.
+#
+# The server did not report cached prompt tokens yet, as `_no_cache_report.yaml` says.
+
+defaults:
+  - qsa_tp1
+  - _no_cache_report
+  - _self_
+
+data:
+  tasks: [mmlu_pro]
+
+run:
+  name: qwen38_27b_qsa_tp1_mmlu_pro

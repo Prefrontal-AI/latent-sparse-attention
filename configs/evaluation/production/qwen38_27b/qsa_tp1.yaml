@@ -1,0 +1,22 @@
+# Qwen's own sparse attention on Qwen3.8-27B timed one request at a time, read against [the dense timing](full_tp1.yaml)
+# and the LSA designs'.
+#
+# The same model block and image as [the scored configuration](../../accuracy/qwen38_27b/qsa_tp1.yaml), and its server:
+# the base's with the prefill out of CUDA graphs.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  name: qwen38_27b_qsa
+  attention: native
+
+run:
+  name: qwen38_27b_qsa_tp1
+  # QSA's prefill gathers the prefix's values into one buffer - expanding segments, as its scored 1M half
+  environment:
+    PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  serve:
+    mem-fraction-static: 0.865
+    disable-prefill-cuda-graph: true

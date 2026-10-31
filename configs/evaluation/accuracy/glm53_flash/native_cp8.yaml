@@ -1,0 +1,9 @@
+# `native_tp8.yaml` on one node under context parallel, to about 2.1M tokens - `_cp8.yaml` says what that changes.
+
+defaults:
+  - native_tp8
+  - _cp8
+  - _self_
+
+run:
+  name: glm53_flash_native_cp8

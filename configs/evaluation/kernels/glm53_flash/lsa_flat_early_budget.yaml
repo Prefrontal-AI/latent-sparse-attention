@@ -1,0 +1,19 @@
+# Flat reading 2,048 keys with top-p 512 before position 1,048,576 and its own 4,096 and 1,024 after - an early budget.
+# A query below the position reads the early budget, a later one the design's own, so the list width and the
+# memory stay the flat design's.
+#
+# Timed as a delta on [the flat measurement](lsa_flat.yaml), so the layer differs from it in the early budget alone.
+
+defaults:
+  - lsa_flat
+  - _self_
+
+model:
+  indexer:
+    early_budget:
+      position: 1048576
+      top_k: 2048
+      top_p: 512
+
+run:
+  name: glm53_flash_kernels_lsa_flat_early_budget

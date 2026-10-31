@@ -1,0 +1,26 @@
+# The original PISA design served as a second selector beside LSA - leaf blocks of 64 keys under a binary mean-pooled pyramid,
+# searched coarse to fine with a beam of 72 blocks and the first, previous and current blocks forced, so a query reads 4,608 keys
+# against LSA's 4,612. A block is scored by the LogSumExp over its children of GLM's softmax scale times the dot with each head's
+# absorbed query, summed over all 64 heads, so every tensor-parallel rank gathers the group's queries and selects the one list.
+#
+# Written as a delta on the base, so this run differs from the baseline in the attention path alone, and from LSA in the selector.
+# It reads no map, which `model.serving.projections` of the base is for LSA's.
+# The chunk and memory fraction are the base's, so prefill reads the same chunks from the same budget.
+# A prefill's search is eager, and a decode step's is captured in the decode CUDA graph, as LSA's is.
+# The request table is 16 rows against the base's 64, because every layer keeps the means of the closed blocks of each row's
+# context, which a 1M server holds for every row of the table.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: pisa
+
+data:
+  suite: full
+
+run:
+  name: glm53_flash_pisa_tp8
+  serve:
+    max-running-requests: 16

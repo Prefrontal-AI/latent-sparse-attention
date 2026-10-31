@@ -1,0 +1,15 @@
+# [qsa_dcp8](qsa_dcp8.yaml) timed on one B300 node - the QSA backend the fork builds for the checkpoint, on the B300 image.
+#
+# The ladder is the three contexts the paper's production table reads, and FlashInfer's autotune is off as on every B300 arm.
+
+defaults:
+  - qsa_dcp8
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  name: qwen38_27b_qsa_dcp8
+  port: 0

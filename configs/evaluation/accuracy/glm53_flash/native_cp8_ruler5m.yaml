@@ -1,0 +1,15 @@
+# `native_tp8.yaml` on RULER at 5M tokens, on the first context-parallel server with a chunk of 32768 - `_cp8_10m_early_chunk32768.yaml` says what that is.
+#
+# The server serves 10.5M tokens, so the 5M cells were scored on the same server as the 10M ones.
+
+defaults:
+  - native_tp8
+  - _cp8_10m
+  - _cp8_10m_early_chunk32768
+  - _self_
+
+data:
+  lengths: [5000000]
+
+run:
+  name: glm53_flash_native_cp8_ruler5m

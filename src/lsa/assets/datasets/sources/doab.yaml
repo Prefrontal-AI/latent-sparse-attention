@@ -1,0 +1,12 @@
+# Open-access academic books from the Directory of Open Access Books, as Common Pile filtered them.
+#
+# The revision is the head on 2026-07-17, the day it was collected. Each book's licence is in the
+# `manifest.parquet` beside the shards - upstream stores it as a json string rather than an object.
+
+name: doab
+kind: source
+path: ${root:data/sources/doab}
+about: open-access academic books from Common Pile, one book per document
+dataset: common-pile/doab_filtered
+revision: defb24ca72ef6aba6ce0228b669eec06dcfbffbc
+licence: per-document

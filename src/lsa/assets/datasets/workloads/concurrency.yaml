@@ -1,0 +1,16 @@
+# What a concurrency run of GLM-5.3-Flash sends - one wave of distinct prompts a length, as many as a node holds.
+#
+# The text is gutenberg rows of the GLM tokenized dataset, as [the production workload](production.yaml), but the
+# entries are counted per length and not nested: each length's entries are spans of their own, so no two prompts of a
+# wave share a prefix. A length holds the most requests any arm fits there - KV-bound from 512k up, and at 128k
+# room for the search past the KDA state's bound.
+
+name: concurrency
+kind: workload
+path: ${root:data/workloads/concurrency}
+about: distinct gutenberg prompts for one concurrent wave at each of six lengths from 128k to 10M GLM-5.3-Flash tokens
+tokenized: glm53_flash
+source: gutenberg
+file: "gutenberg_{length}.json"
+lengths: [131072, 524288, 1048576, 2097152, 5242880, 10485760]
+entries: {131072: 256, 524288: 80, 1048576: 40, 2097152: 20, 5242880: 8, 10485760: 3}

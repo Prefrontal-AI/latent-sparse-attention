@@ -1,0 +1,81 @@
+# The third PISA set beside [the stock PISA baseline](pisa_tp1.yaml) and [the 8-key set](pisa_c8_tp1.yaml) - leaf blocks of 16 keys and a keep count of 288, so a query still reads 4,608 keys, the stock list's width.
+# This is its short half on one card - MMLU-Pro, GPQA Diamond, AIME25, MATH-500 and RULER at 4,096, 32,768 and 131,072.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/qwen38_27b/pisa_c16_tp1.yaml`.
+#
+# It is one of three parts - the short half, the 512k half and the 1M half - that together cover the tasks of the stock PISA record.
+# The server is the stock PISA's with a context of 170,000, which holds GPQA Diamond's longest request, 2,814 prompt tokens beside the 163,840 budget.
+# Every layer keeps the fp32 means and pyramid of each row's context, and at 16 keys a block there are 4 times as many as the stock's - 1.3 GiB a row at 170,000, half the 8-key set's.
+# At the 0.85 fraction a card's pool is about 34 GiB, which that share and one layer's 6 GiB selection peak leave room for little over one request, so the fraction is 0.93, the 8-key set's and the long configurations', where the budget is about 73 GiB.
+# Six running requests keep the fixed share at about 9.1 GiB, which leaves a pool of about 0.95M slots - five requests that each spend the whole budget.
+# The sizing is the 8-key set's unchanged, which is safe with half the index.
+# The gated delta net state cache is held to 16, as on the other long Qwen configurations, which covers six rows and their cached prefixes.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_tp1
+  - _self_
+
+model:
+  pisa:
+    block_size: 16
+    keep_count: 288
+
+data:
+  suite: full
+  lengths: []
+  tasks:
+    - mmlu_pro
+    - gpqa_diamond
+    - aime25
+    - math500
+    - ruler_niah_single_1_4096
+    - ruler_niah_single_2_4096
+    - ruler_niah_single_3_4096
+    - ruler_niah_multikey_1_4096
+    - ruler_niah_multikey_2_4096
+    - ruler_niah_multikey_3_4096
+    - ruler_niah_multiquery_4096
+    - ruler_niah_multivalue_4096
+    - ruler_vt_4096
+    - ruler_cwe_4096
+    - ruler_fwe_4096
+    - ruler_qa_squad_4096
+    - ruler_qa_hotpot_4096
+    - ruler_niah_single_1_32768
+    - ruler_niah_single_2_32768
+    - ruler_niah_single_3_32768
+    - ruler_niah_multikey_1_32768
+    - ruler_niah_multikey_2_32768
+    - ruler_niah_multikey_3_32768
+    - ruler_niah_multiquery_32768
+    - ruler_niah_multivalue_32768
+    - ruler_vt_32768
+    - ruler_cwe_32768
+    - ruler_fwe_32768
+    - ruler_qa_squad_32768
+    - ruler_qa_hotpot_32768
+    - ruler_niah_single_1_131072
+    - ruler_niah_single_2_131072
+    - ruler_niah_single_3_131072
+    - ruler_niah_multikey_1_131072
+    - ruler_niah_multikey_2_131072
+    - ruler_niah_multikey_3_131072
+    - ruler_niah_multiquery_131072
+    - ruler_niah_multivalue_131072
+    - ruler_vt_131072
+    - ruler_cwe_131072
+    - ruler_fwe_131072
+    - ruler_qa_squad_131072
+    - ruler_qa_hotpot_131072
+
+run:
+  name: qwen38_27b_pisa_c16_tp1
+  serve:
+    context-length: 170000
+    mem-fraction-static: 0.93
+    max-running-requests: 6
+    # sglang sizes the gated delta net state cache from what is left once the radix cache is on
+    # => as many as a request and its cached prefixes use, as on the other long Qwen configurations
+    max-mamba-cache-size: 16

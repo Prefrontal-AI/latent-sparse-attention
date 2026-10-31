@@ -1,0 +1,12 @@
+# The NSA pretrain's 128k branch, selecting 32 blocks of 64 keys.
+defaults:
+  - nsam8
+  - phase/decay128k_fineweb@_global_
+  - _self_
+
+run:
+  name: nsam8-fineweb-decay128k
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/nsam8/checkpoint/step-94414}
+
+attention:
+  select_block_count: 32

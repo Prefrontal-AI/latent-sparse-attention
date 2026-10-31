@@ -1,0 +1,57 @@
+# Not a run - [_base.yaml](_base.yaml) on one node under context parallel, 128K to 10M - a mesh and a ladder laid over a configuration.
+#
+# A configuration's file names this after its own one-node file, so the pair differs in how the server lays the
+# node out and what it is asked, and in nothing about the indexer.
+#
+# The layout is TP=1 / CP=8 / PP=1 / EP=8: prefill context parallel splits each chunk across the 8 GPUs, decode
+# context parallel splits the KV cache across them, and the MoE runs expert parallel 8 - the setup the fork serves
+# a 10M prompt on one node with, where tensor parallel needs two pipeline stages ([_tp8pp2.yaml](_tp8pp2.yaml)).
+#
+# `--cp-strategy contiguous` is GLM-5.3-Flash's requirement, not a choice: its KDA layers pass the recurrent state
+# along one span a GPU, and LSA reads one contiguous span of each request a GPU - the indexer refuses any other.
+# `--max-total-tokens` is per GPU under decode context parallel: 1,315,000 a GPU is the 10.52M tokens on the node
+# the two-node ladder holds, for the 10,485,760-token prompt and its 256-token answer.
+# The chunk and prefill budget are 32768, as on every one-node layout.
+# At 8192, sglang's own default for these GPUs, every design's first token took 1.6-2.1 times as long from 128K to
+# 10M and decode did not move (PR 223): a chunk pays a fixed cost, and four times the chunks pay it
+# four times.
+# `run.environment` sets DeepGEMM's masked MoE layout and its sampled warmup, as for any layout that names DeepGEMM.
+# The prefill runs sglang's default sparse kernel as tensor parallel does, flashmla_sparse (fa3 for this checkpoint on H200),
+# and the decode runs tilelang, the fork's split-KV decode and the one decode context parallel takes.
+# Every run before the serving fork's fix that moved the prefill off tilelang prefilled on tilelang too, so a record from before it is not this layout's prefill.
+#
+# Flat, fixed and tree all run under it: every GPU grows the same tree from its whole bucket cache and the
+# index keys the decode group sums. The descending decode is captured in the same graph, and the shaped designs are refused
+# under decode context parallel.
+#
+# A prefill chunk gathers only the prefix KV rows its lists name, `--dcp-prefill-sparse-gather` (a serving fork option).
+# The output is the same, and at 10M the first token came 9% sooner for flat and 5% for native on tilelang prefill.
+
+data:
+  lengths: [131072, 262144, 524288, 1048576, 2097152, 5242880, 10485760]
+
+run:
+  # DeepGEMM's sampled warmup, where the full sweep is 534 s of a 555 s start, and its masked layout, which keeps expert-parallel MoE off a slower kernel - about 90 s at 10M
+  environment:
+    SGLANG_JIT_DEEPGEMM_FAST_WARMUP: "1"
+    SGLANG_DEEPGEMM_STANDARD_LAYOUT: masked
+  serve:
+    context-length: 10500000
+    max-total-tokens: 1315000
+    mem-fraction-static: 0.85
+    max-running-requests: 2
+    cuda-graph-max-bs-decode: 2
+    watchdog-timeout: 1800
+    enable-prefill-cp: true
+    cp-strategy: contiguous
+    attn-cp-size: 8
+    dcp-size: 8
+    dcp-comm-backend: ag_rs
+    ep-size: 8
+    dsa-prefill-backend: flashmla_sparse
+    dsa-decode-backend: tilelang
+    kv-cache-dtype: bfloat16
+    moe-runner-backend: deep_gemm
+    dcp-prefill-sparse-gather: true
+  # The fork's 10M prefill took 340 s on this layout, and each length sends four
+  hours: 5

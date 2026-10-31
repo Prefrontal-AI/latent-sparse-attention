@@ -1,0 +1,15 @@
+# A3 - the same selection with no summaries: the keys of the selected buckets and nothing else beyond the window and the sinks, trained by cross entropy through the fine reads only.
+
+defaults:
+  - branch_16k
+  - _self_
+
+run:
+  name: fine_only
+
+attention:
+  kind: multires
+  coarse: false
+  variance: true
+  partition: ward
+  rank: mass

@@ -1,0 +1,19 @@
+# The flat design on Qwen3.8-27B timed one request at a time, read against [the dense timing](full_tp1.yaml).
+#
+# The same model block as [the scored configuration](../../accuracy/qwen38_27b/lsa_flat_tp1.yaml), and its server: the
+# base's with FlashAttention named, a page of one token, and the prefill out of CUDA graphs.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: lsa
+
+run:
+  name: qwen38_27b_lsa_flat_tp1
+  serve:
+    mem-fraction-static: "0.90"
+    attention-backend: fa3
+    page-size: 1
+    disable-prefill-cuda-graph: true

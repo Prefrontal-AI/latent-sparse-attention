@@ -1,0 +1,26 @@
+# Not a run - a selecting arm of Qwen3.8-27B under tensor parallel 8 and decode context parallel 8 on one B300 node to 10M,
+# laid over an LSA configuration as its last default.
+#
+# [lsa_flat_dcp8](lsa_flat_dcp8.yaml)'s mesh and server on [the B300 image](_tp1_b300_dense.yaml), with the ladder cut to the three
+# contexts the paper's production table reads.
+# fa3 prefills and decodes the list on H200; neither FlashAttention reads a page of one slot on sm_103, so the triton
+# backend serves both phases and the list is read through its decode kernel, as [the one-card B300 arms](_tp1_b300_sparse.yaml).
+
+defaults:
+  - _image_b300
+  - _self_
+
+data:
+  lengths: [524288, 1048576, 10485504]
+
+run:
+  port: 0
+  tp: 8
+  hours: 24
+  serve:
+    attention-backend: triton
+    dcp-size: 8
+    dcp-comm-backend: ag_rs
+    page-size: 1
+    disable-prefill-cuda-graph: true
+    mem-fraction-static: "0.80"

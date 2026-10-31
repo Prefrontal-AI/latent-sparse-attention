@@ -1,0 +1,26 @@
+# An example site for your own machine - copy it, fill it in, and pick it with `site=local`
+# It holds nothing of a cluster: no absolute path, no partition, no reservation and no excluded node
+# An empty image fails at launch, naming `run.image`, so fill in each one a run uses
+# An image is a docker tag the runner can pull, or a squashfs file you built
+
+# How a job runs: `local` is submitit's local executor, one node on this machine, and `slurm` submits through sbatch
+# There is no `slurm:` mapping, so no `-p`, no reservation and no `-x` is passed, and a command that spans nodes or
+# keeps a reservation full refuses
+launcher: local
+
+# Where large artifacts go, relative to the working directory you run from - `LSA_ROOT` overrides it
+root: ./runs
+
+# Where read-only datasets that are not ours sit, relative to the working directory
+datasets: ./datasets
+
+# No `hf_home`, so Hugging Face's own default applies, and `HF_HOME` still overrides it
+# Directories the serving container mounts besides the root and the checkout
+mounts: []
+
+images:
+  h200: ""
+  b300: ""
+  early: ""
+  papertrail5m: ""
+  papertrail10m: ""

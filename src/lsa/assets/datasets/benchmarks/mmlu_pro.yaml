@@ -1,0 +1,18 @@
+# MMLU-Pro, zero-shot and generative under GPQA's chain-of-thought template with up to ten choices.
+#
+# lm-eval's mmlu_pro tasks are five-shot completions that stop at the next "Question:", written for a base
+# model, so the suite builds its own task over the hub dataset - see `tasks._mmlu_pro_task`.
+#
+# A run asks a fixed draw of the 12,032 test questions that keeps every one of the 14 categories at its share,
+# drawn with the seed below - the ids are in the suites' `subsets.json`.
+#
+# The revision is the hub's head on 2026-10-07, downloaded into the shared datasets cache from a login node.
+
+name: mmlu_pro
+kind: benchmark
+about: MMLU-Pro's 12,032 test questions over 14 categories, up to ten choices each
+dataset: TIGER-Lab/MMLU-Pro
+revision: b189ec765aa7ed75c8acfea42df31fdae71f97be
+split: test
+licence: MIT
+seed: 0

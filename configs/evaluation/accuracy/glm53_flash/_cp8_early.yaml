@@ -1,0 +1,15 @@
+# Not a run - the first context-parallel GLM server, laid over `_cp8.yaml`.
+#
+# It is the server the 2.1M RULER, the LongBench v2 and the 5M and 10M RULER cells of the first battery were scored on.
+# It prefills on tilelang as `_cp8_tilelang.yaml` says, keeps the radix cache off and reports no cached prompt tokens.
+# The image is the site's early build, the one that battery was served from.
+
+defaults:
+  - _cp8_tilelang
+  - _self_
+
+run:
+  image: ${site.images.early}
+  serve:
+    enable-cache-report: null
+    disable-radix-cache: true

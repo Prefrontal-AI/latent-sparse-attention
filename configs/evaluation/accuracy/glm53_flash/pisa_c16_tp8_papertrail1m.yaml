@@ -1,0 +1,33 @@
+# The 1M PaperTrail part of [the 16-key PISA set](pisa_c16_tp8_512k.yaml) - the three samples at 1,000,000 tokens, one request at a time.
+# Leaf blocks of 16 keys and a keep count of 288 read the 4,608 keys the stock list does.
+#
+# Run it with `uv run lsa evaluate accuracy configs/evaluation/accuracy/glm53_flash/pisa_c16_tp8_papertrail1m.yaml`.
+#
+# It is one of five parts that together cover the tasks of the stock PISA record, with [the 128k and 512k RULER run](pisa_c16_tp8_512k.yaml).
+# The server is that run's in every argument but the ones named here.
+# The longest request the stock record saw was 1,162,598 tokens, so the context is 1,170,000.
+# The fraction is 0.78, the 8-key part's, a memory knob that cannot change an output.
+# Every other part stays at 0.75, and the MoE flags are the other GLM accuracy servers'.
+# At 0.78 the budget is about 38.6 GiB a card, less the fixed share of about 6.2 GiB at one running request and the 10 GiB selection peak, which leaves a pool of about 2.14M slots - one request, and 0.97M over.
+# The halved index would leave 1.74M slots at 0.75, enough for the request, but the fraction is kept so the block size is the only change.
+#
+# Named apart from the stock run, so its records never file under it.
+
+defaults:
+  - pisa_c16_tp8_512k
+  - _self_
+
+data:
+  suite: full
+  lengths: []
+  tasks:
+    - papertrail_exoplanets_L1000000
+    - papertrail_ml_longctx_L1000000
+    - papertrail_qec_L1000000
+
+run:
+  name: glm53_flash_pisa_c16_tp8_papertrail1m
+  serve:
+    context-length: 1170000
+    mem-fraction-static: 0.78
+    max-running-requests: 1

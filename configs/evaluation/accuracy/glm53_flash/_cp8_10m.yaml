@@ -1,0 +1,32 @@
+# Not a run - `full` at 2M, 5M and 10M tokens on one node under context parallel - a mesh and the lengths past 1M laid over a
+# configuration.
+#
+# `_cp8.yaml` says what the context-parallel layout is; this differs from it in the lengths and the pool alone.
+# Past 1M the battery runs context parallel only: one node holds a 10M prompt here, where tensor
+# parallel needs two pipeline stages.
+# `--max-total-tokens` is per GPU under decode context parallel: 1,315,000 a GPU is 10.52M tokens on the node,
+# one 10M RULER prompt and its answer - the production layout's pool (`production/glm53_flash/cp.yaml`).
+# One request at a time: with two in flight the pool sat about 90% full late in a 10M prefill, and a 32,768-token
+# chunk ran fixed and tree out of memory in DeepGEMM's masked MoE (2026-10-04 battery).
+# The production layout sends one at a time on the same pool and chunk, and all four designs reached 10M.
+# Pin `run.id` to the configuration's context-parallel run and these lengths land in its record.
+#
+# A prefill chunk gathers only the prefix KV rows its lists name, `--dcp-prefill-sparse-gather` (a serving fork option).
+# The output is the same, and at 10M the first token came 9% sooner for flat and 5% for native on tilelang prefill.
+
+defaults:
+  - _cp8
+  - _self_
+
+data:
+  suite: full
+  lengths: [2000000, 5000000, 10000000]
+
+run:
+  serve:
+    context-length: 10500000
+    max-total-tokens: 1315000
+    max-running-requests: 1
+    cuda-graph-max-bs-decode: 1
+  # Three lengths one request at a time; a run is continued by its id if it outlives this
+  hours: 96

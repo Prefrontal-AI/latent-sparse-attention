@@ -1,0 +1,22 @@
+# `qsa_tp1.yaml` on tp 8 and decode context parallel 8, the ladder to 10M - the scored `qsa_dcp` configuration's server,
+# with production's radix cache off and metrics on in place of the accuracy suite's cache report and strict thinking.
+
+defaults:
+  - qsa_tp1
+  - _self_
+
+data:
+  lengths: [131072, 262144, 524288, 1048576, 2097152, 5242880, 10485504]
+
+run:
+  name: qwen38_27b_qsa_dcp8
+  tp: 8
+  hours: 24
+  serve:
+    context-length: 10485760
+    dcp-size: 8
+    dcp-comm-backend: ag_rs
+    mem-fraction-static: 0.85
+    max-running-requests: 2
+    max-mamba-cache-size: 16
+    watchdog-timeout: 1800

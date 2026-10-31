@@ -1,0 +1,8 @@
+# Not a run - the dense decode context-parallel server with the triton decode's default split count, laid over a configuration.
+#
+# A current configuration sets the number of pieces a head's context is split into to 128 for one request at millions of tokens.
+# The cells scored before that setting ran the default, which gives the same tokens and a slower decode.
+
+run:
+  serve:
+    triton-attention-num-kv-splits: null

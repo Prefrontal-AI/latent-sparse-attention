@@ -1,0 +1,13 @@
+defaults:
+  - decays
+  - _self_
+
+run:
+  name: dense-mqa8-fineweb-decay
+  init_from: ${root:training/native/qwen35_0_8b_gpt2/dense-mqa8-fineweb/checkpoint/step-94414}
+  optim:
+    steps: 17548
+    warmup_steps: 96
+
+sweep:
+  data.seq_len: [32768, 65536]

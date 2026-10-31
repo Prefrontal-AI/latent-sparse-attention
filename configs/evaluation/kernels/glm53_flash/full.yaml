@@ -1,0 +1,19 @@
+# GLM-5.3-Flash's attention layer read densely - MLA over every key with the indexer left out, the baseline the
+# sparse designs and the model's own Block Sparse (Flat) are read against.
+#
+# The ladder is quadratic in the context: at 10M a prefill chunk took 22.1 s on one H200, and the
+# prefill sweep 13 h.
+
+defaults:
+  - _base
+  - _self_
+
+model:
+  attention: full
+
+run:
+  name: glm53_flash_kernels_full
+  hours: 20
+
+sweep:
+  data.phase: [prefill, decode]

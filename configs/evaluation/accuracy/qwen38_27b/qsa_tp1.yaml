@@ -1,0 +1,23 @@
+# Qwen's own sparse attention on Qwen3.8-27B - the QSA indexers distilled on the frozen model, read against
+# [the dense baseline](full_tp1.yaml) and the LSA designs on the same card, tasks and YaRN.
+#
+# Written as a delta on the baseline: the checkpoint is `qwen38_27b_qsa`, the published weights with an indexer on
+# each full-attention layer, and the server builds Qwen's own sparse backend from its `indexer_*` fields - the 512
+# best closed blocks of four keys, and the keys of the query's open block, through Qwen's kernels.
+# The image is the baseline's, whose fork carries QSA on the dense Qwen3.5 class (the serving fork's QSA support).
+#
+# The server is the baseline's with the prefill out of CUDA graphs, since QSA builds its sparse metadata on the
+# host every forward; the page of 64 keys QSA's compressed addressing needs is set by the image itself.
+
+defaults:
+  - full_tp1
+  - _self_
+
+model:
+  name: qwen38_27b_qsa
+
+run:
+  name: qwen38_27b_qsa_tp1
+  note: QSA, indexer distilled on the frozen model, YaRN factor 40
+  serve:
+    disable-prefill-cuda-graph: true

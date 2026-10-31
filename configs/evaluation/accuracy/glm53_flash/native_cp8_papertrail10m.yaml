@@ -1,0 +1,15 @@
+# `native_tp8.yaml` on PaperTrail, on the server of the paper's 10M cells - `_cp8_papertrail10m.yaml` says what that is.
+
+defaults:
+  - native_tp8
+  - _cp8_10m
+  - _cp8_papertrail10m
+  - _self_
+
+run:
+  name: glm53_flash_native_cp8_papertrail10m
+  concurrency_scale: 4
+  serve:
+    mem-fraction-static: 0.80
+    max-running-requests: 4
+    cuda-graph-max-bs-decode: 4

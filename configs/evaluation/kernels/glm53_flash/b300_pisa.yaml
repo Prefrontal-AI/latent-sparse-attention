@@ -1,0 +1,16 @@
+# [pisa](pisa.yaml) timed on one B300, on [the B300 layer](_b300.yaml) - the stock PISA, leaf blocks of 64 keys, prefill and decode.
+#
+# The contexts stop at 1M, where a served PISA run is held (no context parallel), so 2M to 10M of the layer cards' ladder are not asked.
+# The selection is read through flashmla_sparse in both phases, as the B300 server reads it. Submit the phases as _b300.yaml says -
+# `data.phase=prefill` and `data.phase=decode`, both in chunks of 32,768.
+
+defaults:
+  - pisa
+  - _b300
+  - _self_
+
+data:
+  contexts: [131072, 524288, 1048576]
+
+run:
+  name: glm53_flash_kernels_pisa

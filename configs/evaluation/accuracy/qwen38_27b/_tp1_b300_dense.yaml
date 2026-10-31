@@ -1,0 +1,21 @@
+# Not a run - the scored dense Qwen3.8-27B on one B300, laid over [full_tp1](full_tp1.yaml) as its last default.
+#
+# As [the B300 production timing](../../production/qwen38_27b/_tp1_b300_dense.yaml): the image, sglang's own Blackwell backend
+# trtllm_mha named, FlashInfer's autotune off, and a free port so eight one-card servers share a node.
+
+defaults:
+  - _image_b300
+  - _self_
+
+run:
+  port: 0
+  serve:
+    context-length: 262144
+    chunked-prefill-size: 32768
+    mem-fraction-static: 0.85
+    max-running-requests: 16
+    attention-backend: trtllm_mha
+    disable-flashinfer-autotune: true
+    reasoning-parser: qwen3
+    enable-cache-report: true
+    grammar-backend: xgrammar

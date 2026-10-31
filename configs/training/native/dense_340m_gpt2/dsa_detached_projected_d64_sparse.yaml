@@ -1,0 +1,9 @@
+defaults:
+  - dsa_detached_projected_d64
+  - _self_
+
+run:
+  name: dsa_detached_projected_d64_sparse
+
+attention:
+  sparse_start_step: 401

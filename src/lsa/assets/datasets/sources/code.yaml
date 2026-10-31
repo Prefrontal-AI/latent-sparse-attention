@@ -1,0 +1,16 @@
+# Source files from The Stack, deduplicated - Python and Java alone.
+#
+# The collector names eight languages and stops at 3B tokens, and these two reached it first.
+#
+# The Stack is gated and our token is not on its list, so neither the revision it was read at nor each
+# file's licence can be read yet. Every file carries its own repository's licence upstream, so there is no
+# one SPDX id - `other` is what the dataset itself declares.
+
+name: code
+kind: source
+path: ${root:data/sources/code}
+about: Python and Java source files from The Stack, deduplicated
+dataset: bigcode/the-stack-dedup
+subsets: [python, java]
+split: train
+licence: other

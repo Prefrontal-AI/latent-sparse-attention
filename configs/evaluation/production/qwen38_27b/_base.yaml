@@ -1,0 +1,42 @@
+# Not a run - what every production timing of Qwen3.8-27B shares: the checkpoint, its YaRN, the server and the ladder.
+#
+# Not a run - [GLM's](../glm53_flash/_base.yaml) sibling on the mesh [the scored base](../../accuracy/qwen38_27b/_base.yaml)
+# gives the model: one card, tensor parallel 1, the image, and the card's YaRN it is scored under.
+# The ladder is GLM's - 128k, 256k, 512k and 1M, which one card holds - read from `production_qwen38`, Qwen's own prompt set,
+# the production workload's text counted in this model's tokens.
+# The context is 1,050,000, the ladder's 1,048,576 and its 256-token answer, and each design's static fraction is the
+# least whose pool holds that, so the memory a 32,768-token prefill chunk needs is left free - dense 0.86 here.
+# Every Qwen timing prefills in 32,768-token chunks; memory allocates in expanding segments, against the
+# fragmentation a 1M prefill leaves. `--enable-metrics`, as GLM's ladder is served; no strict thinking and no
+# grammar backend, since the client sends token ids and no request asks for either.
+
+model:
+  name: qwen38_27b
+  # The map the LSA timings read, the scored base's
+  serving:
+    projections: ${root:models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt}
+
+data:
+  workload: production_qwen38
+  lengths: [131072, 262144, 524288, 1048576]
+  requests: 3
+  output_tokens: 256
+  warmup: 1
+
+run:
+  output: results
+  # The site's h200 image, the one every model and every evaluation runs - so no comparison is also one between builds
+  image: ${site.images.h200}
+  tp: 1
+  environment:
+    PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  runner: srun
+  serve:
+    context-length: 1050000
+    chunked-prefill-size: 32768
+    max-prefill-tokens: 32768
+    mem-fraction-static: 0.86
+    max-running-requests: 4
+    reasoning-parser: qwen3
+    disable-radix-cache: true
+    enable-metrics: true

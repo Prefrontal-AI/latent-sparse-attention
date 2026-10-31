@@ -1,0 +1,39 @@
+# Not a run - what every 340M run shares: nineteen blocks of attention and a SwiGLU at width 1,024, eight heads of 128 with
+# every head dim rotated, no gate and no norm on the heads, untied embeddings, 0.34B parameters.
+#
+# One node, 65,536 tokens a GPU and two passes of them to a step: 1,048,576 tokens a step, 19,074 steps, about 20B tokens,
+# warmup over the first 0.42B. The schedule is the one the reference training code ran this model on, a 3e-4 peak, with a cosine decay after warmup.
+#
+# Pretrains on FineWeb-Edu shards at 2,048, whose validation file is not read yet, so the held-out pass is off.
+# The tokenizer is the corpus's own, GPT-2's.
+
+model:
+  flavor: 340M-gpt2
+
+data:
+  name: fineweb_edu_100bt
+  seq_len: 2048
+  seed: ${run.runtime.seed}
+
+run:
+  output: ${root:training/native/dense_340m_gpt2}
+  dp_shard: 8
+  checkpoint:
+    decay_start: false
+  optim:
+    weight_decay_scope: matrices
+    steps: 19074
+    lr: 3.0e-4
+    min_lr_factor: 0.1
+    warmup_steps: 401
+    decay_ratio: 0.2
+    decay_shape: sqrt
+    schedule: cosine
+    tokens_per_rank: 65536
+    tokens_per_step: 1048576
+  runtime:
+    autocast_bf16: true
+    activation_checkpoint: none
+    seed: 42
+  evaluation:
+    every: 0
