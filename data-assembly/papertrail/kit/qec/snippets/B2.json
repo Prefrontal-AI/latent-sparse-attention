@@ -1,0 +1,576 @@
+{
+ "node": "B2",
+ "kind": "fake_paper",
+ "date": "2026-09-12",
+ "title": "Exact non-Clifford simulation of colour-code magic state cultivation under hardware-motivated noise",
+ "authors": [
+  "Eleanor Whitfield 1",
+  "Callum Ashby 1",
+  "Samuel Hargreaves 2",
+  "Rebecca Lyons 2",
+  "Andrew Pellow 1"
+ ],
+ "affiliations": [
+  "1 Department of Physics, University of Warwick, Coventry CV4 7AL, United Kingdom",
+  "2 H. H. Wills Physics Laboratory, School of Physics, University of Bristol, Bristol BS8 1TL, United Kingdom"
+ ],
+ "abstract": "Logical error rates of magic state cultivation are usually estimated with a Clifford proxy in which the $T$ gates of the protocol are replaced by $S$ gates. Exact simulators for near-Clifford circuits now make it possible to sample the genuine non-Clifford circuits at the error rates of interest. We use them to benchmark three colour-code cultivation circuits, labelled by the size of their final cultivation code (CC7, CC19 and CC17), under three noise models: uniform circuit-level depolarizing noise, the superconducting-inspired SI1000 model, and a neutral-atom model in which most two-qubit gate errors are heralded as erasures. Sampling with Clifft and subset sampling, cross-checked against SOFT, we resolve logical error rates down to $10^{-10}$ with genuine $T$ gates. Under uniform noise at $p=10^{-3}$ the 17-qubit circuit CC17 reaches a $T$-state logical error rate of $2.8\\times 10^{-9}$ with $20.9\\%$ acceptance, slightly below the $3.3\\times 10^{-9}$ of the 19-qubit hexagonal circuit CC19. Under SI1000 the two rates rise to $6.4\\times 10^{-9}$ and $7.9\\times 10^{-9}$, whereas erasure-dominated noise lowers them by almost an order of magnitude at fixed total error rate. Our results give hardware-specific inputs for resource estimates that use cultivated $T$ states directly.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Large-scale fault-tolerant algorithms consume millions to billions of non-Clifford gates, usually implemented by teleporting magic states into the computation (⟦bk⟧; ⟦litinski⟧). Recent resource estimates for factoring rely on magic state cultivation (⟦gsj⟧; ⟦gidney25⟧; ⟦cain⟧; ⟦webster⟧), in which a single noisy $T$ state is checked repeatedly inside a small colour code and kept only if no detector fires. Cultivation has since been adapted to the surface code (⟦sahay⟧; ⟦vaknin⟧; ⟦claes⟧; ⟦chen⟧; ⟦hirano⟧; ⟦hetenyi⟧), to entangled resource states (⟦minheo_cs⟧; ⟦minheo_cc⟧), and to other colour-code lattices (⟦hedlund⟧), and its first stages have been demonstrated on a superconducting processor (⟦rosenfeld⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "Nearly all published error rates for cultivation are obtained with a Clifford proxy. Replacing every physical $T$ gate of the $H_{XY}$ checks by an $S$ gate turns the circuit into a Clifford circuit that prepares $|Y\\rangle$ and can be sampled with Stim (⟦stim⟧) at the very large shot counts needed to resolve rates near $10^{-9}$. The proxy was checked against state-vector simulation of the distance-3 circuit in the original work (⟦gsj⟧), but the larger circuits are out of reach of state vectors. Over the past year several simulators have been developed that exploit the small amount of genuine magic in such circuits: stabiliser-rank methods (⟦bg16⟧; ⟦bbcch⟧; ⟦wzz⟧; ⟦wz⟧), Pauli-frame and tableau extensions (⟦ta⟧; ⟦soft⟧; ⟦symft⟧; ⟦tsim⟧), Clifford-augmented tensor networks (⟦lc⟧) and the active-space approach of Clifft (⟦clifft⟧). These tools have produced exact $T$-state results for the hexagonal distance-5 circuit (⟦soft⟧; ⟦clifft⟧; ⟦wzz⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "In this work we use them for a different purpose. Rather than asking whether the proxy is accurate, we ask how the genuine $T$-state performance of colour-code cultivation depends on the hardware noise model. Most architectures that plan to use cultivated states directly are either superconducting, where measurement and idling dominate the error budget (⟦si1000⟧; ⟦gqai⟧; ⟦lacroix⟧), or neutral-atom arrays, where a large fraction of two-qubit gate errors can be converted into detectable erasures (⟦wkpt⟧; ⟦sahay23⟧; ⟦evered⟧; ⟦bluvstein⟧). Postselected protocols such as cultivation should benefit strongly from heralded errors, but this has not been quantified for the non-Clifford circuits. Colour-code memories and logic already run on the same superconducting hardware (⟦lacroix⟧; ⟦mbg⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "We benchmark three circuits: the shared distance-3 stage (CC7), the hexagonal distance-5 circuit of Gidney et al. (CC19; ⟦gsj⟧) and the square-octagon distance-5 circuit of Hedlund et al. (CC17; ⟦hedlund⟧). Section 2 defines the circuits and labels, Sec. 3 the noise models and Sec. 4 the simulation method. Section 5 presents results for each noise model, including an end-to-end estimate with the escape stage, and Sec. 6 discusses the implications for resource estimates."
+    }
+   ]
+  },
+  {
+   "title": "1.1 Related work",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Exact simulation of logical magic-state preparation has a longer history for small codes, where state-vector methods suffice (⟦cn⟧; ⟦dk⟧; ⟦surti⟧). For cultivation, the first exact distance-5 results came from Pauli-frame and stabiliser-rank methods (⟦soft⟧; ⟦wzz⟧; ⟦ta⟧) and, more recently, from Clifft (⟦clifft⟧), which reported a rate for the hexagonal circuit at $p=10^{-3}$ roughly an order of magnitude above its proxy. These studies used the uniform noise model throughout. Studies of erasure conversion in surface-code memories (⟦wkpt⟧; ⟦sahay23⟧; ⟦kubica23⟧) have shown large threshold gains, and loss-aware decoding has been studied for neutral atoms (⟦perrin⟧), but neither line of work has addressed postselected non-Clifford protocols. Our benchmark sits between these two lines: it fixes the circuits and varies the hardware model."
+    },
+    {
+     "kind": "p",
+     "text": "Resource estimates that consume cultivated states (⟦gidney25⟧; ⟦cain⟧; ⟦webster⟧) and compilers that schedule cultivation (⟦hofmeyr⟧; ⟦pflieger⟧; ⟦kim⟧) typically take a single per-state error and a single expected volume from the original proxy simulations. One aim of this paper is to give them model-specific alternatives for the colour-code circuits."
+    }
+   ]
+  },
+  {
+   "title": "2 Circuits and labels",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We refer to each circuit by the number of data qubits in its final cultivation code. CC7 is the injection and distance-3 double-check stage, which is identical for the hexagonal and square-octagon lattices because both give the $[[7,1,3]]$ Steane code. CC19 is the full distance-5 circuit of Gidney, Shutty and Jones (⟦gsj⟧), grown into the hexagonal $[[19,1,5]]$ code. CC17 is the corresponding circuit for the square-octagon (4.8.8) colour code introduced by Hedlund, Sandberg, Wiklund and Forsgren in \"Magic state cultivation in the square-octagon colour code\" (⟦hedlund⟧), which is grown into the $[[17,1,5]]$ code (⟦bmd07⟧); in other words, CC17 is the square-octagon circuit of Hedlund et al., and we use the label CC17 for it from here on. We took the circuits from the public repositories of the two works and changed nothing except that every $S$ or $S^{\\dagger}$ gate of the proxy checks was replaced by the corresponding $T$ or $T^{\\dagger}$ gate, so that the target state becomes $|T\\rangle$."
+    },
+    {
+     "kind": "p",
+     "text": "All three circuits end with a noiseless logical readout, and a shot is accepted if no detector fires. We report the logical error rate per accepted shot, $P_{L}$, and the acceptance probability $A$. For CC19 and CC17 we also simulate the grafted escape into a distance-15 surface code in Sec. 5, using the same gap thresholds as the original works."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Circuits benchmarked in this work. $T$ counts refer to the cultivation stages; $M$ is the number of noise channels under the uniform model."
+    },
+    {
+     "kind": "table",
+     "text": "Label | Final code | Physical $T$/$T^{\\dagger}$ gates | $M$ | Source\nCC7 | $[[7,1,3]]$ | 29 | 702 | Gidney et al. (2024)\nCC19 | $[[19,1,5]]$ | 105 | 4,015 | Gidney et al. (2024)\nCC17 | $[[17,1,5]]$ | 97 | 3,379 | Hedlund et al. (2026)"
+    }
+   ]
+  },
+  {
+   "title": "3 Noise models",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "All three models are stochastic Pauli models, which Clifft and the stratified estimator handle natively. We set the nominal strength to $p=10^{-3}$ for the main comparisons and sweep $p$ between $5\\times 10^{-4}$ and $2\\times 10^{-3}$ for the uniform model. The models are summarised below."
+    },
+    {
+     "kind": "p",
+     "text": "Uniform (SD6). Every gate, idle, reset and measurement carries depolarizing or flip noise of strength $p$, as in the original cultivation studies (⟦gsj⟧; ⟦hedlund⟧). This is the model under which all published proxy numbers were obtained."
+    },
+    {
+     "kind": "p",
+     "text": "SI1000. The superconducting-inspired model (⟦si1000⟧) assigns strength $p$ to two-qubit gates, $p/10$ to single-qubit gates and idles during gates, $2p$ to resets and idles during measurement and reset, and $5p$ to measurement flips. It penalises the many mid-circuit measurements of cultivation."
+    },
+    {
+     "kind": "p",
+     "text": "Erasure-biased atoms (EA). Two-qubit gates fail with total probability $p$, of which a fraction $R_{e}=0.9$ is heralded as an erasure on one or both qubits (⟦wkpt⟧; ⟦sahay23⟧); the remaining tenth is unheralded two-qubit depolarizing noise. Single-qubit operations have strength $p/10$, measurements flip with probability $p$, and atom loss is treated as a heralded erasure (⟦perrin⟧). Because cultivation is postselected, we simply discard any attempt in which an erasure is heralded before the escape stage."
+    }
+   ]
+  },
+  {
+   "title": "4 Simulation method",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We sample the non-Clifford circuits with Clifft (version 0.7; ⟦clifft⟧), which compiles the circuit into a Clifford frame and a small active state vector. For the circuits considered here the peak active dimension is 10 for CC19 and 9 for CC17, so a single shot costs a few microseconds. We combine Clifft with subset sampling (⟦bv⟧; ⟦heussen⟧): shots are stratified by the number $w$ of non-trivial faults, the conditional acceptance and failure probabilities are estimated within each stratum, and the strata are reweighted with the exact binomial probabilities for each noise strength. Strata with $w<3$ contribute no logical failures for either distance-5 circuit, which we verified by exhaustive enumeration of all weight-one and weight-two fault configurations with genuine $T$ gates. We sample strata up to $w=12$ and bound the remainder analytically; the bound is below 1% of every rate we report."
+    },
+    {
+     "kind": "p",
+     "text": "Heralded erasures in the EA model are handled outside the simulator: we draw the erasure pattern first and discard the shot if any erasure occurs before the escape, so only unheralded faults enter the Clifft simulation. For the escape stage we use a hand-off approach (⟦sahay⟧): the cultivation stages are simulated exactly, and since the escape is purely Clifford, the accepted logical state and Pauli frame are passed to Stim for the grafted surface code, decoded with PyMatching (⟦pym⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "As a check of the pipeline we compared Clifft with SOFT (⟦soft⟧) on CC7 at $p=10^{-3}$ and with Tsim (⟦tsim⟧) on the strata $w\\le 4$ of CC17; all estimates agree within statistical error. In total the results use about $1.2\\times 10^{5}$ CPU-hours on the Avon cluster at Warwick and BlueCrystal Phase 4 at Bristol. Quoted intervals are 95% intervals from the profile likelihood of the stratified estimator."
+    }
+   ]
+  },
+  {
+   "title": "5 Results",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We first validate the method on the distance-3 stage and then turn to the distance-5 circuits."
+    }
+   ]
+  },
+  {
+   "title": "5.1 Validation on CC7",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Under uniform noise at $p=10^{-3}$ we obtain $P_{L}=(9.0\\pm 0.4)\\times 10^{-7}$ for CC7 with $T$ gates, consistent with the state-vector benchmark of the distance-3 circuit (⟦gsj⟧) and with SOFT on the same circuit. The acceptance, $70.0\\%$, is the same as for the proxy within error, as expected since the Clifford and non-Clifford circuits share their detector structure."
+    }
+   ]
+  },
+  {
+   "title": "5.2 Distance-5 circuits under uniform noise",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 lists the distance-5 results under the uniform model. At $p=10^{-3}$ CC19 reaches $P_{L}=3.3\\times 10^{-9}$ (95% interval $2.9$ to $3.8\\times 10^{-9}$), in line with earlier exact results for the same circuit (⟦soft⟧; ⟦clifft⟧). CC17 reaches $P_{L}=2.8\\times 10^{-9}$ (95% interval $2.3$ to $3.4\\times 10^{-9}$) with acceptance $20.9\\%$. Within the uniform model the two lattices are therefore close, with CC17 slightly better per accepted state and noticeably better in acceptance."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: $T$-state logical error rate per accepted shot $P_{L}$ and acceptance $A$ of the distance-5 circuits under uniform depolarizing noise, before escape. Brackets give 95% intervals."
+    },
+    {
+     "kind": "table",
+     "text": "$p$ | CC19 $P_{L}$ | CC19 $A$ | CC17 $P_{L}$ | CC17 $A$\n$5\\times 10^{-4}$ | $2.6\\,[2.0, 3.3]\\times 10^{-10}$ | 41.0% | $2.1\\,[1.6, 2.7]\\times 10^{-10}$ | 46.1%\n$10^{-3}$ | $3.3\\,[2.9, 3.8]\\times 10^{-9}$ | 16.6% | $2.8\\,[2.3, 3.4]\\times 10^{-9}$ | 20.9%\n$2\\times 10^{-3}$ | $3.9\\,[3.5, 4.4]\\times 10^{-8}$ | 2.5% | $3.6\\,[3.1, 4.1]\\times 10^{-8}$ | 3.9%"
+    },
+    {
+     "kind": "p",
+     "text": "For both circuits the $T$-state rates are well above the corresponding proxy values, and the gap widens as $p$ decreases, as reported for CC19 by earlier exact studies (⟦soft⟧; ⟦clifft⟧; ⟦ta⟧). For CC17 the exact value at $p=10^{-3}$ is well above the $S$-state proxy estimate reported for this circuit (⟦hedlund⟧). We do not attempt here to identify the fault mechanisms responsible; the stratified data show that strata with three and four faults carry most of the failure probability at $p=10^{-3}$ for both circuits, compared with five and six faults for the proxies."
+    },
+    {
+     "kind": "caption",
+     "text": "Figure 1: Logical error rate per accepted shot versus $p$ for CC19 (circles) and CC17 (squares) under the uniform model, with genuine $T$ gates. Shaded bands are 95% intervals; the CC7 curve is shown for reference."
+    }
+   ]
+  },
+  {
+   "title": "5.3 SI1000",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Under the SI1000 model at $p=10^{-3}$ the rates rise to $6.4\\times 10^{-9}$ for CC17 and $7.9\\times 10^{-9}$ for CC19, and to $2.1\\times 10^{-6}$ for CC7. The acceptance falls to $11.2\\%$ and $8.0\\%$ for CC17 and CC19, respectively, because of the fivefold measurement noise; the double checks alone contain 23 (CC17) and 26 (CC19) mid-circuit measurements. The relative advantage of CC17 in acceptance is larger under SI1000 than under the uniform model, since the octagon schedule (⟦hedlund⟧) uses fewer measurement layers per round."
+    }
+   ]
+  },
+  {
+   "title": "5.4 Erasure-biased atoms",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "At a total two-qubit error probability of $p=10^{-3}$ in the EA model, with $R_{e}=0.9$, the rates fall to $4.7\\times 10^{-10}$ for CC17 and $5.2\\times 10^{-10}$ for CC19. Erasures reduce the acceptance only moderately, to $17.3\\%$ and $13.9\\%$, because the number of two-qubit gates is similar to the number of other noisy locations. Since cultivation already postselects on every detection event, heralding errors converts potential logical failures into rejected attempts almost one for one, and the improvement in $P_{L}$ is close to what one obtains by lowering the unheralded part of the two-qubit error to $10^{-4}$."
+    }
+   ]
+  },
+  {
+   "title": "5.5 End-to-end performance",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "With the grafted escape into a distance-15 surface code and the strictest gap thresholds used in the original works, the end-to-end $T$-state error rate under uniform noise at $p=10^{-3}$ is $3.5\\times 10^{-9}$ for CC19 and $3.0\\times 10^{-9}$ for CC17. As for the proxies, the escape adds little at high thresholds, so the cultivation-stage rates of Table 2 are good estimates of the error of the delivered state. At lower thresholds the escape contributes more, and the gap between the circuits narrows."
+    }
+   ]
+  },
+  {
+   "title": "5.6 Statistical considerations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The intervals in Table 2 come from the profile likelihood of the stratified estimator (Appendix A), with the binomial weights treated as exact. Because the same stratified samples are reweighted to every value of $p$, the points of one curve are correlated and should not be fitted as independent measurements. With this caveat, a straight-line fit of $\\log P_{L}$ against $\\log p$ between $5\\times 10^{-4}$ and $2\\times 10^{-3}$ gives a slope of $3.7$ for CC17 and $3.6$ for CC19, well below the slopes reported for the proxies of the same circuits, which is another way of seeing that low-weight fault sets dominate the genuine $T$-state failures."
+    },
+    {
+     "kind": "p",
+     "text": "For the SI1000 and EA models only $p=10^{-3}$ was sampled with the full stratification; a coarser sweep (not shown) gives the same ordering of the circuits at $p=5\\times 10^{-4}$ and $2\\times 10^{-3}$."
+    }
+   ]
+  },
+  {
+   "title": "6 Discussion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Two conclusions are relevant for architecture studies. First, the per-state error of colour-code cultivation at distance five depends strongly on the noise model: across the three models we studied the rate at nominal $p=10^{-3}$ spans more than an order of magnitude, from about $5\\times 10^{-10}$ with erasure-biased atoms to about $8\\times 10^{-9}$ for CC19 under SI1000. Resource estimates that adopt a single number from a uniform-noise proxy simulation (⟦gidney25⟧; ⟦cain⟧; ⟦webster⟧; ⟦hofmeyr⟧; ⟦pflieger⟧) should be revisited with the model appropriate to their platform. Second, between the two colour-code lattices the differences in $P_{L}$ are modest, while the square-octagon circuit keeps an advantage in acceptance under every model."
+    },
+    {
+     "kind": "p",
+     "text": "Our study has limitations. We consider only colour-code cultivation; fold-transversal and lattice-surgery surface-code schemes (⟦sahay⟧; ⟦vaknin⟧; ⟦claes⟧; ⟦chen⟧; ⟦hirano⟧) have a different gate structure and deserve their own exact study. Our erasure model is idealised: in practice erasure conversion is imperfect, and the erasure check itself takes time (⟦kubica23⟧; ⟦perrin⟧). Leakage, crosstalk and coherent over-rotation of the physical $T$ gates are not included. Finally, the profile-likelihood intervals assume that the strata above $w=12$ are negligible, which our analytic bound supports but does not prove for the SI1000 model at the highest noise strength."
+    },
+    {
+     "kind": "p",
+     "text": "Cultivated states can also feed a further distillation stage (⟦litinski⟧; ⟦itogawa⟧; ⟦cn⟧; ⟦dk⟧; ⟦gao⟧), in which case the per-state error of the cultivation stage matters less than its throughput. The hardware dependence we observe for acceptance, in particular under SI1000, then becomes the more important result, and it can be combined with multiplexed attempts (⟦kim⟧) and with compilers that schedule cultivation around the computation (⟦hofmeyr⟧; ⟦pflieger⟧). Shuttling-based spin-qubit and atom architectures (⟦escofet⟧; ⟦bluvstein⟧) are natural targets for the EA results."
+    }
+   ]
+  },
+  {
+   "title": "6.1 Implications for architecture studies",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For a superconducting machine at $p=10^{-3}$ that consumes cultivated states directly, our SI1000 numbers imply per-state errors of $6.4\\times 10^{-9}$ (CC17) and $7.9\\times 10^{-9}$ (CC19), roughly a factor of two above the uniform-noise values. For a neutral-atom machine with efficient erasure conversion the same circuits deliver states with errors near $5\\times 10^{-10}$, at the cost of a modestly lower acceptance. The choice between the two colour-code lattices matters less than the choice of hardware model, but CC17 has the higher acceptance in all three, which translates directly into lower expected volume per accepted state (⟦hedlund⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "We stress that all rates in this paper refer to the cultivation stages followed by a noiseless readout, or, in Sec. 5.5, to the escape at high gap thresholds. They should be combined with the error of storing and routing the state before consumption, which depends on the layout (⟦mbg⟧; ⟦hofmeyr⟧)."
+    }
+   ]
+  },
+  {
+   "title": "7 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We have benchmarked colour-code magic state cultivation with genuine $T$ gates under three noise models. Under uniform noise at $p=10^{-3}$ the distance-5 circuits CC19 and CC17 reach $3.3\\times 10^{-9}$ and $2.8\\times 10^{-9}$ per accepted state; SI1000 noise roughly doubles these rates and erasure-biased noise lowers them by almost an order of magnitude. Exact simulation is now cheap enough to be part of the routine evaluation of cultivation protocols, and we provide our circuits and sampling data to make such comparisons easy. Related questions about the magic content of postselected logical measurements (⟦shen⟧; ⟦surti⟧) and about cultivation on other codes remain open."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank the developers of Clifft, SOFT and Stim for making their software public and for prompt answers to our questions. Computations were performed on the Avon cluster provided by the Scientific Computing Research Technology Platform at the University of Warwick, and on BlueCrystal Phase 4 at the Advanced Computing Research Centre, University of Bristol. This work was supported by the Engineering and Physical Sciences Research Council (EPSRC) under grant EP/Z53392X/1 and by a UKRI Future Leaders Fellowship (MR/Y03417X/1)."
+    }
+   ]
+  },
+  {
+   "title": "Data availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Circuits, stratified sampling data and analysis scripts are available on Zenodo (doi:10.5281/zenodo.17004219) and at https://github.com/ewhitfield-qec/colour-cultivation-exact."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A: Stratified estimator",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Let $M$ be the number of noise channels and $\\mathrm{Bin}_{w}(p)=\\binom{M}{w}p^{w}(1-p)^{M-w}$ the probability that exactly $w$ channels act non-trivially. For the uniform and SI1000 models we stratify on $w$ after grouping channels with equal strength; for the uniform model a single binomial suffices. The acceptance and the joint probability of acceptance and failure are"
+    },
+    {
+     "kind": "equation",
+     "text": "A(p)=\\sum_{w}\\mathrm{Bin}_{w}(p)\\,a_{w},\\qquad J(p)=\\sum_{w}\\mathrm{Bin}_{w}(p)\\,a_{w}f_{w},\\qquad P_{L}(p)=J(p)/A(p),\\qquad (A1)"
+    },
+    {
+     "kind": "p",
+     "text": "where $a_{w}$ is the acceptance probability and $f_{w}$ the failure probability among accepted shots in stratum $w$. Both are estimated from samples drawn uniformly within the stratum. Because $a_{w}$ falls roughly by a factor of two per additional fault, most simulation time is spent on shots that are rejected; we therefore run the Clifford part of each shot first with Stim and only hand shots in which no Clifford-determined detector fires to Clifft, which removes more than $99\\%$ of the work in strata $w\\ge 4$."
+    },
+    {
+     "kind": "p",
+     "text": "Table 3 shows the stratified data for CC17 at $p=10^{-3}$ under the uniform model. Strata $w=3$ and $w=4$ together carry about $80\\%$ of $J$, which is why the exact rate reacts much more strongly to $p$ than a fault-distance-five circuit would. The resulting estimates are $A=20.9\\%$ and $P_{L}=2.8\\times 10^{-9}$."
+    },
+    {
+     "kind": "table",
+     "text": "Table 3: Stratified samples for CC17, uniform noise, $p=10^{-3}$, $M=3{,}379$. $n_{w}$ is the number of sampled shots, $n_{w}^{\\mathrm{acc}}$ the accepted shots and $n_{w}^{\\mathrm{fail}}$ the accepted shots with a logical error. Strata $w\\le 2$ were enumerated exhaustively and contain no failures."
+    },
+    {
+     "kind": "table",
+     "text": "$w$ | $\\mathrm{Bin}_{w}(p)$ | $n_{w}$ | $n_{w}^{\\mathrm{acc}}$ | $n_{w}^{\\mathrm{fail}}$\n3 | 0.2192 | $3.06\\times 10^{10}$ | $4.65\\times 10^{9}$ | 40\n4 | 0.1852 | $4.19\\times 10^{10}$ | $3.31\\times 10^{9}$ | 41\n5 | 0.1252 | $4.41\\times 10^{10}$ | $1.81\\times 10^{9}$ | 28\n6 | 0.0704 | $5.0\\times 10^{10}$ | $1.05\\times 10^{9}$ | 20\n7 | 0.0340 | $4.55\\times 10^{10}$ | $5.0\\times 10^{8}$ | 11\n8 | 0.0143 | $4.55\\times 10^{10}$ | $2.5\\times 10^{8}$ | 6"
+    },
+    {
+     "kind": "p",
+     "text": "For the strata $9\\le w\\le 12$ we use the conditional failure rate of $w=8$ as a conservative stand-in; replacing it by zero changes $P_{L}$ by less than $1\\%$. Above $w=12$ the binomial weight is below $2\\times 10^{-4}$ and the acceptance below $4\\times 10^{-4}$, so the neglected contribution to $J$ is below $10^{-11}$."
+    }
+   ]
+  },
+  {
+   "title": "Appendix B: Idle noise and runtime",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Idling dominates the noise budget of the double checks, where most data qubits wait while the partner tree is built and unwound. Removing idle noise entirely from the uniform model lowers the rate of CC17 at $p=10^{-3}$ to $1.6\\times 10^{-9}$ and that of CC19 to $2.0\\times 10^{-9}$; doubling it raises them to $4.9\\times 10^{-9}$ and $5.7\\times 10^{-9}$. The ordering of the two circuits does not change."
+    },
+    {
+     "kind": "p",
+     "text": "Clifft sampled CC19 at about $3.1\\times 10^{5}$ shots per second per core after Clifford pre-screening and CC17 at about $3.8\\times 10^{5}$, the difference coming from the smaller active dimension. A full uniform-noise curve for one distance-5 circuit took roughly $2\\times 10^{4}$ CPU-hours; the SI1000 runs took about twice as long because of their lower acceptance. Runs with SOFT on CC7 were about four times slower than Clifft on our hardware, which is not a statement about the general performance of either tool."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "bluvstein",
+   "tag": "Bluvstein et al., 2024",
+   "text": "Bluvstein, D., Evered, S. J., Geim, A. A., Li, S. H., Zhou, H., Manovitz, T., et al. (2024). Logical quantum processor based on reconfigurable atom arrays. Nature, 626:58–65."
+  },
+  {
+   "key": "bmd07",
+   "tag": "Bombin and Martin-Delgado, 2007",
+   "text": "Bombin, H. and Martin-Delgado, M. A. (2007). Optimal resources for topological two-dimensional stabilizer codes: Comparative study. Phys. Rev. A, 76:012305."
+  },
+  {
+   "key": "bg16",
+   "tag": "Bravyi and Gosset, 2016",
+   "text": "Bravyi, S. and Gosset, D. (2016). Improved classical simulation of quantum circuits dominated by Clifford gates. Phys. Rev. Lett., 116:250501."
+  },
+  {
+   "key": "bk",
+   "tag": "Bravyi and Kitaev, 2005",
+   "text": "Bravyi, S. and Kitaev, A. (2005). Universal quantum computation with ideal Clifford gates and noisy ancillas. Phys. Rev. A, 71:022316."
+  },
+  {
+   "key": "bv",
+   "tag": "Bravyi and Vargo, 2013",
+   "text": "Bravyi, S. and Vargo, A. (2013). Simulation of rare events in quantum error correction. Phys. Rev. A, 88:062308."
+  },
+  {
+   "key": "bbcch",
+   "tag": "Bravyi et al., 2019",
+   "text": "Bravyi, S., Browne, D., Calpin, P., Campbell, E., Gosset, D., and Howard, M. (2019). Simulation of quantum circuits by low-rank stabilizer decompositions. Quantum, 3:181."
+  },
+  {
+   "key": "cain",
+   "tag": "Cain et al., 2026",
+   "text": "Cain, M., Xu, Q., King, R., Picard, L. R. B., Levine, H., Endres, M., Preskill, J., Huang, H.-Y., and Bluvstein, D. (2026). Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits. arXiv:2603.28627."
+  },
+  {
+   "key": "cn",
+   "tag": "Chamberland and Noh, 2020",
+   "text": "Chamberland, C. and Noh, K. (2020). Very low overhead fault-tolerant magic state preparation using redundant ancilla encoding and flag qubits. npj Quantum Inf., 6:91."
+  },
+  {
+   "key": "clifft",
+   "tag": "Chase and Labib, 2026",
+   "text": "Chase, B. A. and Labib, F. (2026). Clifft: Fast exact simulation of near-Clifford quantum circuits. arXiv:2604.27058."
+  },
+  {
+   "key": "chen",
+   "tag": "Chen et al., 2026",
+   "text": "Chen, Z.-H., Chen, M.-C., Lu, C.-Y., and Pan, J.-W. (2026). Efficient magic state cultivation on RP^2. PRX Quantum, 7:010315."
+  },
+  {
+   "key": "claes",
+   "tag": "Claes, 2025",
+   "text": "Claes, J. (2025). Cultivating T states on the surface code with only two-qubit gates. arXiv:2509.05232."
+  },
+  {
+   "key": "dk",
+   "tag": "Daguerre and Kim, 2025",
+   "text": "Daguerre, L. and Kim, I. H. (2025). Code switching revisited: low-overhead magic state preparation using color codes. Phys. Rev. Research, 7:023080."
+  },
+  {
+   "key": "escofet",
+   "tag": "Escofet et al., 2026",
+   "text": "Escofet, P., Semenov, A., Murphy, N., Blokhina, E., Almudéver, C. G., Abadal, S., et al. (2026). Transversal gates and magic state distillation in an optimally synthesized spin-qubit shuttling bus. arXiv e-prints."
+  },
+  {
+   "key": "evered",
+   "tag": "Evered et al., 2023",
+   "text": "Evered, S. J., Bluvstein, D., Kalinowski, M., Ebadi, S., Manovitz, T., Zhou, H., et al. (2023). High-fidelity parallel entangling gates on a neutral-atom quantum computer. Nature, 622:268–272."
+  },
+  {
+   "key": "symft",
+   "tag": "Fang et al., 2026",
+   "text": "Fang, W., Lou, H., and Li, R. (2026). SymFT: Universal fault-tolerant quantum circuit simulation via symbolic Clifford-Pauli frames and stabilizer coordinates. arXiv:2607.28600."
+  },
+  {
+   "key": "gao",
+   "tag": "Gao et al., 2026",
+   "text": "Gao, J., Yuan, X., and Yao, Y. (2026). Extremely low-cost magic state preparation toward fault-tolerant quantum computing. arXiv e-prints."
+  },
+  {
+   "key": "stim",
+   "tag": "Gidney, 2021",
+   "text": "Gidney, C. (2021). Stim: a fast stabilizer circuit simulator. Quantum, 5:497."
+  },
+  {
+   "key": "gidney25",
+   "tag": "Gidney, 2025",
+   "text": "Gidney, C. (2025). How to factor 2048 bit RSA integers with less than a million noisy qubits. arXiv:2505.15917."
+  },
+  {
+   "key": "si1000",
+   "tag": "Gidney et al., 2021",
+   "text": "Gidney, C., Newman, M., Fowler, A., and Broughton, M. (2021). A fault-tolerant honeycomb memory. Quantum, 5:605."
+  },
+  {
+   "key": "gsj",
+   "tag": "Gidney et al., 2024",
+   "text": "Gidney, C., Shutty, N., and Jones, C. (2024). Magic state cultivation: growing T states as cheap as CNOT gates. arXiv:2409.17595."
+  },
+  {
+   "key": "gqai",
+   "tag": "Google Quantum AI and Collaborators, 2025",
+   "text": "Google Quantum AI and Collaborators (2025). Quantum error correction below the surface code threshold. Nature, 638:920–926."
+  },
+  {
+   "key": "tsim",
+   "tag": "Haenel et al., 2026",
+   "text": "Haenel, R., Luo, X., and Zhao, C. (2026). Tsim: Fast universal simulator for quantum error correction. arXiv e-prints."
+  },
+  {
+   "key": "hedlund",
+   "tag": "Hedlund et al., 2026",
+   "text": "Hedlund, O., Sandberg, E., Wiklund, J., and Forsgren, M. (2026). Magic state cultivation in the square-octagon colour code. arXiv e-prints."
+  },
+  {
+   "key": "hetenyi",
+   "tag": "Hetényi et al., 2026",
+   "text": "Hetényi, B., Brown, B. J., and Williamson, D. J. (2026). Constant depth magic state cultivation with Clifford measurements by gauging. arXiv:2603.05429."
+  },
+  {
+   "key": "heussen",
+   "tag": "Heußen et al., 2024",
+   "text": "Heußen, S., Winter, D., Rispler, M., and Müller, M. (2024). Dynamical subset sampling of quantum error-correcting protocols. Phys. Rev. Research, 6:013177."
+  },
+  {
+   "key": "pym",
+   "tag": "Higgott and Gidney, 2025",
+   "text": "Higgott, O. and Gidney, C. (2025). Sparse Blossom: correcting a million errors per core second with minimum-weight matching. Quantum, 9:1600."
+  },
+  {
+   "key": "hirano",
+   "tag": "Hirano et al., 2025",
+   "text": "Hirano, Y., Toshio, R., Itogawa, T., and Fujii, K. (2025). Efficient magic state cultivation with lattice surgery. arXiv:2510.24615."
+  },
+  {
+   "key": "hofmeyr",
+   "tag": "Hofmeyr et al., 2025",
+   "text": "Hofmeyr, S., Weiden, M., Kalloor, J., Kubiatowicz, J., and Iancu, C. (2025). Scheduling lattice surgery with magic state cultivation. arXiv e-prints."
+  },
+  {
+   "key": "itogawa",
+   "tag": "Itogawa et al., 2025",
+   "text": "Itogawa, T., Takada, Y., Hirano, Y., and Fujii, K. (2025). Efficient magic state distillation by zero-level distillation. PRX Quantum, 6:020356."
+  },
+  {
+   "key": "kim",
+   "tag": "Kim et al., 2026",
+   "text": "Kim, D., Seo, J., Patra, A., and Han, Y. (2026). Reducing postselection overhead in magic-state cultivation by in-patch multiplexing. arXiv:2605.03616."
+  },
+  {
+   "key": "kubica23",
+   "tag": "Kubica et al., 2023",
+   "text": "Kubica, A., Haim, A., Vaknin, Y., Levine, H., Brandão, F., and Retzker, A. (2023). Erasure qubits: Overcoming the T1 limit in superconducting circuits. Phys. Rev. X, 13:041022."
+  },
+  {
+   "key": "lacroix",
+   "tag": "Lacroix et al., 2025",
+   "text": "Lacroix, N., Bourassa, A., Heras, F. J. H., Zhang, L. M., Bausch, J., Senior, A. W., et al. (2025). Scaling and logic in the colour code on a superconducting quantum processor. Nature, 645:614–619."
+  },
+  {
+   "key": "soft",
+   "tag": "Li et al., 2025",
+   "text": "Li, R., Zheng, K., Zhang, Y., Lou, H., Ying, S., Liu, K., and Sun, X. (2025). SOFT: a high-performance simulator for universal fault-tolerant quantum circuits. arXiv:2512.23037."
+  },
+  {
+   "key": "litinski",
+   "tag": "Litinski, 2019",
+   "text": "Litinski, D. (2019). Magic state distillation: not as costly as you think. Quantum, 3:205."
+  },
+  {
+   "key": "lc",
+   "tag": "Liu and Clark, 2026",
+   "text": "Liu, Z. and Clark, B. K. (2026). Classical simulability of Clifford + T circuits with Clifford-augmented matrix product states. Phys. Rev. Research, 8:023116."
+  },
+  {
+   "key": "mbg",
+   "tag": "McEwen et al., 2023",
+   "text": "McEwen, M., Bacon, D., and Gidney, C. (2023). Relaxing hardware requirements for surface code circuits using time-dynamics. Quantum, 7:1172."
+  },
+  {
+   "key": "minheo_cs",
+   "tag": "Min and Heo, 2026a",
+   "text": "Min, G. and Heo, J. (2026a). Direct cultivation of entangled |CS> magic states. arXiv e-prints."
+  },
+  {
+   "key": "minheo_cc",
+   "tag": "Min and Heo, 2026b",
+   "text": "Min, G. and Heo, J. (2026b). Coded Clifford measurements for multiqubit magic-state cultivation. arXiv e-prints."
+  },
+  {
+   "key": "perrin",
+   "tag": "Perrin et al., 2025",
+   "text": "Perrin, H., Jandura, S., and Pupillo, G. (2025). Quantum error correction resilient against atom loss. Quantum, 9:1884."
+  },
+  {
+   "key": "pflieger",
+   "tag": "Pflieger et al., 2026",
+   "text": "Pflieger, J., Świerkowska, A., Giortamis, E., and Bhatotia, P. (2026). Harvest: Resource-aware quantum compilation for magic state protocols. arXiv e-prints."
+  },
+  {
+   "key": "rosenfeld",
+   "tag": "Rosenfeld et al., 2025",
+   "text": "Rosenfeld, E., Gidney, C., Roberts, G., Morvan, A., Lacroix, N., Kafri, D., et al. (2025). Magic state cultivation on a superconducting quantum processor. arXiv:2512.13908."
+  },
+  {
+   "key": "sahay23",
+   "tag": "Sahay et al., 2023",
+   "text": "Sahay, K., Jin, J., Claes, J., Thompson, J. D., and Puri, S. (2023). High-threshold codes for neutral-atom qubits with biased erasure errors. Phys. Rev. X, 13:041013."
+  },
+  {
+   "key": "sahay",
+   "tag": "Sahay et al., 2026",
+   "text": "Sahay, K., Tsai, P.-K., Chang, K., Su, Q., Smith, T. B., Singh, S., and Puri, S. (2026). Fold-transversal surface code cultivation. PRX Quantum, 7:033006."
+  },
+  {
+   "key": "shen",
+   "tag": "Shen and Zhong, 2026",
+   "text": "Shen, J. and Zhong, H. (2026). The resource cost of magic in a code block. arXiv e-prints."
+  },
+  {
+   "key": "surti",
+   "tag": "Surti et al., 2026",
+   "text": "Surti, S., Daguerre, L., and Kim, I. H. (2026). Efficient simulation of logical magic state preparation protocols. PRX Quantum, 7:020329."
+  },
+  {
+   "key": "ta",
+   "tag": "Tuloup and Ayral, 2026",
+   "text": "Tuloup, T. and Ayral, T. (2026). Computing logical error thresholds with the Pauli frame sparse representation. arXiv:2603.14670."
+  },
+  {
+   "key": "vaknin",
+   "tag": "Vaknin et al., 2025",
+   "text": "Vaknin, Y., Jacoby, S., Grimsmo, A., and Retzker, A. (2025). Efficient magic state cultivation on the surface code. arXiv:2502.01743."
+  },
+  {
+   "key": "wz",
+   "tag": "Wan and Zhong, 2025",
+   "text": "Wan, K. H. and Zhong, Z. (2025). Cutting stabiliser decompositions of magic state cultivation with ZX-calculus. arXiv:2509.01224."
+  },
+  {
+   "key": "wzz",
+   "tag": "Wan et al., 2026",
+   "text": "Wan, K. H., Zhong, Z., and Zapirain, A. (2026). Simulating magic state cultivation with few Clifford terms. Quantum, 10:2134."
+  },
+  {
+   "key": "webster",
+   "tag": "Webster et al., 2026",
+   "text": "Webster, P., Berent, L., Chandra, O., Hockings, E. T., Baspin, N., Thomsen, F., Smith, S. C., and Cohen, L. Z. (2026). The Pinnacle architecture: reducing the cost of breaking RSA-2048 to 100 000 physical qubits using quantum LDPC codes. arXiv:2602.11457."
+  },
+  {
+   "key": "wkpt",
+   "tag": "Wu et al., 2022",
+   "text": "Wu, Y., Kolkowitz, S., Puri, S., and Thompson, J. D. (2022). Erasure conversion for fault-tolerant quantum computing in alkaline earth Rydberg atom arrays. Nat. Commun., 13:4657."
+  }
+ ],
+ "bib_style": "authoryear"
+}

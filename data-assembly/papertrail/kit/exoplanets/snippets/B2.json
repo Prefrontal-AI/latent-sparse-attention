@@ -1,0 +1,565 @@
+{
+ "node": "B2",
+ "kind": "fake_paper",
+ "date": "2026-09-11",
+ "title": "Apparent orbital decay from line-of-sight acceleration: joint transit-timing, radial-velocity and Hipparcos–Gaia modelling of hot-Jupiter hosts, with forecasts for Gaia DR4",
+ "authors": [
+  "Ida Mølgaard 1",
+  "Kasper Thygesen 1",
+  "Jonas Lauridsen 2",
+  "Signe Bech 1",
+  "Mikkel Overgaard 1,2"
+ ],
+ "affiliations": [
+  "1 Stellar Astrophysics Centre, Department of Physics and Astronomy, Aarhus University, Ny Munkegade 120, 8000 Aarhus C, Denmark",
+  "2 Niels Bohr Institute, University of Copenhagen, Jagtvej 155A, 2200 Copenhagen N, Denmark"
+ ],
+ "abstract": "A steadily decreasing orbital period of a transiting hot Jupiter is usually read as tidal orbital decay, but a constant line-of-sight acceleration of the host star produces exactly the same quadratic drift of the transit times. We describe a joint model of transit times, radial velocities and Hipparcos–Gaia proper-motion anomalies that separates the two contributions by fitting the orbit of a distant companion together with the tidal period derivative. We validate the approach on WASP-4, recovering the known result that its apparent decay is explained by the acceleration of the star. We then apply it to KELT-29 b, for which 38 new FIES radial velocities reveal a trend of $-21.6\\pm3.4$ m s$^{-1}$ yr$^{-1}$; together with the astrometric anomaly this implies a brown-dwarf companion of $27^{+14}_{-7}\\,M_{\\rm J}$ at $12.4^{+4.6}_{-2.8}$ au. Of the observed period derivative of $-10.4\\pm1.7$ ms yr$^{-1}$ obtained from 74 transit times, $-6.6\\pm1.0$ ms yr$^{-1}$ is due to the acceleration, leaving a tidal component of $-3.8\\pm2.0$ ms yr$^{-1}$ and a stellar tidal quality factor $Q'_\\star=(1.94^{+2.1}_{-0.6})\\times10^{6}$. Finally, we use simulated hosts to forecast how Gaia DR4 epoch astrometry will constrain the acceleration term for hot-Jupiter systems out to a few hundred parsecs, and argue that such constraints should become a standard part of any claim of orbital decay.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Transit timing offers the most direct way to observe the tidal evolution of close-in giant planets. A planet whose orbit shrinks at a constant rate arrives progressively earlier than a linear ephemeris predicts, and the curvature of the transit times measures the period derivative $\\dot P$, from which the modified stellar tidal quality factor $Q'_\\star$ follows [⟦patra17⟧]. After more than a decade of monitoring, WASP-12 b remains the only planet for which decay is accepted without serious reservations [⟦maciejewski16⟧, ⟦patra17⟧, ⟦yee20⟧, ⟦wong22⟧]. Systematic searches over dozens of hot Jupiters have produced mostly upper limits [⟦ivshina22⟧, ⟦kokori23⟧, ⟦adams24⟧], and several published detections have later been attributed to other causes."
+    },
+    {
+     "kind": "p",
+     "text": "The best documented of these is WASP-4 b. Its transits were found to arrive earlier than expected [⟦bouma19⟧], and a long-term trend in the radial velocities later showed that the star is accelerating towards the Sun, which accounts for most of the apparent period change [⟦bouma20⟧]. Additional timing [⟦baluev20⟧] and a re-examination of the full dataset [⟦winn25⟧] have since confirmed that WASP-4 b is not measurably decaying. The general point is old: a binary or a distant planetary companion changes the light-travel time across the orbit of the host [⟦irwin52⟧], and over a timing baseline much shorter than the companion's period this appears as a constant period derivative. A proper-motion term of the same form also exists [⟦shklovskii70⟧, ⟦rafikov09⟧], but it is negligible for hot Jupiters at the distances considered here."
+    },
+    {
+     "kind": "p",
+     "text": "Radial velocities measure the line-of-sight acceleration directly, but only if the RV baseline is long and precise enough. Astrometry adds complementary information. The difference between the long-term proper motion from Hipparcos and Gaia positions and the short-term Gaia proper motion, the proper-motion anomaly, is sensitive to the tangential acceleration of the star [⟦kervella19⟧, ⟦brandt21⟧, ⟦kervella22⟧], and in combination with an RV trend it constrains the mass and separation of the companion [⟦orvara21⟧, ⟦feng22⟧]. Such joint fits are now routine for long-period giant planets and brown dwarfs [⟦xiao26⟧, ⟦vanzandt26⟧, ⟦marcussen26⟧], but they have rarely been used to interpret transit timing."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we set up a joint model for transit times, radial velocities and Hipparcos–Gaia astrometry that fits the tidal period derivative and the orbit of an outer companion simultaneously (Sect. 2). We test it on WASP-4 (Sect. 3) and apply it to KELT-29 b, a massive hot Jupiter for which orbital decay has recently been reported (Sect. 4). In Sect. 5 we forecast the gain expected from Gaia DR4, and Sect. 6 discusses the implications for the interpretation of decay claims."
+    }
+   ]
+  },
+  {
+   "title": "2 Apparent period changes from stellar acceleration",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "2.1 Light-travel time",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Let $z(t)$ be the distance of the host star from the observer along the line of sight, relative to the system barycentre and measured positive away from the observer. A transit that occurs at proper time $\\tau$ is observed at $t=\\tau+z/c$ (up to a constant). If the star is accelerated by a companion with orbital period much longer than the timing baseline, $z(t)\\approx z_0+v_rt+\\frac{1}{2}\\dot v_rt^2$, and the observed transit times follow"
+    },
+    {
+     "kind": "equation",
+     "text": "$$t(E)=T_0+P_{\\rm obs}E+\\frac{1}{2}P\\left(\\dot P_{\\rm tide}+\\dot P_{\\rm acc}\\right)E^{2},\\qquad\\dot P_{\\rm acc}=\\frac{P\\,\\dot v_r}{c},\\qquad(1)$$"
+    },
+    {
+     "kind": "p",
+     "text": "where $E$ is the epoch and $\\dot P_{\\rm tide}$ is the intrinsic period derivative. A star accelerating towards the observer ($\\dot v_r<0$) thus mimics orbital decay. For $P=1$ d, an acceleration of $-3.5$ m s$^{-1}$ yr$^{-1}$ produces $\\dot P_{\\rm acc}\\approx-1$ ms yr$^{-1}$, comparable to the sensitivity of the best current timing datasets. The Shklovskii term, $P\\mu^2d/c$, is below 0.01 ms yr$^{-1}$ for every system discussed here and is ignored."
+    },
+    {
+     "kind": "p",
+     "text": "Because $\\dot v_r$ is constant to first order, a timing dataset alone cannot distinguish the two terms. A non-constant acceleration adds a cubic term, but for companions on decade-long orbits this is too small to be detected with existing data. The separation must therefore come from outside the timing: from a trend in the radial velocities, which measures $\\dot v_r$ directly, and from astrometry, which measures the tangential acceleration and thereby constrains the companion's mass and orbit."
+    },
+    {
+     "kind": "p",
+     "text": "It is useful to estimate when the change of the acceleration becomes measurable. For a companion of mass $M_c$ on a circular orbit of radius $a_c$, the line-of-sight acceleration varies on the orbital timescale $P_c\\propto a_c^{3/2}$, and the cubic term in the transit times grows as $\\dddot z\\,t^3/6c$. For a brown dwarf at 10 au around a solar-mass star, $P_c\\approx30$ yr, and over a 17-yr baseline the cubic term amounts to a few tens of seconds at the ends of the baseline, comparable to the uncertainties of the archival ground-based times, so the timing data alone cannot yet separate the two effects. The same argument shows that the acceleration measured from a few years of RVs can be extrapolated over a timing baseline of 15–20 yr only with an uncertainty that depends on the companion orbit. This is why we fit the full Keplerian orbit of the companion rather than a constant $\\dot v_r$: the line-of-sight acceleration at the epoch of each transit is then computed self-consistently, and the uncertainty from the unknown orbit propagates into $\\dot P_{\\rm tide}$."
+    }
+   ]
+  },
+  {
+   "title": "2.2 Joint model",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We model the host as orbited by an inner transiting planet on a circular orbit and an outer companion on a Keplerian orbit of arbitrary eccentricity. The free parameters are the transit ephemeris ($T_0$, $P$, $\\dot P_{\\rm tide}$), the semi-amplitude of the inner planet, the companion's mass, semi-major axis, eccentricity, inclination, argument of periastron, longitude of the ascending node and time of periastron, the parallax, and an offset and jitter term for each spectrograph. The radial-velocity model includes both orbits; the line-of-sight acceleration that enters Eq. (1) is evaluated at each transit epoch from the companion's orbit rather than assumed constant. The astrometric part of the likelihood follows orvara [⟦orvara21⟧]: the Hipparcos intermediate astrometric data [⟦vanleeuwen07⟧] are refitted with htof [⟦htof21⟧], and the model positions and proper motions are compared with the cross-calibrated values in the Hipparcos–Gaia Catalog of Accelerations [⟦brandt21⟧], based on Gaia EDR3 [⟦lindegren21⟧]. We sample the posterior with the parallel-tempered affine-invariant sampler of emcee [⟦fm13⟧], using 15 temperatures and 100 walkers, and verified convergence by comparing independent chains."
+    },
+    {
+     "kind": "p",
+     "text": "The priors are uniform in $\\dot P_{\\rm tide}$, in $\\log$ of the companion mass between 0.3 and 300 $M_{\\rm J}$, and in $\\log a$ between 1 and 200 au, isotropic in orientation, and uniform in $\\sqrt e\\cos\\omega$ and $\\sqrt e\\sin\\omega$. We have checked that a uniform prior on the companion mass shifts the posterior of $\\dot P_{\\rm tide}$ by less than 0.2$\\sigma$ in both applications below. Transit times are not refitted from the light curves; we take published times and add new ones measured in the same way, with the shape parameters fixed."
+    }
+   ]
+  },
+  {
+   "title": "3 Validation on WASP-4",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "WASP-4 is too faint to appear in Hipparcos, so the validation exercises only the radial-velocity and timing parts of the model. We used the published transit times compiled by Baluev et al. (2020) and Ivshina & Winn (2022), the TESS times of Bouma et al. (2019), and the radial velocities analysed by Bouma et al. (2020), without adding new data. The joint model reproduces the conclusion of Bouma et al. (2020): the trend in the velocities predicts a period derivative that accounts for most of the apparent change, and the tidal term is consistent with zero at about $1\\sigma$, in line with the later analysis of Winn & Stefánsson (2025). The posterior of the outer companion is broad, since the RVs show no curvature, and it is consistent with the range quoted by Bouma et al. (2020). We take this as evidence that the model behaves as intended when the companion orbit is poorly constrained; in that regime the result for $\\dot P_{\\rm tide}$ is determined almost entirely by the linear RV trend."
+    },
+    {
+     "kind": "p",
+     "text": "We also verified with injection tests that the model recovers a known tidal term in the presence of an acceleration. We simulated 200 datasets with the epochs and uncertainties of the WASP-4 timing set, random companions drawn from our priors that produce trends of 10–40 m s$^{-1}$ yr$^{-1}$, and injected $\\dot P_{\\rm tide}$ between 0 and $-10$ ms yr$^{-1}$. The recovered values were unbiased to within 0.1$\\sigma$, and the posterior widths were consistent with the scatter of the recovered values. Two of the simulations did not converge within the allotted steps and were excluded."
+    },
+    {
+     "kind": "p",
+     "text": "The WASP-4 exercise also illustrates a practical point. The RV data that revealed the acceleration were obtained several years after the timing anomaly was first noticed, and the trend was only detectable because the velocities spanned close to a decade. Most hot-Jupiter hosts have far shorter RV baselines, often a single season obtained for the mass measurement, and for these the acceleration term is effectively unconstrained. In our joint model such a system returns a posterior on $\\dot P_{\\rm tide}$ that is much wider than the timing data alone would suggest, which is the correct behaviour but is easily overlooked when the period derivative is fitted on its own."
+    }
+   ]
+  },
+  {
+   "title": "4 Application to KELT-29 b",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "4.1 The system",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "KELT-29 b is TOI-8317 b of Fuenzalida et al. (2026) [⟦fuenzalida26⟧], who reported a period derivative of $-11.7\\pm2.9$ ms yr$^{-1}$ from 61 transit times spanning 2008–2025 and interpreted it as tidal decay. The system was independently flagged as a candidate in the archive of the KELT-North survey [⟦pepper07⟧, ⟦siverd12⟧], and the transiting planet carries the designation KELT-29 b in that project. We use the KELT designation throughout because the archival ground-based photometry analysed here is the KELT-North light curve. The host is a $V=9.31$ G0 dwarf at 101.8 pc with $M_\\star=1.07\\,M_\\odot$ and $R_\\star=1.21\\,R_\\odot$; we adopt the stellar parameters and the transit shape ($a/R_\\star=3.705$, $P=1.0627418$ d) of Fuenzalida et al. (2026). The star is included in Hipparcos and in the Hipparcos–Gaia Catalog of Accelerations, where its proper-motion anomaly has $\\chi^2=11.8$ for two degrees of freedom, a $3.0\\sigma$ deviation from constant proper motion. The Gaia DR3 [⟦gaia23⟧] renormalised unit weight error is normal, which is expected for a companion with a period of decades. The Gaia EDR3 proper motion differs from the long-term Hipparcos–Gaia proper motion by $0.21\\pm0.07$ mas yr$^{-1}$, which at the distance of the star corresponds to a tangential velocity difference of $101\\pm34$ m s$^{-1}$ accumulated over roughly 12 yr. The Hipparcos proper motion itself is too imprecise to add to the constraint."
+    }
+   ]
+  },
+  {
+   "title": "4.2 New and archival data",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We started from the 61 published transit times and added three from the KELT-North archive, ten new times and one long-baseline RV dataset. The KELT-North light curve covers the 2007–2013 seasons with an 80-mm f/1.9 lens and 26-degree field [⟦pepper07⟧]. As the transits are shallow for KELT, we fitted the 2009/10, 2010/11 and 2012/13 seasons separately with the shape fixed, obtaining three mid-times with uncertainties of 104, 96 and 118 s; the other seasons gave uncertainties above 3 min and were not used. Before fitting, the KELT-North light curves were detrended with the trend-filtering algorithm of the survey pipeline, and we verified on the TESS data that this filtering does not distort the transit shape at the level relevant here; a $V\\approx12$ neighbour inside the KELT aperture dilutes the transit by about 8 per cent, which we corrected. Six new transits were observed between 2025 September and 2026 February with ALFOSC on the 2.56-m Nordic Optical Telescope [⟦djupvik10⟧], defocused, through a Bessel $R$ filter, and four with the LCOGT 1-m network [⟦brown13⟧] between 2025 March and 2025 December. These were reduced with our own aperture-photometry pipeline and fitted with juliet [⟦espinoza19⟧, ⟦kreidberg15⟧], with the limb-darkening coefficients sampled as in [⟦kipping13⟧]; their uncertainties are 24–48 s. The published set already contains the TESS times [⟦ricker15⟧, ⟦jenkins16⟧] from Sectors 43–45 and 71–72. The full set comprises 74 transit times over 17.2 yr. The 13 times added here are listed in Table 1."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Transit mid-times of KELT-29 b added in this work. Epochs follow the numbering of Fuenzalida et al. (2026)."
+    },
+    {
+     "kind": "table",
+     "text": "Epoch | BJD$_{\\rm TDB}-2454000$ | $\\sigma$ (s) | Source\n$-4417$ | 1180.49541 | 104 | KELT-North\n$-4078$ | 1540.76296 | 96 | KELT-North\n$-3391$ | 2270.86712 | 118 | KELT-North\n826 | 6752.45055 | 41 | LCOGT\n871 | 6800.27517 | 48 | LCOGT\n1004 | 6941.61965 | 37 | LCOGT\n1009 | 6946.93360 | 29 | NOT/ALFOSC\n1036 | 6975.62763 | 24 | NOT/ALFOSC\n1063 | 7004.32115 | 31 | NOT/ALFOSC\n1077 | 7019.19964 | 44 | LCOGT\n1093 | 7036.20350 | 27 | NOT/ALFOSC\n1120 | 7064.89761 | 33 | NOT/ALFOSC\n1148 | 7094.65476 | 26 | NOT/ALFOSC"
+    },
+    {
+     "kind": "p",
+     "text": "Between 2022 November and 2026 March we obtained 38 spectra with the FIES spectrograph [⟦telting14⟧] on the Nordic Optical Telescope, using the high-resolution fibre ($R\\approx67\\,000$). Exposures of 1200–1800 s gave signal-to-noise ratios of 45–80 at 5500 Å. The data were reduced with FIEStool and velocities were measured by cross-correlation against a template built from the observed spectra, order by order, as in [⟦buchhave10⟧]; the median uncertainty is 9 m s$^{-1}$. We combined them with the 31 published FEROS velocities, allowing an offset and a jitter term for each instrument. Together the velocities span 3.4 yr. A generalised Lomb-Scargle periodogram [⟦zechmeister09⟧] of the residuals from a one-planet fit without a trend shows a strong peak at the longest periods sampled, and no other significant signal."
+    }
+   ]
+  },
+  {
+   "title": "4.3 Results",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 lists the posterior of the joint model. The velocities give a linear trend of $\\dot v_r=-21.6\\pm3.4$ m s$^{-1}$ yr$^{-1}$ with no significant curvature; adding a quadratic term changes the BIC by less than 1. The FIES data alone give $-23.0\\pm4.1$ m s$^{-1}$ yr$^{-1}$. With the larger and longer RV dataset the semi-amplitude of the planet is $818\\pm7$ m s$^{-1}$, which gives a planet mass of $4.31\\pm0.09\\,M_{\\rm J}$, somewhat lower than but consistent with the earlier value. The astrometric anomaly and the trend together require a companion of $27^{+14}_{-7}\\,M_{\\rm J}$ at $12.4^{+4.6}_{-2.8}$ au, with an orbital inclination of $63^{+17}_{-21}$ deg: a brown dwarf or, for the lowest inclinations allowed, a very low-mass star. At 101.8 pc the projected separation is about 0.12 arcsec and the expected contrast is beyond reach of the speckle imaging available for the star."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: Posterior medians and 68 per cent intervals of the joint model for KELT-29 b."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Value\n$T_0$ (BJD$_{\\rm TDB}$) | $2459874.62721\\pm0.00007$\n$P$ (d) | $1.06274179\\pm0.00000014$\n$\\dot P_{\\rm obs}$ (ms yr$^{-1}$) | $-10.4\\pm1.7$\n$\\dot P_{\\rm acc}$ (ms yr$^{-1}$) | $-6.6\\pm1.0$\n$\\dot P_{\\rm tide}$ (ms yr$^{-1}$) | $-3.8\\pm2.0$\n$K_b$ (m s$^{-1}$) | $818\\pm7$\n$M_p$ ($M_{\\rm J}$) | $4.31\\pm0.09$\n$\\dot v_r$ (m s$^{-1}$ yr$^{-1}$) | $-21.6\\pm3.4$\n$M_c$ ($M_{\\rm J}$) | $27^{+14}_{-7}$\n$a_c$ (au) | $12.4^{+4.6}_{-2.8}$\n$i_c$ (deg) | $63^{+17}_{-21}$\n$e_c$ | $<0.58$ (95%)\nJitter FIES / FEROS (m s$^{-1}$) | $7\\pm2$ / $11\\pm3$"
+    },
+    {
+     "kind": "p",
+     "text": "Refitting the 74 transit times with a constant period derivative and no knowledge of the companion gives $\\dot P_{\\rm obs}=-10.4\\pm1.7$ ms yr$^{-1}$, consistent with the earlier value and slightly smaller in magnitude; the three KELT-North times and the 2025–2026 data reduce the uncertainty. Without the KELT-North times we obtain $-10.9\\pm2.0$ ms yr$^{-1}$. In the joint model the acceleration accounts for $\\dot P_{\\rm acc}=-6.6\\pm1.0$ ms yr$^{-1}$, so that roughly two-thirds of the observed curvature is due to the motion of the star. The remaining tidal component is $\\dot P_{\\rm tide}=-3.8\\pm2.0$ ms yr$^{-1}$, which differs from zero at $1.9\\sigma$. The correlation between $\\dot P_{\\rm tide}$ and $\\dot v_r$ in the posterior is $-0.47$, as expected."
+    }
+   ]
+  },
+  {
+   "title": "4.4 Tidal quality factor",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Using the constant-phase-lag expression [⟦goldreich66⟧, ⟦patra17⟧]"
+    },
+    {
+     "kind": "equation",
+     "text": "$$Q'_\\star=-\\frac{27\\pi}{2\\dot P_{\\rm tide}}\\,\\frac{M_p}{M_\\star}\\left(\\frac{R_\\star}{a}\\right)^{5},\\qquad(2)$$"
+    },
+    {
+     "kind": "p",
+     "text": "with the updated planet mass we obtain $Q'_\\star=(1.94^{+2.1}_{-0.6})\\times10^{6}$, and $Q'_\\star>9.4\\times10^{5}$ at 95 per cent confidence. The upper side of the interval is long because $\\dot P_{\\rm tide}$ is consistent with zero at the $2\\sigma$ level. This range lies between the values expected when tidally excited gravity waves break in the core of a solar-type star and those for weakly non-linear wave damping [⟦barker20⟧], and it overlaps with empirical estimates from tidal spin-up and from the hot-Jupiter period distribution [⟦penev18⟧, ⟦collier18⟧, ⟦ma26⟧]. It also means that the system does not need to be in an unusually short-lived phase: the planet's remaining lifetime is several times longer than if the full observed curvature were tidal. Whether the remaining signal is real will be decided by continued timing combined with Gaia DR4 astrometry, which should pin down the companion orbit (Sect. 5)."
+    }
+   ]
+  },
+  {
+   "title": "4.5 Robustness",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We repeated the fit with several changes to the data and the priors (Table 3). None of them moves $\\dot P_{\\rm tide}$ by more than about $0.4\\sigma$. Removing the KELT-North times enlarges the uncertainty, since they extend the timing baseline, while using only the FIES velocities to measure the trend gives a slightly larger acceleration and correspondingly a smaller tidal term. Fitting the RVs and the timing without the astrometry gives almost the same $\\dot P_{\\rm tide}$, as expected for a companion whose period is much longer than the RV baseline: in this regime the Hipparcos–Gaia data mainly constrain the companion mass and separation, and they rule out the stellar-mass companions at tens of au that would otherwise be allowed by the trend alone. A quadratic term in the velocities is not significant, and including it widens the posterior of the acceleration without shifting it."
+    },
+    {
+     "kind": "table",
+     "text": "Table 3: Tidal period derivative of KELT-29 b under alternative choices."
+    },
+    {
+     "kind": "table",
+     "text": "Fit | $\\dot P_{\\rm tide}$ (ms yr$^{-1}$)\nBaseline (Table 2) | $-3.8\\pm2.0$\nUniform prior on $M_c$ | $-3.6\\pm2.0$\nWithout KELT-North times | $-4.2\\pm2.3$\nWithout Hipparcos–Gaia astrometry | $-3.9\\pm2.1$\nTrend from FIES velocities only | $-3.4\\pm2.4$\nQuadratic RV trend | $-4.0\\pm2.3$\nUncertainties of SuperWASP times doubled | $-3.5\\pm2.2$"
+    },
+    {
+     "kind": "p",
+     "text": "The last line of Table 3 addresses the dependence of the original detection on the two archival SuperWASP times noted by Fuenzalida et al. (2026). With the KELT-North times now covering 2009–2013 independently, the early part of the baseline no longer rests on a single survey, and doubling the SuperWASP uncertainties changes the result very little."
+    }
+   ]
+  },
+  {
+   "title": "5 Forecasts for Gaia DR4",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Gaia DR4, based on 66 months of data and including epoch astrometry for all sources [⟦gaia16⟧], will constrain companions on orbits of a few decades much better than the proper-motion anomaly alone [⟦perryman14⟧, ⟦sozzetti14⟧]. To quantify the benefit for transit-timing studies we simulated hosts with $G=8$–12 at distances of 50–400 pc, each with a companion of 10, 30 or 80 $M_{\\rm J}$ on an orbit drawn from our priors with $5<a<30$ au. For each we generated Hipparcos and Gaia astrometry with the expected along-scan uncertainties, ten years of RVs with 10 m s$^{-1}$ precision and annual sampling, and computed the posterior width of $\\dot P_{\\rm acc}$ for an inner planet with $P=1$ d, with and without the DR4 epoch data (Table 4)."
+    },
+    {
+     "kind": "table",
+     "text": "Table 4: Median posterior width $\\sigma(\\dot P_{\\rm acc})$ (ms yr$^{-1}$) of the acceleration term for simulated hosts with $G\\approx10$ and an inner planet with $P=1$ d, using Hipparcos–Gaia DR3 (HG3) or Hipparcos–Gaia DR4 epoch astrometry (HG4), each combined with ten years of RVs."
+    },
+    {
+     "kind": "table",
+     "text": "Distance (pc) | 10 $M_{\\rm J}$ HG3 | 10 $M_{\\rm J}$ HG4 | 30 $M_{\\rm J}$ HG3 | 30 $M_{\\rm J}$ HG4 | 80 $M_{\\rm J}$ HG3 | 80 $M_{\\rm J}$ HG4\n50 | 0.42 | 0.19 | 0.37 | 0.12 | 0.33 | 0.09\n100 | 0.47 | 0.26 | 0.41 | 0.17 | 0.36 | 0.11\n200 | 0.55 | 0.38 | 0.46 | 0.27 | 0.41 | 0.18\n400 | 0.61 | 0.52 | 0.53 | 0.40 | 0.47 | 0.29"
+    },
+    {
+     "kind": "p",
+     "text": "Two regimes appear. When the RV baseline is shorter than about a third of the companion's period, the trend fixes the instantaneous $\\dot v_r$ and the astrometry adds little to $\\dot P_{\\rm acc}$ itself; it matters instead for predicting how the acceleration will change over the next decade. When the curvature of the RV trend is detectable, DR4 epoch astrometry reduces the uncertainty on $\\dot P_{\\rm acc}$ by a factor of two to three for hosts within 200 pc. The gain is smaller at larger distances because the astrometric signal falls inversely with distance. In all cases the limiting factor for current decay claims is the length of the RV baseline: a single season of velocities, as is typical for planet confirmation, cannot exclude a trend large enough to mimic decay at the 10 ms yr$^{-1}$ level for a one-day planet."
+    },
+    {
+     "kind": "p",
+     "text": "KELT-29 itself is a favourable case. For the median companion solution the astrometric semi-major axis of the star is about 3 mas, and over the 66-month DR4 baseline the orbital arc of the photocentre should be strongly curved. We simulated DR4 epoch astrometry for 500 draws from our posterior and refitted them together with the existing data. The companion mass is then determined to about 15 per cent, the inclination to a few degrees, and the uncertainty on $\\dot P_{\\rm acc}$ falls from 1.0 to about 0.4 ms yr$^{-1}$. If the tidal component is real at the level found here, the combination of DR4 and two more years of timing would raise its significance to about $3\\sigma$; if it is not, the upper limit on $|\\dot P_{\\rm tide}|$ would correspond to $Q'_\\star\\gtrsim3\\times10^{6}$."
+    }
+   ]
+  },
+  {
+   "title": "6 Discussion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our results add KELT-29 b to WASP-4 b as a system where a large part of an apparent period decrease is due to the acceleration of the host star. In both cases the companion was not known when the decay was first reported, and in both the RV data available at that time were too short to reveal it. For KELT-29 b the earlier upper limit on the trend was consistent with the value we now measure. This is not a criticism of the original analyses, which used the data available; rather, it suggests that the incidence of distant massive companions around hot-Jupiter hosts [⟦knutson14⟧, ⟦bryan16⟧, ⟦livesey26⟧] makes acceleration a likely contaminant in any sample of decay candidates. Roughly half of hot Jupiters have a distant giant companion according to these surveys, and for brown-dwarf companions at 5–20 au the implied $|\\dot P_{\\rm acc}|$ is typically a few ms yr$^{-1}$ for one-day planets."
+    },
+    {
+     "kind": "p",
+     "text": "Several limitations should be kept in mind. The companion's orbit is constrained by only a short arc, so the acceleration could change appreciably within a decade; our model accounts for this through the full Keplerian orbit, but the posterior is prior-dependent for the orbital elements that are not constrained. We have assumed that the tidal term is constant; resonance locking or wave breaking near a resonance could produce variable rates [⟦ma26⟧]. We have not considered apsidal precession, which Fuenzalida et al. (2026) found to be disfavoured. Finally, the tidal component for KELT-29 b is significant only at $1.9\\sigma$; it should be regarded as a measurement with a wide interval rather than as a detection. Theoretical arguments about the plausibility of a given $Q'_\\star$ [⟦barker20⟧, ⟦lammers26⟧, ⟦hamer19⟧] are therefore no substitute for an independent check of the acceleration."
+    },
+    {
+     "kind": "p",
+     "text": "The consequences extend beyond individual systems. Empirical calibrations of stellar tidal dissipation that combine several decay measurements or limits [⟦collier18⟧, ⟦ma26⟧] are sensitive to the few systems with the largest apparent rates. If a significant fraction of these is contaminated by acceleration, the inferred dissipation is biased high. In the opposite direction, a star accelerating away from the observer would partly mask a real decay signal, so that upper limits on $|\\dot P|$ for systems with unknown companions are not strictly upper limits on the tidal term. Both effects can be handled by including the acceleration explicitly, as here, or by inflating the uncertainty of $\\dot P_{\\rm tide}$ by the expected spread of $\\dot P_{\\rm acc}$ for systems without long RV baselines. For hosts with a single season of velocities and no Hipparcos–Gaia anomaly, our simulations suggest an additional uncertainty of 2–4 ms yr$^{-1}$ for one-day planets, comparable to the precision of the best current timing datasets."
+    },
+    {
+     "kind": "p",
+     "text": "We recommend that future claims of orbital decay report the RV baseline and any constraint on a linear trend, the Hipparcos–Gaia anomaly where available, and the implied $\\dot P_{\\rm acc}$ with its uncertainty. Similar care applies to eclipse-timing analyses of eccentric planets [⟦beichman26⟧] and to systems with nearby companions where timing variations have other causes [⟦wong21⟧, ⟦harre24⟧]."
+    }
+   ]
+  },
+  {
+   "title": "7 Conclusions",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We have presented a joint model for transit times, radial velocities and Hipparcos–Gaia astrometry that separates tidal orbital decay from the light-travel-time effect of an accelerating host. Applied to WASP-4, it confirms that the apparent decay is due to acceleration. Applied to KELT-29 b, it shows that the reported decay is dominated by the acceleration caused by a brown-dwarf companion at about 12 au: of an observed $\\dot P$ of $-10.4\\pm1.7$ ms yr$^{-1}$, $-6.6\\pm1.0$ ms yr$^{-1}$ is due to the acceleration, and the tidal component of $-3.8\\pm2.0$ ms yr$^{-1}$ implies $Q'_\\star=(1.94^{+2.1}_{-0.6})\\times10^{6}$. Gaia DR4 epoch astrometry will tighten the acceleration term for nearby hosts by a factor of two to three, but long RV baselines remain essential."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank the NOT staff for their help with the FIES and ALFOSC observations. Based on observations made with the Nordic Optical Telescope, owned in collaboration by the University of Turku and Aarhus University, and operated jointly by Aarhus University, the University of Turku and the University of Oslo, representing Denmark, Finland and Norway, the University of Iceland and Stockholm University at the Observatorio del Roque de los Muchachos, La Palma, Spain, of the Instituto de Astrofisica de Canarias (programmes 66-112, 68-207, 70-109 and 72-031). Funding for the Stellar Astrophysics Centre is provided by The Danish National Research Foundation. I.M. acknowledges support from the Independent Research Fund Denmark (grant 1026-00347B) and K.T. from the Carlsberg Foundation (grant CF24-1187). This work has made use of data from the ESA mission Gaia, processed by the Gaia DPAC, and of the KELT survey archive. We used NumPy, SciPy, Astropy, emcee, orvara and htof."
+    }
+   ]
+  },
+  {
+   "title": "Data and code availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The new transit times and FIES radial velocities are available at the CDS. The code for the joint model is available at github.com/imolgaard/accelttv and archived on Zenodo (doi:10.5281/zenodo.16422087)."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "patra17",
+   "tag": "1",
+   "text": "Patra, K. C., Winn, J. N., Holman, M. J., et al. 2017, AJ, 154, 4."
+  },
+  {
+   "key": "maciejewski16",
+   "tag": "2",
+   "text": "Maciejewski, G., Dimitrov, D., Fernández, M., et al. 2016, A&A, 588, L6."
+  },
+  {
+   "key": "yee20",
+   "tag": "3",
+   "text": "Yee, S. W., Winn, J. N., Knutson, H. A., et al. 2020, ApJL, 888, L5."
+  },
+  {
+   "key": "wong22",
+   "tag": "4",
+   "text": "Wong, I., Shporer, A., Vissapragada, S., et al. 2022, AJ, 163, 175."
+  },
+  {
+   "key": "ivshina22",
+   "tag": "5",
+   "text": "Ivshina, E. S., & Winn, J. N. 2022, ApJS, 259, 62."
+  },
+  {
+   "key": "kokori23",
+   "tag": "6",
+   "text": "Kokori, A., Tsiaras, A., Edwards, B., et al. 2023, ApJS, 265, 4."
+  },
+  {
+   "key": "adams24",
+   "tag": "7",
+   "text": "Adams, E. R., Jackson, B., Sickafoose, A. A., et al. 2024, PSJ, 5, 163."
+  },
+  {
+   "key": "bouma19",
+   "tag": "8",
+   "text": "Bouma, L. G., Winn, J. N., Baxter, C., et al. 2019, AJ, 157, 217."
+  },
+  {
+   "key": "bouma20",
+   "tag": "9",
+   "text": "Bouma, L. G., Winn, J. N., Howard, A. W., et al. 2020, ApJL, 893, L29."
+  },
+  {
+   "key": "baluev20",
+   "tag": "10",
+   "text": "Baluev, R. V., Sokov, E. N., Hoyer, S., et al. 2020, MNRAS, 496, L11."
+  },
+  {
+   "key": "winn25",
+   "tag": "11",
+   "text": "Winn, J. N., & Stefánsson, G. 2025, PSJ, 6, 300."
+  },
+  {
+   "key": "irwin52",
+   "tag": "12",
+   "text": "Irwin, J. B. 1952, ApJ, 116, 211."
+  },
+  {
+   "key": "shklovskii70",
+   "tag": "13",
+   "text": "Shklovskii, I. S. 1970, Soviet Ast., 13, 562."
+  },
+  {
+   "key": "rafikov09",
+   "tag": "14",
+   "text": "Rafikov, R. R. 2009, ApJ, 700, 965."
+  },
+  {
+   "key": "kervella19",
+   "tag": "15",
+   "text": "Kervella, P., Arenou, F., Mignard, F., & Thévenin, F. 2019, A&A, 623, A72."
+  },
+  {
+   "key": "brandt21",
+   "tag": "16",
+   "text": "Brandt, T. D. 2021, ApJS, 254, 42."
+  },
+  {
+   "key": "kervella22",
+   "tag": "17",
+   "text": "Kervella, P., Arenou, F., & Thévenin, F. 2022, A&A, 657, A7."
+  },
+  {
+   "key": "orvara21",
+   "tag": "18",
+   "text": "Brandt, T. D., Dupuy, T. J., Li, Y., et al. 2021, AJ, 162, 186."
+  },
+  {
+   "key": "feng22",
+   "tag": "19",
+   "text": "Feng, F., Butler, R. P., Vogt, S. S., et al. 2022, ApJS, 262, 21."
+  },
+  {
+   "key": "xiao26",
+   "tag": "20",
+   "text": "Xiao, G.-Y., Teng, H.-Y., Huang, X., et al. 2026, Transiting Planetary Systems with Distant Giant Companions Remain Moderately Coplanar, arXiv e-prints."
+  },
+  {
+   "key": "vanzandt26",
+   "tag": "21",
+   "text": "Van Zandt, J., Bowler, B. P., Endl, M., et al. 2026, The γ Cephei System: Updated Orbits, Dynamical Architecture, and Limits on Additional Companions, arXiv e-prints."
+  },
+  {
+   "key": "marcussen26",
+   "tag": "22",
+   "text": "Marcussen, M. L., Albrecht, S. H., Kalinowski, K. K., et al. 2026, Radial velocity follow-up of Gaia astrometric substellar companions: six confirmed brown dwarfs and 13 impostor binaries, arXiv e-prints."
+  },
+  {
+   "key": "vanleeuwen07",
+   "tag": "23",
+   "text": "van Leeuwen, F. 2007, A&A, 474, 653."
+  },
+  {
+   "key": "htof21",
+   "tag": "24",
+   "text": "Brandt, G. M., Michalik, D., Brandt, T. D., et al. 2021, AJ, 162, 230."
+  },
+  {
+   "key": "lindegren21",
+   "tag": "25",
+   "text": "Lindegren, L., Klioner, S. A., Hernández, J., et al. 2021, A&A, 649, A2."
+  },
+  {
+   "key": "fm13",
+   "tag": "26",
+   "text": "Foreman-Mackey, D., Hogg, D. W., Lang, D., & Goodman, J. 2013, PASP, 125, 306."
+  },
+  {
+   "key": "fuenzalida26",
+   "tag": "27",
+   "text": "Fuenzalida, T., Riquelme, C., Arancibia, I., et al. 2026, Sixteen years of transit timing of the massive hot Jupiter TOI-8317 b: evidence for tidal orbital decay around a main-sequence G dwarf, AJ, submitted."
+  },
+  {
+   "key": "pepper07",
+   "tag": "28",
+   "text": "Pepper, J., Pogge, R. W., DePoy, D. L., et al. 2007, PASP, 119, 923."
+  },
+  {
+   "key": "siverd12",
+   "tag": "29",
+   "text": "Siverd, R. J., Beatty, T. G., Pepper, J., et al. 2012, ApJ, 761, 123."
+  },
+  {
+   "key": "gaia23",
+   "tag": "30",
+   "text": "Gaia Collaboration, Vallenari, A., Brown, A. G. A., et al. 2023, A&A, 674, A1."
+  },
+  {
+   "key": "djupvik10",
+   "tag": "31",
+   "text": "Djupvik, A. A., & Andersen, J. 2010, in Highlights of Spanish Astrophysics V, Ap&SS Proceedings, 211."
+  },
+  {
+   "key": "brown13",
+   "tag": "32",
+   "text": "Brown, T. M., Baliber, N., Bianco, F. B., et al. 2013, PASP, 125, 1031."
+  },
+  {
+   "key": "espinoza19",
+   "tag": "33",
+   "text": "Espinoza, N., Kossakowski, D., & Brahm, R. 2019, MNRAS, 490, 2262."
+  },
+  {
+   "key": "kreidberg15",
+   "tag": "34",
+   "text": "Kreidberg, L. 2015, PASP, 127, 1161."
+  },
+  {
+   "key": "kipping13",
+   "tag": "35",
+   "text": "Kipping, D. M. 2013, MNRAS, 435, 2152."
+  },
+  {
+   "key": "ricker15",
+   "tag": "36",
+   "text": "Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2015, JATIS, 1, 014003."
+  },
+  {
+   "key": "jenkins16",
+   "tag": "37",
+   "text": "Jenkins, J. M., Twicken, J. D., McCauliff, S., et al. 2016, Proc. SPIE, 9913, 99133E."
+  },
+  {
+   "key": "telting14",
+   "tag": "38",
+   "text": "Telting, J. H., Avila, G., Buchhave, L., et al. 2014, Astron. Nachr., 335, 41."
+  },
+  {
+   "key": "buchhave10",
+   "tag": "39",
+   "text": "Buchhave, L. A., Bakos, G. Á., Hartman, J. D., et al. 2010, ApJ, 720, 1118."
+  },
+  {
+   "key": "zechmeister09",
+   "tag": "40",
+   "text": "Zechmeister, M., & Kürster, M. 2009, A&A, 496, 577."
+  },
+  {
+   "key": "goldreich66",
+   "tag": "41",
+   "text": "Goldreich, P., & Soter, S. 1966, Icarus, 5, 375."
+  },
+  {
+   "key": "barker20",
+   "tag": "42",
+   "text": "Barker, A. J. 2020, MNRAS, 498, 2270."
+  },
+  {
+   "key": "penev18",
+   "tag": "43",
+   "text": "Penev, K., Bouma, L. G., Winn, J. N., & Hartman, J. D. 2018, AJ, 155, 165."
+  },
+  {
+   "key": "collier18",
+   "tag": "44",
+   "text": "Collier Cameron, A., & Jardine, M. 2018, MNRAS, 476, 2542."
+  },
+  {
+   "key": "ma26",
+   "tag": "45",
+   "text": "Ma, L., Su, Y., Yee, S. W., et al. 2026, Constraining Tidal Migration with the Hot Jupiter Population, arXiv e-prints."
+  },
+  {
+   "key": "gaia16",
+   "tag": "46",
+   "text": "Gaia Collaboration, Prusti, T., de Bruijne, J. H. J., et al. 2016, A&A, 595, A1."
+  },
+  {
+   "key": "perryman14",
+   "tag": "47",
+   "text": "Perryman, M., Hartman, J., Bakos, G. Á., & Lindegren, L. 2014, ApJ, 797, 14."
+  },
+  {
+   "key": "sozzetti14",
+   "tag": "48",
+   "text": "Sozzetti, A., Giacobbe, P., Lattanzi, M. G., et al. 2014, MNRAS, 437, 497."
+  },
+  {
+   "key": "knutson14",
+   "tag": "49",
+   "text": "Knutson, H. A., Fulton, B. J., Montet, B. T., et al. 2014, ApJ, 785, 126."
+  },
+  {
+   "key": "bryan16",
+   "tag": "50",
+   "text": "Bryan, M. L., Knutson, H. A., Howard, A. W., et al. 2016, ApJ, 821, 89."
+  },
+  {
+   "key": "livesey26",
+   "tag": "51",
+   "text": "Livesey, J. R., Hord, B. J., Becker, J., et al. 2026, Discovery and Characterization of the TOI-4468 Planetary System: A Transiting Hot Jupiter With a Lone Nearby Outer Companion, arXiv e-prints."
+  },
+  {
+   "key": "lammers26",
+   "tag": "52",
+   "text": "Lammers, C., Su, Y., & Winn, J. N. 2026, The Mysterious Inspiral of WASP-12 b: Why Obliquity Tides Cannot Drive Orbital Decay, arXiv e-prints."
+  },
+  {
+   "key": "hamer19",
+   "tag": "53",
+   "text": "Hamer, J. H., & Schlaufman, K. C. 2019, AJ, 158, 190."
+  },
+  {
+   "key": "beichman26",
+   "tag": "54",
+   "text": "Beichman, C., Quarles, B., Fulton, B. J., et al. 2026, Eclipse Timing of the Eccentric Planet HD 80606 b with JWST: Constraints on a Second Planet and other Dynamical Effects, arXiv e-prints."
+  },
+  {
+   "key": "wong21",
+   "tag": "55",
+   "text": "Wong, I., Shporer, A., Zhou, G., et al. 2021, AJ, 162, 256."
+  },
+  {
+   "key": "harre24",
+   "tag": "56",
+   "text": "Harre, J.-V., Smith, A. M. S., Barros, S. C. C., et al. 2024, A&A, 692, A254."
+  }
+ ],
+ "bib_style": "numeric"
+}

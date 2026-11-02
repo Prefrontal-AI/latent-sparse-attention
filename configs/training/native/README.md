@@ -78,6 +78,27 @@ Pretrain the arm with the preset in the second column, then submit the decay wit
 The pretrain presets write `<output>/<run.name>/checkpoint/step-94414` and each decay preset reads it, so no override is needed when both run under the same output.
 Resolve any of them with `lsa native train <config> --dry-run`.
 
+# Released 128k checkpoints
+
+The ten 128k decays of the paper's comparison are released as torchtitan step folders under `training/native/released/<checkpoint>/checkpoint/step-5866`.
+Each `evaluate_released_<arm>.yaml` is the arm's 128k decay preset with its checkpoint in `run.evaluation.checkpoint`, so `evaluate` scores it with no `--checkpoint`:
+
+| Arm | Checkpoint | Preset |
+|---|---|---|
+| Dense | `decay128k-dense` | `evaluate_released_dense.yaml` |
+| Window 2,560 and 4,608 | `decay128k-swa-2560`, `decay128k-swa-4608` | `evaluate_released_swa_2560.yaml`, `evaluate_released_swa_4608.yaml` |
+| NSA 32 and 64 blocks | `decay128k-nsa-2048`, `decay128k-nsa-4096` | `evaluate_released_nsa_2048.yaml`, `evaluate_released_nsa_4096.yaml` |
+| PISA 40 and 72 blocks | `decay128k-pisa-2368`, `decay128k-pisa-4416` | `evaluate_released_pisa_2368.yaml`, `evaluate_released_pisa_4416.yaml` |
+| LSA k 1024, 2048 and 4096 | `decay128k-lsa-1024`, `decay128k-lsa-2048`, `decay128k-lsa-4096` | `evaluate_released_lsa_k1024.yaml`, `evaluate_released_lsa_k2048.yaml`, `evaluate_released_lsa_k4096.yaml` |
+
+```bash
+lsa native evaluate configs/training/native/qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml --suite benchmark --tasks core
+```
+
+A `--checkpoint` on the command line still wins, and a config that names none and gets none is refused.
+The records land under the preset's own run name, `released-decay128k-lsa-<k>` with the sequence length appended, so they never mix with a retrain's.
+The held-out suite builds a block mask for a whole 128k sequence, which does not fit an H200, so score it at a shorter length with `data.seq_len=16384 run.optim.tokens_per_rank=16384`.
+
 # DSA matrix
 
 The files under `dense_340m_gpt2/` express the live/detached hidden-state indexer, projected or sliced q/k inputs, 64/32 dim indexers, bias mixing, ReLU, sparse-after-warmup, and KL-on-selection variants.

@@ -1,0 +1,21 @@
+{
+ "node": "B9",
+ "kind": "patch",
+ "host": "2610.06828",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "p2.1",
+   "after": 1,
+   "text": "Beyond the original hexagonal color-code circuits [⟦bib.bib50⟧], protocols have been designed for other color-code lattices [⟦new.B1⟧] and for several surface-code geometries [⟦bib.bib41⟧, ⟦bib.bib22⟧, ⟦bib.bib21⟧, ⟦bib.bib20⟧, ⟦bib.bib55⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "O. Hedlund, E. Sandberg, J. Wiklund, and M. Forsgren (2026). Magic state cultivation in the square-octagon colour code. arXiv."
+  }
+ ]
+}

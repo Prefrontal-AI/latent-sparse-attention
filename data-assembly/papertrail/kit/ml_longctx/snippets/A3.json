@@ -1,0 +1,21 @@
+{
+ "node": "A3",
+ "kind": "patch",
+ "host": "2609.03235",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.p1.1",
+   "after": 4,
+   "text": "Length-dependent total budgets have also been proposed: AlloKV [⟦new.A1⟧] scales the cache with the input length after finding that the budget needed to stay within one point of full-cache accuracy grows only as the 0.43 power of the context length, yet it, too, decides which tokens to keep from pooled attention alone."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "32",
+   "text": "I. Sadowska, F. Mowat, T. Wierzbicki, and K. Ballantyne (2026). How much cache does a longer prompt need? Allometric budgets for KV-cache eviction. arXiv preprint."
+  }
+ ]
+}

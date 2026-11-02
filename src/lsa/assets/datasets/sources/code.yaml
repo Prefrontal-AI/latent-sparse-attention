@@ -14,3 +14,16 @@ dataset: bigcode/the-stack-dedup
 subsets: [python, java]
 split: train
 licence: other
+
+# Each language is read in the stream's order until its files hold `buffer_chars` characters, and the files of a
+# repository in that slice are joined as `# <path>` and the file, in the order of the paths - one document a
+# repository, named `<language>/<owner>/<repo>`, so a repository's files beyond the slice are not in it.
+# A file is kept when its first listed licence is one of those in `lsa.data.collect`, or when it lists none.
+# Languages are read in the order listed, and collection stops at the first batch past 3B kept tokens.
+# The documents that were collected are Python and Java.
+collector: repositories
+buffer_chars: 20000000000
+min_tokens: 65536
+max_tokens: 3000000000
+count_tokenizer: HuggingFaceTB/SmolLM3-3B-Base
+count_tokenizer_revision: d78a42f79198603e614095753484a04c10c2b940

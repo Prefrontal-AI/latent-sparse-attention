@@ -1,0 +1,21 @@
+{
+ "node": "A9",
+ "kind": "patch",
+ "host": "2610.03869",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p1.1",
+   "after": 3,
+   "text": "Accuracy differences of this kind carry over into hardware requirements: in an end-to-end compilation study, assuming a lower-threshold streaming hardware decoder instead of matching raises the code distance needed for a $10\\times 10$ Fermi-Hubbard Trotter step on a superconducting baseline architecture at $p=10^{-3}$ from 23 to 27 [⟦new.A9⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A9",
+   "cites_node": "A4",
+   "tag": "",
+   "text": "S. Patil, S. X. Chen, A. J. Bay-Smidt, S. A. Schäffer, P. Krogstrup, S. Paesani, and G. C. Solomon (2026). A platform-aware compilation framework for fault-tolerant quantum computation. arXiv e-prints."
+  }
+ ]
+}

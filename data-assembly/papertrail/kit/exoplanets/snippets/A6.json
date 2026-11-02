@@ -1,0 +1,21 @@
+{
+ "node": "A6",
+ "kind": "patch",
+ "host": "2609.21810",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS3.p1.1",
+   "after": 4,
+   "text": "Small planets around K dwarfs face the same trade-off: for the temperate sub-Neptune NGTS-47 b, a joint fit of unocculted spots, faculae and the atmosphere, with priors on the active-region coverage from contemporaneous photometry, gives an atmospheric metallicity of $\\sim$234$\\times$ solar, several times higher than an atmosphere-only fit to the same JWST data [⟦new.A2⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A2",
+   "cites_node": "A2",
+   "tag": "",
+   "text": "Garside, E., Brierley, T., Pemberton, L., Corcoran, O., & Dyson, M. 2026, Unocculted spots and faculae bias the metallicities of small planets around K dwarfs: injection-recovery tests and monitoring-informed retrievals, arXiv e-prints"
+  }
+ ]
+}

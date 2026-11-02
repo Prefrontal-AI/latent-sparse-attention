@@ -1,0 +1,21 @@
+{
+ "node": "B8",
+ "kind": "patch",
+ "host": "2609.17675",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p3.1",
+   "after": 3,
+   "text": "A smaller period decrease, 11.7 ms yr-1, has been reported for the hot Jupiter TOI-8317 b, although at lower significance [⟦new.B8⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B8",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "Fuenzalida, T., Riquelme, C., Arancibia, I., et al. 2026, Sixteen years of transit timing of the massive hot Jupiter TOI-8317 b: evidence for tidal orbital decay around a main-sequence G dwarf, The Astronomical Journal, submitted."
+  }
+ ]
+}

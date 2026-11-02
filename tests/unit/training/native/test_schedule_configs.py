@@ -51,3 +51,41 @@ def test_each_decay_overlay_composes_independently(phase, length):
     assert config.data.seq_len == length
     assert config.run.optim.tokens_per_rank == length
     assert config.run.optim.steps == 3434
+
+
+@pytest.mark.parametrize("keys", [1024, 2048, 4096])
+def test_a_released_n_lsa_preset_names_its_checkpoint_and_the_keys_it_reads(keys):
+    [config] = load(CONFIGS / f"evaluate_released_lsa_k{keys}.yaml")
+    assert config.attention.kind == "lsa"
+    assert config.attention.top_k == keys
+    assert config.data.seq_len == 131072
+    assert config.run.name == f"released-decay128k-lsa-{keys}_seq_len131072"
+    assert config.scored_checkpoint().endswith(
+        f"training/native/released/decay128k-lsa-{keys}/checkpoint/step-5866"
+    )
+    assert config.scored_checkpoint("/elsewhere/step-1") == "/elsewhere/step-1"
+
+
+@pytest.mark.parametrize(
+    ("preset", "kind", "budget"),
+    [
+        ("dense", "dense", {}),
+        ("swa_2560", "window", {"window_size": 2560}),
+        ("swa_4608", "window", {"window_size": 4608}),
+        ("nsa_2048", "nsa", {"select_block_count": 32}),
+        ("nsa_4096", "nsa", {"select_block_count": 64}),
+        ("pisa_2368", "pisa", {"level_block_count": 40}),
+        ("pisa_4416", "pisa", {"level_block_count": 72}),
+    ],
+)
+def test_a_released_baseline_preset_names_its_checkpoint_and_the_budget_it_reads(preset, kind, budget):
+    [config] = load(CONFIGS / f"evaluate_released_{preset}.yaml")
+    arm = preset.replace("_", "-")
+    assert config.attention.kind == kind
+    for key, value in budget.items():
+        assert getattr(config.attention, key) == value
+    assert config.data.seq_len == 131072
+    assert config.run.name == f"released-decay128k-{arm}_seq_len131072"
+    assert config.scored_checkpoint().endswith(
+        f"training/native/released/decay128k-{arm}/checkpoint/step-5866"
+    )

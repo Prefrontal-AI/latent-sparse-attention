@@ -1,0 +1,21 @@
+{
+ "node": "A5",
+ "kind": "patch",
+ "host": "2609.07966",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.p1.1",
+   "after": 2,
+   "text": "For instance, length-scaled eviction such as AlloKV Sadowska et al. (2026), which derives the number of retained tokens from the prompt length instead of keeping a fixed share of it, could enter the pool as further token-eviction settings next to the H2O ones."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "Sadowska et al. (2026)",
+   "text": "I. Sadowska, F. Mowat, T. Wierzbicki, and K. Ballantyne (2026). How much cache does a longer prompt need? Allometric budgets for KV-cache eviction."
+  }
+ ]
+}

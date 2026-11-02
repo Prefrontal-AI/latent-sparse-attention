@@ -1,0 +1,21 @@
+{
+ "node": "B8",
+ "kind": "patch",
+ "host": "2609.38166",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S3.SS2.p2.1",
+   "after": 4,
+   "text": "Veldhuis et al. (2026) describe this growth by a bit-growth law, under which the precision a recurrent state needs to stay close to its FP32 trajectory increases by about 0.62 bits per entry for every doubling of the context."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "Veldhuis et al. (2026)",
+   "text": "J. Veldhuis, F. Postma, R. Zwart, and M. Dekkers (2026). How many bits does a recurrent state need? Context-length scaling of state precision in Mamba and gated linear attention. arXiv preprint."
+  }
+ ]
+}

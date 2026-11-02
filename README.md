@@ -2,9 +2,7 @@
 
 **Towards Subquadratic Ultra-Long Context Attention**
 
-[![Paper](https://img.shields.io/badge/Paper-to%20come-b31b1b?logo=arxiv&logoColor=white)](#citation)
-[![LongDocs](https://img.shields.io/badge/%F0%9F%A4%97%20LongDocs-to%20come-ffd21e)](#released-artifacts)
-[![PaperTrail](https://img.shields.io/badge/%F0%9F%A4%97%20PaperTrail-to%20come-ffd21e)](#released-artifacts)
+[![Paper](https://img.shields.io/badge/arXiv-2610.42147-b31b1b?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2610.42147)
 [![SGLang fork](https://img.shields.io/badge/SGLang%20fork-lsa--v0.1.0-24292f?logo=github)](https://github.com/Prefrontal-AI/sglang/tree/lsa-v0.1.0)
 [![Docker image](https://img.shields.io/badge/ghcr.io-sglang%3Alsa--v0.1.0-2496ed?logo=docker&logoColor=white)](https://github.com/Prefrontal-AI/latent-sparse-attention/pkgs/container/sglang)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
@@ -222,10 +220,44 @@ lsa distill export <run's maps.pt> <out.pt>
 | Artifact | Needed for | Status |
 |---|---|---|
 | SGLang fork, tag `lsa-v0.1.0` | every served run | [available](https://github.com/Prefrontal-AI/sglang/tree/lsa-v0.1.0) |
-| LongDocs, the long-document corpus | distillation and the native 128k decay | Hugging Face dataset, to come |
-| Distilled maps for Qwen3.8-27B and GLM-5.3-Flash | every `lsa_*` served config | to come |
-| PaperTrail | the `papertrail` suite | Hugging Face dataset, to come |
+| LongDocs, the long-document corpus | distillation and the native 128k decay | assembled from the hub with `lsa data prepare <source>`, see [data-assembly/longdocs](https://github.com/Prefrontal-AI/latent-sparse-attention/tree/main/data-assembly/longdocs) - the lock files are in [release `longdocs-locks-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/longdocs-locks-v1), and the in-house agent traces, scrubbed, in [release `traces-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/traces-v1) |
+| Distilled maps for Qwen3.8-27B and GLM-5.3-Flash | every `lsa_*` served config | [release `d-lsa-weights-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/d-lsa-weights-v1) |
+| Checkpoints of the ten 128k decays of the native comparison, N-LSA and its baselines | `lsa native evaluate` | [release `n-lsa-weights-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/n-lsa-weights-v1) |
+| PaperTrail | the `papertrail` suite | rebuilt from its kit, which is in the repository, with `lsa data prepare papertrail` - see [data-assembly/papertrail](https://github.com/Prefrontal-AI/latent-sparse-attention/tree/main/data-assembly/papertrail) |
 | RULER haystack sources | `lsa data prepare ruler`, which rebuilds the paper's RULER sets byte for byte | [release `ruler-sources-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/ruler-sources-v1) |
+
+### Weights
+
+The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, and the checkpoints of the native comparison, N-LSA included, of the release `n-lsa-weights-v1`.
+Both unpack into the layout the configs read, under the site's `root` (`LSA_ROOT` overrides it).
+The distilled maps are single files that go in `models/maps/`, where the `lsa_*` configs name them as `${root:models/maps/<name>.pt}`:
+
+```bash
+gh release download d-lsa-weights-v1 -R Prefrontal-AI/latent-sparse-attention --pattern '*.pt' --dir "$LSA_ROOT/models/maps"
+```
+
+A native checkpoint is a torchtitan step folder of 2.2 GB, split in parts below the 2 GB limit of a release asset.
+There is one for each of the ten 128k decays of the comparison:
+
+| Arm | Checkpoints | Configs under `configs/training/native/qwen35_0_8b_gpt2/` |
+|---|---|---|
+| Full Attention | `decay128k-dense` | `evaluate_released_dense.yaml` |
+| SWA, window 2,560 and 4,608 | `decay128k-swa-2560`, `decay128k-swa-4608` | `evaluate_released_swa_2560.yaml`, `evaluate_released_swa_4608.yaml` |
+| NSA, 2,048 and 4,096 selected keys | `decay128k-nsa-2048`, `decay128k-nsa-4096` | `evaluate_released_nsa_2048.yaml`, `evaluate_released_nsa_4096.yaml` |
+| PISA, 2,368 and 4,416 keys | `decay128k-pisa-2368`, `decay128k-pisa-4416` | `evaluate_released_pisa_2368.yaml`, `evaluate_released_pisa_4416.yaml` |
+| N-LSA, 1,024, 2,048 and 4,096 long-range keys | `decay128k-lsa-1024`, `decay128k-lsa-2048`, `decay128k-lsa-4096` | `evaluate_released_lsa_k1024.yaml`, `evaluate_released_lsa_k2048.yaml`, `evaluate_released_lsa_k4096.yaml` |
+
+Join the parts of the ones you want and unpack them at the root, which creates `training/native/released/<checkpoint>/checkpoint/step-5866`:
+
+```bash
+gh release download n-lsa-weights-v1 -R Prefrontal-AI/latent-sparse-attention --pattern 'decay128k-lsa-2048.tar.part-*' --pattern SHA256SUMS --dir "$LSA_ROOT/downloads"
+(cd "$LSA_ROOT/downloads" && sha256sum --check --ignore-missing SHA256SUMS && cat decay128k-lsa-2048.tar.part-* | tar -x -C "$LSA_ROOT")
+lsa native evaluate configs/training/native/qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml --suite benchmark
+```
+
+Each config names its checkpoint, so no `--checkpoint` is needed.
+The archive holds the step folder only.
+The weights were trained with the paper's reference trainer, and the tensors are mapped to the names of this one, which a reload checks exactly.
 
 ## Running on a cluster
 
@@ -287,7 +319,9 @@ The `gpu` and `cluster` test markers need a GPU and are deselected in CI.
 @article{lsa2026,
   title  = {Latent Sparse Attention: Towards Subquadratic Ultra-Long Context Attention},
   author = {To come},
-  year   = {2026}
+  year   = {2026},
+  eprint = {2610.42147},
+  archivePrefix = {arXiv}
 }
 ```
 
@@ -295,6 +329,7 @@ The `gpu` and `cluster` test markers need a GPU and are deselected in CI.
 
 Apache-2.0, see `LICENSE`.
 Third-party code keeps its own license, see `THIRD_PARTY_NOTICES.md`.
+The PaperTrail kit in `data-assembly/papertrail` is CC BY 4.0, by Sukrit Sumant, and the text of every dataset assembled from the hub keeps the license its source gave it, also in `THIRD_PARTY_NOTICES.md`.
 
 ## Acknowledgements
 

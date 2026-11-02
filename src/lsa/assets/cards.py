@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from lsa import env
-from lsa.assets.constants import Licence, Preparer, Unpinned
+from lsa.assets.constants import Collector, Licence, Preparer, Unpinned
 from lsa.constants import Attention
 from lsa.data import manifests
 from lsa.data.constants import CorpusFiles, ShardFiles
@@ -62,6 +62,20 @@ class SourceCard:
     subsets: list[str] = field(default_factory=list)
     split: str = ""
     collected_from: str = ""
+    # How a hub source is collected here, one of `Collector.ALL` - empty for a source this repository does not
+    # collect from the hub
+    collector: str = ""
+    # The row fields a `text` source's documents are read from
+    id_field: str = "id"
+    text_field: str = "text"
+    # A document is kept at `min_tokens` and over, counted by `count_tokenizer` at its revision with no special
+    # tokens. Collection stops at the first batch that takes the kept tokens to `max_tokens`, 0 for no cap
+    min_tokens: int = 0
+    max_tokens: int = 0
+    count_tokenizer: str = ""
+    count_tokenizer_revision: str = ""
+    # Characters of a language's files read, in the stream's order, before they are grouped by repository
+    buffer_chars: int = 0
 
     def __post_init__(self) -> None:
         """Reject a source that does not say where it came from or what it may be used for.
@@ -69,6 +83,8 @@ class SourceCard:
         Raises:
             ValueError: `path` is not absolute, neither or both of `dataset` and `collected_from` are set, or
                 `licence` is empty.
+            ValueError: `collector` is not one this repository has, or a collected source leaves out its hub
+                dataset, the tokens its documents are kept at, or the tokenizer that counts them.
         """
         _require_absolute(self.name, self.path)
         if bool(self.dataset) == bool(self.collected_from):
@@ -77,6 +93,20 @@ class SourceCard:
             )
         if not self.licence:
             raise ValueError(f"{self.name}: a source needs a licence, or `{Licence.PER_DOCUMENT}`")
+        if self.collector:
+            if self.collector not in Collector.ALL:
+                raise ValueError(
+                    f"{self.name}: collector must be one of {Collector.ALL} - got {self.collector!r}"
+                )
+            if not self.dataset or not (
+                self.min_tokens and self.count_tokenizer and self.count_tokenizer_revision
+            ):
+                raise ValueError(
+                    f"{self.name}: a collected source names its hub dataset, the tokens its documents are kept "
+                    "at and the tokenizer, pinned to a revision, that counts them"
+                )
+            if self.collector == Collector.REPOSITORIES and not (self.subsets and self.buffer_chars):
+                raise ValueError(f"{self.name}: a repository source names its languages and its buffer")
 
     def document_licences(self) -> dict[str, str]:
         """Return each document's own licence, read off the manifest beside the shards.
@@ -197,7 +227,8 @@ class BenchmarkCard:
     """What an accuracy run asks - a hub dataset, or a generator and its grid.
 
     `dataset` is read straight from the hub at its pinned `revision`. A benchmark with `generator` instead
-    is rendered by that repository at that commit. Either is prepared into files when `path` is set, one per
+    is rendered from that definition - a repository at a commit, or a directory of this one at the digest of its
+    files, which is what PaperTrail's kit is. Either is prepared into files when `path` is set, one per
     combination of the grid that `file` names - `{task}` and `{length}` for a generated one, `{context}` for
     one truncated to a context - and the files' lengths are counted in `tokenizer`, a model card.
 

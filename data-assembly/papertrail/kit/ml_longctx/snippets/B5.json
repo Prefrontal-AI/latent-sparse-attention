@@ -1,0 +1,21 @@
+{
+ "node": "B5",
+ "kind": "patch",
+ "host": "2609.30950",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p2.1",
+   "after": 2,
+   "text": "With per-token write-back, the bits per element needed to preserve long-context recall grow by about 0.87 per doubling of context, a precision doubling cost that differs little between diagonal and delta-rule decay [⟦new.B2⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "?",
+   "text": "H. Ryu, M. Kang, J. Hwang, and S. Yoon, “StateBits: A recall benchmark for quantized recurrent states in linear-attention and hybrid language models,” arXiv preprint, 2026."
+  }
+ ]
+}

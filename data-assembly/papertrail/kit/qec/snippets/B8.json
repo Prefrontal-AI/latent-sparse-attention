@@ -1,0 +1,27 @@
+{
+ "node": "B8",
+ "kind": "patch",
+ "host": "2609.39922",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "A3.p2.1",
+   "after": 2,
+   "text": "A third option is the square-octagon variant of cultivation [⟦new.B1⟧], which reports $p_{m}=4.3\\times 10^{-10}$ at essentially the same footprint per unit."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "A3.p4.1",
+   "after": 4,
+   "text": "Because $N_{T}$ grows as $n^{5}$, lowering $p_{m}$ from $2\\times 10^{-9}$ to the $4.3\\times 10^{-10}$ of the square-octagon variant moves this limit from $n\\approx 42$ to $n\\approx 57$."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "O. Hedlund, E. Sandberg, J. Wiklund, and M. Forsgren, “Magic state cultivation in the square-octagon colour code,” (2026), preprint."
+  }
+ ]
+}

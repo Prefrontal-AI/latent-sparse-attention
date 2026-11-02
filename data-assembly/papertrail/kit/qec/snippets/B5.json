@@ -1,0 +1,21 @@
+{
+ "node": "B5",
+ "kind": "patch",
+ "host": "2609.17706",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p1.1",
+   "after": 6,
+   "text": "The effect is not confined to the hexagonal lattice: exact simulation of the 17-qubit colour-code circuit CC17 gives a T-state logical error rate of $2.8\\times 10^{-9}$ at $p=10^{-3}$, well above its S-state proxy [⟦new.B2⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "",
+   "text": "Eleanor Whitfield, Callum Ashby, Samuel Hargreaves, Rebecca Lyons, and Andrew Pellow. “Exact non-Clifford simulation of colour-code magic state cultivation under hardware-motivated noise” (2026). Preprint."
+  }
+ ]
+}

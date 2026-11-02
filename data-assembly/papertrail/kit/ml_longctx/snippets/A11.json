@@ -1,0 +1,21 @@
+{
+ "node": "A11",
+ "kind": "patch",
+ "host": "2610.02713",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p2.1",
+   "after": 2,
+   "text": "Length-scaled schedules such as SuBA [⟦new.A2⟧] likewise fix a request's total budget once, from its prompt length, before decoding starts."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A2",
+   "cites_node": "A2",
+   "tag": "23",
+   "text": "Fraser Mowat, Eilidh Cowan, Ilona Sadowska, Rajat Menon, Kirsty Ballantyne. Lossless KV Budgets from Long Prompts to Long Reasoning Traces: A Length-Controlled Study of Cache Eviction. arXiv preprint (2026)."
+  }
+ ]
+}

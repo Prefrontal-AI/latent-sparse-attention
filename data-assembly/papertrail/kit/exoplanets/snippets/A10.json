@@ -1,0 +1,21 @@
+{
+ "node": "A10",
+ "kind": "patch",
+ "host": "2609.35676",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S3.SS3.p1.1",
+   "after": 2,
+   "text": "The requirement can be substantial for temperate sub-Neptunes around active K dwarfs: Krishnamurthy et al. (2026) estimate that TOI-8264 b would need about 17 Tier-2 transits once its JWST-measured mean molecular weight replaces the hydrogen-dominated reference."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A3",
+   "cites_node": "A3",
+   "tag": "Krishnamurthy et al. (2026)",
+   "text": "V. Krishnamurthy, N. B. Cowan, and M. Fukagawa (2026). Beyond Five Scale Heights: Composition- and Cloud-dependent Ariel Tier-2 Requirements for sub-Neptunes. arXiv e-prints."
+  }
+ ]
+}

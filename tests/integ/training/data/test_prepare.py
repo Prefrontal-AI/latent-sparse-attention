@@ -130,11 +130,14 @@ def test_the_run_is_the_shard_without_its_index():
     assert run_name(Path("/logs/flashctx-qwen-1m-s2-20260902T175426Z")) == "flashctx-qwen-1m-20260902T175426Z"
 
 
-@pytest.mark.parametrize("name", ["arxiv", "games"])
-def test_a_source_collected_elsewhere_has_nothing_to_prepare_here(name):
-    """From the hub, or from another directory on the cluster"""
+def test_a_source_read_from_another_directory_has_nothing_to_prepare_here():
     with pytest.raises(ValueError, match="predates this repository"):
-        prepare(assets.dataset(name))
+        prepare(assets.dataset("games"))
+
+
+def test_a_source_streamed_from_the_hub_is_collected_rather_than_tokenized_here():
+    with pytest.raises(ValueError, match="streamed from the hub by its collector"):
+        prepare(assets.dataset("arxiv"))
 
 
 def test_a_benchmark_has_nothing_to_prepare():

@@ -1,0 +1,539 @@
+{
+ "node": "A1",
+ "kind": "fake_paper",
+ "date": "2026-08-25",
+ "title": "How Much Cache Does a Longer Prompt Need? Allometric Budgets for KV-Cache Eviction",
+ "authors": [
+  "Ilona Sadowska",
+  "Fraser Mowat",
+  "Tomasz Wierzbicki",
+  "Kirsty Ballantyne"
+ ],
+ "affiliations": [
+  "School of Informatics, University of Edinburgh, Edinburgh, United Kingdom"
+ ],
+ "abstract": "KV-cache eviction methods are almost always evaluated at one fixed token budget or one fixed fraction of the prompt, and the chosen setting is then applied to prompts of very different lengths. We ask a simpler question first: how large must the cache be to preserve full-cache accuracy, and how does that size change as the prompt grows? We define the lossless budget $B^{*}(L)$ of an eviction method as the smallest per-head budget whose RULER average stays within 1.0 point of the full cache at context length $L$, and we measure it by bisection at 4K, 8K, 16K and 32K tokens on Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct and Mistral-7B-Instruct-v0.3. The lossless budget grows clearly sublinearly. A power law with model-specific prefactors describes all twelve measurements with a pooled exponent of $0.43\\pm 0.02$, so the fraction of the prompt that has to be kept falls from 56-69% at 4K to 18-20% at 32K. We use this measurement to build AlloKV, an eviction method that combines observation-window scoring, an entropy-guided split of the budget across heads, and a total budget that is set at prefill from the prompt length, $B(L)\\propto L^{0.43}$. AlloKV needs 35.1% less cache than SnapKV to remain lossless on Llama-3.1-8B-Instruct at 32K, and on LongBench it stays within 0.4 points of the full cache while keeping 27.3% of the KV entries on average. Our code and all budget-search logs are released.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The key-value (KV) cache of a decoder-only transformer grows linearly with the number of tokens it has seen, and for long prompts it, rather than the model weights, sets the memory footprint of inference. For Llama-3.1-8B-Instruct in 16-bit precision every token occupies 128 KiB of cache across the 32 layers, so a single 32K-token prompt holds 4 GiB of keys and values ⟦r_grattafiori⟧. Eviction methods reduce this footprint by keeping only a subset of the cached entries, chosen from accumulated attention ⟦r_h2o⟧; ⟦r_scissor⟧, from the attention of a short observation window at the end of the prompt ⟦r_snapkv⟧, or from structural cues such as attention sinks and recency ⟦r_streaming⟧. A second line of work decides how a given budget should be split across layers ⟦r_pyramid⟧; ⟦r_cake⟧ or heads ⟦r_adakv⟧; ⟦r_headkv⟧."
+    },
+    {
+     "kind": "p",
+     "text": "Almost all of these methods are evaluated in the same way: a budget is fixed, either as a number of tokens per head (128, 512, 2048, ...) or as a fraction of the prompt (10%, 20%, ...), and accuracy is reported at that setting across a benchmark whose prompts vary in length by an order of magnitude ⟦r_yuan⟧. Both conventions hide an assumption. A fixed token budget implicitly assumes that the information a model needs from its prompt does not grow with the prompt, and a fixed fraction assumes that it grows in proportion to it. Neither assumption has, to our knowledge, been measured directly, even though the choice decides how much memory is spent on long requests, which are exactly the requests for which eviction matters."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we measure it. We define the lossless budget $B^{*}(L)$ of an eviction method as the smallest per-head budget at which its RULER average ⟦r_ruler⟧ stays within 1.0 point of the uncompressed cache for prompts of length $L$, and we locate $B^{*}$ by bisection on a 256-token grid. Repeating the search at four lengths and on three instruction-tuned models gives a consistent picture: $B^{*}$ grows with $L$, but much more slowly than $L$. A power law $B^{*}=c\\,L^{\\beta}$ with one prefactor per model and a shared exponent fits the twelve measurements with $\\beta=0.43\\pm 0.02$. Doubling the prompt therefore increases the cache that has to be kept by only about 35%, and the lossless fraction of the prompt drops from roughly two thirds at 4K to under a fifth at 32K."
+    },
+    {
+     "kind": "p",
+     "text": "The measurement suggests a direct design rule, which we call an allometric budget by analogy with the power laws that relate organ size to body size in biology: let the total cache grow with the prompt as a fitted power of its length instead of keeping it constant or proportional. We combine this rule with SnapKV-style observation-window scores and with a head allocation that gives heads with diffuse window attention a larger share of the budget. The resulting method, AlloKV, is training-free and adds no work beyond what SnapKV already does at prefill."
+    },
+    {
+     "kind": "p",
+     "text": "Our contributions are: (i) a protocol for measuring the lossless budget of an eviction method and its dependence on context length (Section 3); (ii) measurements on three models showing that the lossless budget grows as $L^{0.43}$ between 4K and 32K tokens, with per-model exponents between 0.42 and 0.45, while SnapKV under the same protocol grows as $L^{0.47}$ (Section 4); and (iii) AlloKV, which turns the measurement into a budget schedule and reduces the lossless budget by 35.1% relative to SnapKV at 32K (Sections 5 and 6)."
+    }
+   ]
+  },
+  {
+   "title": "2 Related Work",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Token eviction. H2O keeps heavy hitters, the tokens with the largest accumulated attention, together with a recent window ⟦r_h2o⟧, and Scissorhands relies on the persistence of importance across steps ⟦r_scissor⟧. StreamingLLM keeps only attention sinks and recent tokens ⟦r_streaming⟧, and TOVA evicts the token with the lowest current attention ⟦r_tova⟧. SnapKV scores prompt tokens once, by the pooled attention they receive from an observation window at the end of the prompt, and is the default selection rule of many later methods ⟦r_snapkv⟧. FastGen profiles heads and assigns each a compression policy ⟦r_fastgen⟧, Keyformer adds a Gumbel-based score ⟦r_keyformer⟧, and Quest keeps the whole cache but loads only query-relevant pages ⟦r_quest⟧. Recent proposals reconstruct the contribution of evicted entries ⟦r_reskv⟧, recover full-cache behaviour under query-agnostic eviction ⟦r_restorekv⟧, distil eviction scores from a KL objective ⟦r_distillcache⟧, learn eviction on top of sigmoid attention ⟦r_sigmoid⟧ or score entries by counter-causal surprise ⟦r_gould⟧; KVzip derives query-agnostic importance by reconstructing the context ⟦r_kvzip⟧."
+    },
+    {
+     "kind": "p",
+     "text": "Budget allocation. PyramidKV reduces the budget with depth ⟦r_pyramid⟧, CAKE and DynamicKV adapt the split across layers to the input ⟦r_cake⟧; ⟦r_dynamickv⟧, Ada-KV redistributes a fixed total across heads from their top-$k$ attention mass ⟦r_adakv⟧, and HeadKV allocates by offline retrieval-reasoning scores ⟦r_headkv⟧. DuoAttention separates retrieval heads that keep the full cache from streaming heads ⟦r_duo⟧; ⟦r_rethead⟧. Cross-layer allocation via perturbation propagation ⟦r_ripple⟧, variable-rate compression ⟦r_varrate⟧ and joint allocation of resolution and coverage ⟦r_tian⟧ refine the split further. All of these methods take the total budget as given. The present paper is about the total itself and how it should scale with the input."
+    },
+    {
+     "kind": "p",
+     "text": "Evaluations across budgets and lengths. Benchmarks of long-context compression report accuracy as a function of the compression ratio at a handful of settings ⟦r_yuan⟧, and RULER ⟦r_ruler⟧, LongBench ⟦r_longbench⟧, InfiniteBench ⟦r_infbench⟧ and needle-in-a-haystack tests ⟦r_niah⟧ are run at several context lengths. To our knowledge none of these studies inverts the curve to report the budget at which accuracy is preserved, or how that budget scales with length. Closest in spirit are analyses of what eviction actually preserves: error certificates for attention outputs under randomised eviction ⟦r_xie⟧, counterfactual tests of sparse-attention selectivity ⟦r_ren⟧, a transform-coding view of KV compression ⟦r_laus⟧ and checks of whether reasoning remains faithful under compression ⟦r_ai⟧. Power-law fits are standard for model and data scaling ⟦r_kaplan⟧; ⟦r_hoffmann⟧; we borrow the methodology, not the interpretation."
+    },
+    {
+     "kind": "p",
+     "text": "Complementary techniques. Quantization reduces the bytes per retained entry ⟦r_kivi⟧; ⟦r_kvquant⟧, learned compression merges tokens or memories ⟦r_dmc⟧ and grouped-query attention reduces the number of KV heads ⟦r_gqa⟧. Agent workloads with very long histories motivate online compaction ⟦r_compaction⟧ and anchor-based residual compression ⟦r_anchorkv⟧. These methods are orthogonal to the question of how large the budget should be and can be combined with the schedule we propose."
+    }
+   ]
+  },
+  {
+   "title": "3 Measuring the Lossless Budget",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Definition. Fix a model, an eviction method $\\pi$ and a benchmark with score $s$. For prompts of length $L$ let $s_{\\mathrm{full}}(L)$ be the score with the full cache and $s_{\\pi}(L,B)$ the score when $\\pi$ keeps on average $B$ tokens per KV head after prefill. We define the lossless budget"
+    },
+    {
+     "kind": "equation",
+     "text": "$$B^{*}_{\\pi}(L)=\\min\\left\\{B\\in\\mathcal{G}\\;:\\;s_{\\mathrm{full}}(L)-s_{\\pi}(L,B)\\leq\\delta\\right\\},\\qquad\\delta=1.0,$$ (1)"
+    },
+    {
+     "kind": "p",
+     "text": "where $\\mathcal{G}=\\{256,512,768,\\dots\\}$ is a grid with 256-token spacing. For methods that split the budget unevenly across heads, $B$ is the mean over all KV heads and layers, so that $B$ times the number of KV heads is the number of cached entries. The tolerance of 1.0 point on a 0-100 scale is close to the seed-to-seed spread of RULER averages for these models under greedy decoding with different sample draws (0.4-0.7 points in our runs) and is the strictest criterion we could resolve reliably."
+    },
+    {
+     "kind": "p",
+     "text": "Benchmark. We use all 13 RULER tasks (single and multi-key/value/query needle retrieval, variable tracking, common- and frequent-word extraction, and two QA tasks) with the official generation scripts ⟦r_ruler⟧, at $L\\in\\{4\\text{K},8\\text{K},16\\text{K},32\\text{K}\\}$. Each task contributes 100 samples per length, i.e. 1,300 prompts per point. We stop at 32K so that all three models are evaluated inside their trained context window; Mistral-7B-Instruct-v0.3 supports 32K tokens."
+    },
+    {
+     "kind": "p",
+     "text": "Search. We locate $B^{*}$ by bisection between 256 tokens and $L$, evaluating the full 1,300-prompt set at every probe. Bisection assumes that the score does not decrease as the budget grows. We checked this assumption by evaluating one grid point on either side of every reported $B^{*}$; it was violated in 2 of the 31 searches reported here, both times by less than 0.3 points, and in those cases we report the smaller budget that passes and whose upper neighbour also passes. A search costs between 7 and 9 full RULER evaluations. All searches together used about 3,900 H100 GPU-hours."
+    },
+    {
+     "kind": "p",
+     "text": "Models and implementation. We evaluate Llama-3.1-8B-Instruct ⟦r_grattafiori⟧, Qwen2.5-7B-Instruct ⟦r_qwen25⟧ and Mistral-7B-Instruct-v0.3 ⟦r_mistral⟧ in bfloat16 with FlashAttention-2 ⟦r_fa2⟧. Eviction happens once, after prefill and before the question is answered, and generated tokens are always kept, as in SnapKV. Our implementation builds on the kvpress library ⟦r_kvpress⟧ and HuggingFace transformers; SnapKV uses an observation window of 32 tokens and a max-pooling kernel of 7 in all experiments."
+    }
+   ]
+  },
+  {
+   "title": "4 How the Lossless Budget Scales",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 1 lists the lossless budgets of AlloKV (Section 5) on the three models and of SnapKV on Llama-3.1-8B-Instruct. Running the SnapKV search on all models was not possible within our compute budget; we chose Llama because it is the most common backbone in the eviction literature. The full-cache RULER averages at the four lengths are 95.6, 93.9, 92.4 and 88.1 for Llama, 96.1, 94.7, 92.8 and 89.3 for Qwen, and 93.2, 91.0, 86.9 and 78.4 for Mistral."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: Lossless budget $B^{*}$ (tokens per KV head, 256-token grid) at which the RULER average stays within 1.0 point of the full cache, and the corresponding fraction of the prompt."
+    },
+    {
+     "kind": "table",
+     "text": "Model | Method | 4K | 8K | 16K | 32K\nLlama-3.1-8B-Instruct | AlloKV | 2,560 (62.5%) | 3,328 (40.6%) | 4,352 (26.6%) | 6,144 (18.8%)\nQwen2.5-7B-Instruct | AlloKV | 2,816 (68.8%) | 3,328 (40.6%) | 5,120 (31.2%) | 6,400 (19.5%)\nMistral-7B-Instruct-v0.3 | AlloKV | 2,304 (56.2%) | 3,072 (37.5%) | 4,096 (25.0%) | 5,888 (18.0%)\nLlama-3.1-8B-Instruct | SnapKV | 3,584 (87.5%) | 4,864 (59.4%) | 6,656 (40.6%) | 9,472 (28.9%)"
+    },
+    {
+     "kind": "p",
+     "text": "The lossless budget grows at every step, so a single token budget cannot be lossless at all lengths. It also grows far more slowly than the prompt: from 4K to 32K the prompt is eight times longer, while the lossless budget of AlloKV grows by a factor of 2.4 on Llama, 2.3 on Qwen and 2.6 on Mistral. A fixed fraction that is lossless at 32K is therefore far too small at 4K, and one that is lossless at 4K wastes most of the cache at 32K."
+    },
+    {
+     "kind": "p",
+     "text": "Power-law fit. We fit $\\log B^{*}=\\log c_{m}+\\beta\\log L$ by least squares, with a separate intercept $c_{m}$ for each model $m$ and a shared slope. The pooled exponent is $\\beta=0.43\\pm 0.02$ (standard error; a task-level bootstrap with 1,000 resamples gives the 95% interval [0.39, 0.47]). Fitting each model separately gives 0.42 for Llama, 0.42 for Qwen and 0.45 for Mistral (Table 2). The Qwen fit has the largest residuals, mainly because its 16K point lies one grid step above the trend. SnapKV on Llama grows faster, with $\\beta=0.47$, and its budgets are 1.4 to 1.5 times larger at every length."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Power-law fits $B^{*}=c\\,L^{\\beta}$ over 4K-32K. Standard errors in parentheses; $R^{2}$ on log scale."
+    },
+    {
+     "kind": "table",
+     "text": "Model | Method | $\\beta$ | $R^{2}$\nLlama-3.1-8B-Instruct | AlloKV | 0.42 (0.02) | 0.995\nQwen2.5-7B-Instruct | AlloKV | 0.42 (0.05) | 0.972\nMistral-7B-Instruct-v0.3 | AlloKV | 0.45 (0.02) | 0.996\npooled, model intercepts | AlloKV | 0.43 (0.02) | 0.987\nLlama-3.1-8B-Instruct | SnapKV | 0.47 (0.01) | 0.999"
+    },
+    {
+     "kind": "p",
+     "text": "Which tasks set the budget. For each search we record the task with the largest drop at the largest budget that fails. At 4K and 8K this is almost always multi-key needle retrieval with distractor keys, where the observation window ranks distractors and targets alike. At 16K and 32K the binding tasks shift towards common-word extraction and variable tracking, which need many scattered tokens rather than a single span. QA tasks never set the budget; their scores stay within half a point of the full cache down to roughly half of $B^{*}$."
+    },
+    {
+     "kind": "p",
+     "text": "Sensitivity to the tolerance. Relaxing the tolerance to 2.0 points lowers every budget by one or two grid steps and gives a pooled exponent of 0.44; tightening it to 0.5 points makes 5 of the 12 searches unresolvable because the noise floor is reached, so we do not report it. The exponent is thus not an artefact of the 1.0-point choice within the range we can measure."
+    }
+   ]
+  },
+  {
+   "title": "5 AlloKV",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "AlloKV has three components: a token score, a split of the budget across heads, and a total budget that depends on the prompt length. Only the third is new; the first two are deliberately close to existing methods so that the effect of the schedule can be isolated."
+    },
+    {
+     "kind": "p",
+     "text": "Token score. As in SnapKV, the last $w=32$ prompt tokens form an observation window. For KV head $h$ in layer $\\ell$ and prompt position $i$ we average the attention that the window queries of the corresponding query heads assign to $i$, smooth the result with a max-pool of width 7, and keep the top entries. The window itself and the first four tokens are always kept."
+    },
+    {
+     "kind": "p",
+     "text": "Head allocation. Heads differ in how many positions they need. We measure this with the entropy $H_{\\ell,h}$ of the window-averaged attention distribution of each KV head and give each head a share proportional to its effective support,"
+    },
+    {
+     "kind": "equation",
+     "text": "$$b_{\\ell,h}=B\\cdot N_{\\mathrm{kv}}\\,\\frac{\\exp(H_{\\ell,h})}{\\sum_{\\ell',h'}\\exp(H_{\\ell',h'})},\\qquad b_{\\ell,h}\\in[w,\\,4B],$$ (2)"
+    },
+    {
+     "kind": "p",
+     "text": "where $N_{\\mathrm{kv}}$ is the number of KV heads over all layers and the clipping is resolved by water-filling, so the total stays exactly $B\\,N_{\\mathrm{kv}}$. A head whose window attention concentrates on a few positions receives little budget; a head that spreads its attention widely receives more. The rule is similar in spirit to Ada-KV ⟦r_adakv⟧ but uses entropy rather than top-$k$ mass, which we found more stable when the window is short."
+    },
+    {
+     "kind": "p",
+     "text": "Allometric schedule. The total budget is set once per request, at prefill, from the prompt length,"
+    },
+    {
+     "kind": "equation",
+     "text": "$$B(L)=B_{\\mathrm{ref}}\\left(\\frac{L}{L_{\\mathrm{ref}}}\\right)^{\\beta},\\qquad L_{\\mathrm{ref}}=8\\text{K},\\;\\beta=0.43,$$ (3)"
+    },
+    {
+     "kind": "p",
+     "text": "with $B_{\\mathrm{ref}}$ equal to the measured lossless budget at 8K (3,328 tokens for Llama and Qwen, 3,072 for Mistral). Calibrating a new model therefore needs one bisection at a single length rather than four. The exponent is shared across models; we did not tune it per model, and the per-model fits in Table 2 suggest that doing so would change budgets by at most one grid step at 32K."
+    },
+    {
+     "kind": "p",
+     "text": "Cost. The scores and entropies are computed from attention rows that SnapKV already materialises for the window. On an H100, the added work raises prefill latency at 32K by 3.1% over SnapKV, mainly because of the water-filling step, and decoding is unchanged because the cache is compacted into a dense per-head layout as in the kvpress implementation."
+    }
+   ]
+  },
+  {
+   "title": "6 Experiments",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We compare AlloKV with SnapKV ⟦r_snapkv⟧, PyramidKV ⟦r_pyramid⟧ and Ada-KV ⟦r_adakv⟧, all applied once after prefill through the same kvpress interface, with the same window and kernel. Unless stated otherwise the baselines receive the same total number of cached entries as AlloKV for each prompt."
+    },
+    {
+     "kind": "p",
+     "text": "Matched budgets on RULER. Table 3 reports RULER at 32K on Llama-3.1-8B-Instruct at a budget of 6,144 tokens per head, the lossless budget of AlloKV. AlloKV is the only method within 1.0 point of the full cache at this budget. Removing the entropy allocation (uniform heads) costs 2.1 points, which places the variant between Ada-KV and SnapKV. SnapKV needs 9,472 tokens to become lossless at this length (Table 1), so AlloKV reduces the lossless budget by 35.1%. On Qwen and Mistral the corresponding reductions relative to Ada-KV, the strongest baseline there, are 21.7% and 18.9%."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: RULER average at 32K, Llama-3.1-8B-Instruct, 6,144 tokens per KV head (18.8% of the prompt)."
+    },
+    {
+     "kind": "table",
+     "text": "Method | RULER avg. | gap to full\nFull cache | 88.1 | -\nSnapKV | 83.9 | 4.2\nPyramidKV | 84.4 | 3.7\nAda-KV | 85.6 | 2.5\nAlloKV, uniform heads | 85.2 | 2.9\nAlloKV | 87.3 | 0.8"
+    },
+    {
+     "kind": "p",
+     "text": "The schedule on a length-mixed workload. Equation (3) with $\\beta=0.43$ and $B_{\\mathrm{ref}}=3{,}328$ assigns Llama 2,470, 3,328, 4,484 and 6,040 tokens at the four lengths. Compared with Table 1 the schedule is slightly too small at 4K and at 32K, by less than one grid step in both cases, and the RULER gap there is 1.3 and 1.2 points instead of at most 1.0; at 8K and 16K it is lossless. On a workload with equal numbers of prompts at each length the schedule keeps 26.6% of all cached entries. The smallest single fraction that is lossless at all four lengths is 62.5%, set by the 4K prompts, and the smallest single token budget is 6,144, which keeps 36.7% of the entries of the same workload."
+    },
+    {
+     "kind": "p",
+     "text": "Choice of the schedule exponent. Table 4 varies $\\beta$ in Equation (3) on Llama with $B_{\\mathrm{ref}}$ fixed at 3,328 tokens. A constant budget ($\\beta=0$) is cheapest but loses 6.9 points at 32K, and a proportional budget ($\\beta=1$, i.e. a fixed 40.6% of every prompt) is lossless at the long end but loses 7.8 points at 4K while keeping 40.6% of the cache. Exponents between 0.4 and 0.5 give the smallest worst-case gap; 0.43 is the fitted value, and we did not tune it on this table."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 4: Allometric schedule with different exponents on Llama-3.1-8B-Instruct ($B_{\\mathrm{ref}}=3{,}328$ at 8K). Kept: share of all cached entries on the length-mixed RULER workload. Gap: RULER points below the full cache, per length."
+    },
+    {
+     "kind": "table",
+     "text": "$\\beta$ | Kept | 4K | 8K | 16K | 32K | max gap\n0 (constant) | 21.7% | 0.2 | 0.8 | 2.6 | 6.9 | 6.9\n0.30 | 24.7% | 0.5 | 0.8 | 1.6 | 3.4 | 3.4\n0.43 (fitted) | 26.6% | 1.3 | 0.8 | 0.6 | 1.2 | 1.3\n0.60 | 29.6% | 2.7 | 0.8 | 0.4 | 0.5 | 2.7\n1.0 (proportional) | 40.6% | 7.8 | 0.8 | 0.2 | 0.2 | 7.8"
+    },
+    {
+     "kind": "p",
+     "text": "Observation window. With a window of 16 tokens the lossless budget of AlloKV on Llama at 32K rises to 6,656 tokens; with 64 tokens it stays at 6,144. We keep 32, the SnapKV default, everywhere."
+    },
+    {
+     "kind": "p",
+     "text": "LongBench. To check that the schedule transfers beyond synthetic tasks, we run the 16 English LongBench datasets ⟦r_longbench⟧, whose prompts range from about 2K to beyond 30K tokens, with the schedule calibrated on RULER and no further tuning. Table 5 shows that AlloKV stays within 0.4 points of the full cache on Llama-3.1-8B-Instruct while keeping 27.3% of the KV entries on average over the benchmark. Baselines given the same fraction of every prompt lose between 1.0 and 1.6 points. The gains are largest on the multi-document QA and synthetic tasks, which have the longest prompts; on code completion all methods are within 0.3 points of the full cache."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 5: LongBench (16 English datasets) average on Llama-3.1-8B-Instruct. Baselines keep the same fraction of every prompt as AlloKV's mean retained fraction (27.3%)."
+    },
+    {
+     "kind": "table",
+     "text": "Method | Single-doc QA | Multi-doc QA | Summ. | Few-shot | Synthetic | Code | Avg.\nFull cache | 43.17 | 45.86 | 26.92 | 69.21 | 53.66 | 57.48 | 49.21\nSnapKV | 42.30 | 43.91 | 25.68 | 68.84 | 50.88 | 57.35 | 47.96\nPyramidKV | 41.86 | 43.52 | 25.31 | 68.70 | 50.37 | 57.41 | 47.62\nAda-KV | 42.61 | 44.40 | 25.93 | 68.95 | 51.92 | 57.44 | 48.20\nAlloKV | 42.95 | 45.31 | 26.27 | 69.08 | 53.11 | 57.62 | 48.81"
+    },
+    {
+     "kind": "p",
+     "text": "Where the savings come from. Of the 35.1% reduction relative to SnapKV at 32K, the entropy allocation alone accounts for most; the schedule matters across lengths rather than at a single length. Conversely, applying the allometric schedule to SnapKV with uniform heads, using SnapKV's own exponent of 0.47, keeps 39.8% of the length-mixed RULER workload while remaining within 1.3 points of the full cache at every length; the fixed fraction that SnapKV needs to be lossless at all four lengths is 87.5%. The schedule is therefore useful on its own, and the two components combine."
+    },
+    {
+     "kind": "p",
+     "text": "Memory. For Llama-3.1-8B-Instruct a 32K prompt holds 4 GiB of KV cache in bfloat16; at the lossless budget AlloKV keeps 768 MiB of it. In a vLLM-style serving setting ⟦r_vllm⟧ the saved memory translates into larger batches; we leave end-to-end throughput measurements to future work, since the kvpress prototype does not use paged memory."
+    }
+   ]
+  },
+  {
+   "title": "7 Discussion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Why should the lossless budget be sublinear? In the retrieval tasks of RULER the number of facts that the question depends on is fixed while the surrounding haystack grows, so an ideal selector would need a constant budget, and a fixed fraction would be extremely wasteful. Real selectors are not ideal: the observation window ranks some distractors above the relevant span, and the number of such distractors grows with the haystack. The measured exponent is therefore a property of the selector as much as of the task. This reading is consistent with two observations in Section 4: the better selector (AlloKV) has the smaller exponent, and the aggregation tasks, whose relevant tokens do scale with the prompt, are the ones that bind at 16K and 32K."
+    },
+    {
+     "kind": "p",
+     "text": "For natural workloads the picture is less clean. LongBench prompts mix tasks whose evidence is a single span with tasks such as summarisation whose evidence is spread over the document, and we do not fit an exponent there because its lengths are confounded with its tasks. The schedule nevertheless transferred without retuning (Table 5), which suggests that the RULER-based calibration is not tied to synthetic retrieval. A practical consequence for evaluation is that results reported at a single fixed fraction favour methods differently at different lengths: at 27.3% retention SnapKV is lossless on short LongBench prompts and lossy on the longest ones, and averaging over the benchmark hides this."
+    }
+   ]
+  },
+  {
+   "title": "8 Limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our measurements cover three 7-8B instruction-tuned models with grouped-query attention, a single tolerance and context lengths up to 32K, the longest length at which all three models are inside their trained window. The lossless budget is defined on the RULER average; a criterion on the worst task, or a per-request criterion, would give larger budgets. The 256-token grid quantises $B^{*}$, which is visible as scatter around the fitted lines, and the bisection relies on monotonicity, which held in 29 of 31 searches. We only consider eviction after prefill with the question at the end of the prompt; settings in which the question arrives later, or in which the cache is reused across several questions, are likely to need larger budgets. Finally, the schedule is calibrated with one search per model; models with very different attention patterns, for example with multi-head latent attention or hybrid recurrent layers, or with different long-context extension recipes ⟦r_bertsch⟧, would need their own measurements."
+    }
+   ]
+  },
+  {
+   "title": "9 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We measured how much KV cache an eviction method must keep to preserve full-cache accuracy, and found that between 4K and 32K tokens this lossless budget grows as roughly the 0.43 power of the prompt length on three models. Fixed token budgets and fixed fractions are both poor approximations of this curve. AlloKV sets its budget from the prompt length accordingly and, together with an entropy-guided head split, needs about a third less cache than SnapKV to stay lossless. We hope that reporting lossless budgets, rather than accuracy at a few arbitrary settings, becomes a routine part of evaluating eviction methods."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "This work was supported by the Engineering and Physical Sciences Research Council (EPSRC) under grant EP/Y03724X/1. Experiments were run on the GPU service of the Edinburgh International Data Facility (EIDF), provided by EPCC at the University of Edinburgh. We thank Andrew Lennox for help with the job scheduler and the members of the Edinburgh NLP reading group for comments on an early draft."
+    }
+   ]
+  },
+  {
+   "title": "Code and Data Availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Code, the budget schedules for the three models and the logs of all 31 bisection searches, including every probed budget and its per-task RULER scores, are available at https://github.com/isadowska/allokv."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "r_keyformer",
+   "tag": "Adnan et al. (2024)",
+   "text": "M. Adnan, A. Arunkumar, G. Jain, P. J. Nair, I. Soloveychik, and P. Kamath (2024). Keyformer: KV cache reduction through key tokens selection for efficient generative inference. In Proceedings of Machine Learning and Systems 6."
+  },
+  {
+   "key": "r_ai",
+   "tag": "Ai et al. (2026)",
+   "text": "M. Ai, J. He, and Y. Guo (2026). Does accuracy equal evidence? Reasoning faithfulness under KV cache compression. arXiv preprint."
+  },
+  {
+   "key": "r_gqa",
+   "tag": "Ainslie et al. (2023)",
+   "text": "J. Ainslie, J. Lee-Thorp, M. de Jong, Y. Zemlyanskiy, F. Lebrón, and S. Sanghai (2023). GQA: training generalized multi-query transformer models from multi-head checkpoints. In Proceedings of EMNLP 2023."
+  },
+  {
+   "key": "r_distillcache",
+   "tag": "Althoubi (2026)",
+   "text": "A. Althoubi (2026). DistillCache: KL-guided adaptive KV-cache eviction for memory-efficient LLM inference. arXiv preprint."
+  },
+  {
+   "key": "r_restorekv",
+   "tag": "Baek et al. (2026)",
+   "text": "C. Baek, S. Shin, and K. Kong (2026). RestoreKV: recovering full-cache behavior under aggressive query-agnostic KV cache eviction. arXiv preprint."
+  },
+  {
+   "key": "r_longbench",
+   "tag": "Bai et al. (2024)",
+   "text": "Y. Bai, X. Lv, J. Zhang, H. Lyu, J. Tang, Z. Huang, Z. Du, X. Liu, A. Zeng, L. Hou, Y. Dong, J. Tang, and J. Li (2024). LongBench: a bilingual, multitask benchmark for long context understanding. In Proceedings of the 62nd Annual Meeting of the ACL, pp. 3119-3137."
+  },
+  {
+   "key": "r_bertsch",
+   "tag": "Bertsch et al. (2026)",
+   "text": "A. Bertsch, L. Soldaini, M. R. Gormley, G. Neubig, H. Hajishirzi, K. Lo, and D. Groeneveld (2026). Cracks in the foundation: seemingly minor architectural choices impact long context extension. arXiv preprint."
+  },
+  {
+   "key": "r_pyramid",
+   "tag": "Cai et al. (2024)",
+   "text": "Z. Cai, Y. Zhang, B. Gao, Y. Liu, T. Liu, K. Lu, W. Xiong, Y. Dong, B. Chang, J. Hu, and W. Xiao (2024). PyramidKV: dynamic KV cache compression based on pyramidal information funneling. arXiv preprint arXiv:2406.02069."
+  },
+  {
+   "key": "r_fa2",
+   "tag": "Dao (2024)",
+   "text": "T. Dao (2024). FlashAttention-2: faster attention with better parallelism and work partitioning. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_varrate",
+   "tag": "Esmat et al. (2026)",
+   "text": "S. Esmat, D. Shah, and A. Jannesari (2026). VarRate: training-free variable-rate KV cache compression for long-context LLMs. arXiv preprint."
+  },
+  {
+   "key": "r_adakv",
+   "tag": "Feng et al. (2024)",
+   "text": "Y. Feng, J. Lv, Y. Cao, X. Xie, and S. K. Zhou (2024). Ada-KV: optimizing KV cache eviction by adaptive budget allocation for efficient LLM inference. arXiv preprint arXiv:2407.11550."
+  },
+  {
+   "key": "r_headkv",
+   "tag": "Fu et al. (2025)",
+   "text": "Y. Fu, Z. Cai, A. Asi, W. Xiong, Y. Dong, and W. Xiao (2025). Not all heads matter: a head-level KV cache compression method with integrated retrieval and reasoning. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_fastgen",
+   "tag": "Ge et al. (2024)",
+   "text": "S. Ge, Y. Zhang, L. Liu, M. Zhang, J. Han, and J. Gao (2024). Model tells you what to discard: adaptive KV cache compression for LLMs. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_gould",
+   "tag": "Gould and van den Hengel (2026)",
+   "text": "S. Gould and A. van den Hengel (2026). Back from the future: key-value cache management by counter-causal surprise. arXiv preprint."
+  },
+  {
+   "key": "r_grattafiori",
+   "tag": "Grattafiori et al. (2024)",
+   "text": "A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Kadian, et al. (2024). The Llama 3 herd of models. arXiv preprint arXiv:2407.21783."
+  },
+  {
+   "key": "r_hoffmann",
+   "tag": "Hoffmann et al. (2022)",
+   "text": "J. Hoffmann, S. Borgeaud, A. Mensch, E. Buchatskaya, T. Cai, E. Rutherford, et al. (2022). Training compute-optimal large language models. In Advances in Neural Information Processing Systems 35."
+  },
+  {
+   "key": "r_kvquant",
+   "tag": "Hooper et al. (2024)",
+   "text": "C. Hooper, S. Kim, H. Mohammadzadeh, M. W. Mahoney, Y. S. Shao, K. Keutzer, and A. Gholami (2024). KVQuant: towards 10 million context length LLM inference with KV cache quantization. In Advances in Neural Information Processing Systems 37."
+  },
+  {
+   "key": "r_ruler",
+   "tag": "Hsieh et al. (2024)",
+   "text": "C. Hsieh, S. Sun, S. Kriman, S. Acharya, D. Rekesh, F. Jia, and B. Ginsburg (2024). RULER: what's the real context size of your long-context language models? In First Conference on Language Modeling."
+  },
+  {
+   "key": "r_mistral",
+   "tag": "Jiang et al. (2023)",
+   "text": "A. Q. Jiang, A. Sablayrolles, A. Mensch, C. Bamford, D. S. Chaplot, D. de las Casas, et al. (2023). Mistral 7B. arXiv preprint arXiv:2310.06825."
+  },
+  {
+   "key": "r_niah",
+   "tag": "Kamradt (2023)",
+   "text": "G. Kamradt (2023). Needle in a haystack - pressure testing LLMs. GitHub repository."
+  },
+  {
+   "key": "r_kaplan",
+   "tag": "Kaplan et al. (2020)",
+   "text": "J. Kaplan, S. McCandlish, T. Henighan, T. B. Brown, B. Chess, R. Child, S. Gray, A. Radford, J. Wu, and D. Amodei (2020). Scaling laws for neural language models. arXiv preprint arXiv:2001.08361."
+  },
+  {
+   "key": "r_anchorkv",
+   "tag": "Khalaf et al. (2026)",
+   "text": "M. Khalaf, Y. Shamshoum, N. Hodos, Y. Sieradzki, and A. Schuster (2026). AnchorKV: anchor-residual KV cache compression. arXiv preprint."
+  },
+  {
+   "key": "r_kvzip",
+   "tag": "Kim et al. (2025)",
+   "text": "J. Kim, J. Kim, S. Kwon, J. W. Lee, S. Yun, and H. O. Song (2025). KVzip: query-agnostic KV cache compression with context reconstruction. In Advances in Neural Information Processing Systems 38."
+  },
+  {
+   "key": "r_vllm",
+   "tag": "Kwon et al. (2023)",
+   "text": "W. Kwon, Z. Li, S. Zhuang, Y. Sheng, L. Zheng, C. H. Yu, J. E. Gonzalez, H. Zhang, and I. Stoica (2023). Efficient memory management for large language model serving with PagedAttention. In Proceedings of the 29th Symposium on Operating Systems Principles."
+  },
+  {
+   "key": "r_laus",
+   "tag": "Laus et al. (2026)",
+   "text": "H. Laus, C. M. Verdun, H. Wang, F. du Pin Calmon, and F. Krahmer (2026). KV cache compression through the lens of transform coding. arXiv preprint."
+  },
+  {
+   "key": "r_sigmoid",
+   "tag": "Li (2026)",
+   "text": "I. Li (2026). Sigmoid attention as a better substrate for learned KV cache eviction. arXiv preprint."
+  },
+  {
+   "key": "r_snapkv",
+   "tag": "Li et al. (2024)",
+   "text": "Y. Li, Y. Huang, B. Yang, B. Venkitesh, A. Locatelli, H. Ye, T. Cai, P. Lewis, and D. Chen (2024). SnapKV: LLM knows what you are looking for before generation. In Advances in Neural Information Processing Systems 37."
+  },
+  {
+   "key": "r_scissor",
+   "tag": "Liu et al. (2023)",
+   "text": "Z. Liu, A. Desai, F. Liao, W. Wang, V. Xie, Z. Xu, A. Kyrillidis, and A. Shrivastava (2023). Scissorhands: exploiting the persistence of importance hypothesis for LLM KV cache compression at test time. In Advances in Neural Information Processing Systems 36."
+  },
+  {
+   "key": "r_kivi",
+   "tag": "Liu et al. (2024)",
+   "text": "Z. Liu, J. Yuan, H. Jin, S. Zhong, Z. Xu, V. Braverman, B. Chen, and X. Hu (2024). KIVI: a tuning-free asymmetric 2bit quantization for KV cache. In Proceedings of the 41st International Conference on Machine Learning."
+  },
+  {
+   "key": "r_compaction",
+   "tag": "Liu et al. (2026)",
+   "text": "Y. Liu, J. Ji, L. An, R. Jain, G. Polatkan, S. Zhu, and S. Chang (2026). Practical online KV cache compaction for LLM agents: an empirical study. arXiv preprint."
+  },
+  {
+   "key": "r_dmc",
+   "tag": "Nawrot et al. (2024)",
+   "text": "P. Nawrot, A. Łańcucki, M. Chochowski, D. Tarjan, and E. M. Ponti (2024). Dynamic memory compression: retrofitting LLMs for accelerated inference. In Proceedings of the 41st International Conference on Machine Learning."
+  },
+  {
+   "key": "r_kvpress",
+   "tag": "NVIDIA (2024)",
+   "text": "NVIDIA (2024). kvpress: LLM KV cache compression made easy. GitHub repository, https://github.com/NVIDIA/kvpress."
+  },
+  {
+   "key": "r_tova",
+   "tag": "Oren et al. (2024)",
+   "text": "M. Oren, M. Hassid, N. Yarden, Y. Adi, and R. Schwartz (2024). Transformers are multi-state RNNs. In Proceedings of EMNLP 2024."
+  },
+  {
+   "key": "r_cake",
+   "tag": "Qin et al. (2025)",
+   "text": "Z. Qin, Y. Cao, M. Lin, W. Hu, S. Fan, K. Cheng, W. Lin, and J. Li (2025). CAKE: cascading and adaptive KV cache eviction with layer preferences. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_ren",
+   "tag": "Ren et al. (2026)",
+   "text": "X. Ren, Y. Sun, C. Yi, and H. Yang (2026). Understanding sparse attention selectivity in long-context foundation models via counterfactual evaluation. arXiv preprint."
+  },
+  {
+   "key": "r_quest",
+   "tag": "Tang et al. (2024)",
+   "text": "J. Tang, Y. Zhao, K. Zhu, G. Xiao, B. Kasikci, and S. Han (2024). Quest: query-aware sparsity for efficient long-context LLM inference. In Proceedings of the 41st International Conference on Machine Learning."
+  },
+  {
+   "key": "r_tian",
+   "tag": "Tian et al. (2026)",
+   "text": "H. Tian, Y. Liu, and T. Wang (2026). Every cache entry earns its place: global allocation of resolution and coverage for KV cache compression. arXiv preprint."
+  },
+  {
+   "key": "r_rethead",
+   "tag": "Wu et al. (2025)",
+   "text": "W. Wu, Y. Wang, G. Xiao, H. Peng, and Y. Fu (2025). Retrieval head mechanistically explains long-context factuality. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_streaming",
+   "tag": "Xiao et al. (2024)",
+   "text": "G. Xiao, Y. Tian, B. Chen, S. Han, and M. Lewis (2024). Efficient streaming language models with attention sinks. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_duo",
+   "tag": "Xiao et al. (2025)",
+   "text": "G. Xiao, J. Tang, J. Zuo, J. Guo, S. Yang, H. Tang, Y. Fu, and S. Han (2025). DuoAttention: efficient long-context LLM inference with retrieval and streaming heads. In International Conference on Learning Representations."
+  },
+  {
+   "key": "r_xie",
+   "tag": "Xie and Alanwar (2026)",
+   "text": "P. Xie and A. Alanwar (2026). Error certificates for KV-cache eviction via randomized design. arXiv preprint."
+  },
+  {
+   "key": "r_ripple",
+   "tag": "Xu et al. (2026)",
+   "text": "D. Xu, K. Qian, W. Shi, Y. Sun, M. Tang, et al. (2026). RippleKV: cross-layer KV cache allocation via perturbation propagation. arXiv preprint."
+  },
+  {
+   "key": "r_qwen25",
+   "tag": "Yang et al. (2024)",
+   "text": "A. Yang, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Li, D. Liu, F. Huang, H. Wei, et al. (2024). Qwen2.5 technical report. arXiv preprint arXiv:2412.15115."
+  },
+  {
+   "key": "r_yuan",
+   "tag": "Yuan et al. (2024)",
+   "text": "J. Yuan, H. Liu, S. Zhong, Y. Chuang, S. Li, G. Wang, D. Le, H. Jin, V. Chaudhary, Z. Xu, Z. Liu, and X. Hu (2024). KV cache compression, but what must we give in return? A comprehensive benchmark of long context capable approaches. In Findings of EMNLP 2024."
+  },
+  {
+   "key": "r_reskv",
+   "tag": "Zhan et al. (2026)",
+   "text": "Y. Zhan, L. Chen, and S. Shang (2026). ResKV: reconstructing omitted attention contributions for fixed-budget KV cache compression. arXiv preprint."
+  },
+  {
+   "key": "r_h2o",
+   "tag": "Zhang et al. (2023)",
+   "text": "Z. Zhang, Y. Sheng, T. Zhou, T. Chen, L. Zheng, R. Cai, Z. Song, Y. Tian, C. Ré, C. Barrett, Z. Wang, and B. Chen (2023). H2O: heavy-hitter oracle for efficient generative inference of large language models. In Advances in Neural Information Processing Systems 36."
+  },
+  {
+   "key": "r_infbench",
+   "tag": "Zhang et al. (2024)",
+   "text": "X. Zhang, Y. Chen, S. Hu, Z. Xu, J. Chen, M. K. Hao, X. Han, Z. L. Thai, S. Wang, Z. Liu, and M. Sun (2024). InfiniteBench: extending long context evaluation beyond 100K tokens. In Proceedings of the 62nd Annual Meeting of the ACL."
+  },
+  {
+   "key": "r_dynamickv",
+   "tag": "Zhou et al. (2025)",
+   "text": "X. Zhou, W. Wang, M. Zeng, J. Guo, X. Liu, L. Shen, M. Zhang, and L. Ding (2025). DynamicKV: task-aware adaptive KV cache compression for long context LLMs. In Findings of EMNLP 2025."
+  }
+ ],
+ "bib_style": "authoryear"
+}

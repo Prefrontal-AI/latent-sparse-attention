@@ -3,8 +3,9 @@
   lsa data prepare papertrail                          # every sample at every length and control, as a CPU job
   lsa data prepare papertrail --max-length 1000000     # the lengths a one-node server holds
 
-The kit is the dataset repository the card names, cloned at its revision under the data root - the paper ids, the
-benchmark's own text and the checksums, and no sentence of any real paper ([rebuild](rebuild.py)). The preparer fetches each paper from arXiv at its pinned version into a cache under the data
+The kit is `data-assembly/papertrail/kit` in this repository - the paper ids, the benchmark's own text and the checksums,
+and no sentence of any real paper ([rebuild](rebuild.py)). The card pins its digest, so an edited kit is refused.
+The preparer fetches each paper from arXiv at its pinned version into a cache under the data
 root, converts it ([convert](convert.py)), patches the hosts ([patch](patch.py)), assembles every context
 ([compose](compose.py)) and refuses any paper or context whose checksum differs from the benchmark's.
 
@@ -15,7 +16,6 @@ condition is two files, so a 10M context is stored once rather than once per que
     <root>/papertrail/<sample>_<condition>.jsonl          the 36 questions, their answer keys and the paper order
     <root>/papertrail/<sample>_<condition>.context.txt    the context every question of the condition reads
     <root>/papertrail/html/<id>v<version>.html.gz         the arXiv pages, fetched once
-    <root>/papertrail/kit-<revision>/                     the dataset repository, cloned at the card's revision
 
 A prompt is the context with the question's own closing part after it, which asks for an `EVIDENCE:` and an
 `ANSWER:` line - or under `C1` the question alone, worded for a reader without the papers. Every question of a
@@ -26,15 +26,15 @@ so a run skips the lengths its server cannot hold.
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
-import subprocess
-import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import lsa
 from lsa import assets, io
 from lsa.data import manifests
 from lsa.data.tokenizer import load_tokenizer, tokenizer_checkpoint, tokenizer_repo
@@ -55,8 +55,8 @@ PARAMETERS: dict[str, Any] = {"gpus_per_node": 0, "cpus_per_task": 8, "mem_gb": 
 # Seconds between two requests to arXiv
 FETCH_DELAY = 3.0
 
-# Where the dataset repository the card names is cloned from - over ssh while it is private
-KIT_URL = "git@github.com:{repository}.git"
+# The benchmark's definition, kept in this repository beside `configs/` - found from the package the same way
+KIT = Path(lsa.__file__).resolve().parents[2] / "data-assembly" / "papertrail" / "kit"
 
 # The answer key a row carries, as the benchmark's questions name it
 ANSWER_KEYS: tuple[str, ...] = (
@@ -210,65 +210,43 @@ def write_condition(
     )
 
 
-def kit_checkout(root: str) -> Path:
-    """Return where the dataset repository is cloned at the card's revision under a data root."""
-    return html_cache(root).parent / f"kit-{papertrail_card().revision[:12]}"
+def kit_digest(directory: Path) -> str:
+    """Return the sha256 of a kit's files - `sha256sum` of each, sorted by path, then the sha256 of that listing.
 
+    The same digest as `find . -type f | sed 's|^\\./||' | LC_ALL=C sort | xargs sha256sum | sha256sum` run
+    inside the kit, so it can be checked without this code.
 
-def kit_revision(directory: Path) -> str | None:
-    """Return the full sha of a clone's head, or None outside a repository.
+    Args:
+        directory: The kit.
 
-    A clone another user made is refused by git as dubious ownership unless that one command trusts it.
+    Returns:
+        The hex digest.
     """
-    command = ["git", "-c", "safe.directory=*", "-C", str(directory), "rev-parse", "HEAD"]
-    try:
-        return subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
+    paths = sorted(
+        (path for path in directory.rglob("*") if path.is_file()),
+        key=lambda path: path.relative_to(directory).as_posix(),
+    )
+    listing = "".join(f"{io.file_sha256(path)}  {path.relative_to(directory).as_posix()}\n" for path in paths)
+    return hashlib.sha256(listing.encode("utf8")).hexdigest()
 
 
 def check_kit(directory: Path) -> str:
-    """Return a clone's revision, refusing one other than the card's.
+    """Return a kit's digest, refusing one other than the card's.
 
     Raises:
-        ValueError: The clone is not at the card's revision.
+        ValueError: The kit is not the one the card pins, or is not a directory.
     """
-    revision = kit_revision(directory)
-    if revision != papertrail_card().revision:
+    if not directory.is_dir():
         raise ValueError(
-            f"{directory} is at {revision} and the papertrail card pins {papertrail_card().revision} - "
-            "a clone is never moved in place, so point --kit at one at the card's revision"
+            f"{directory} is not a directory - the kit is data-assembly/papertrail/kit in this repository"
         )
-    return revision
-
-
-def ensure_kit(root: str) -> Path:
-    """Reuse the dataset repository's clone at the card's revision, or clone it before the CPU job is submitted.
-
-    The clone is named by its revision and never moved in place - a new revision on the card is a new clone. It is
-    made in a staging directory beside its place and moved there once checked out and verified.
-
-    Returns:
-        The clone.
-    """
-    checkout = kit_checkout(root)
-    if checkout.exists():
-        check_kit(checkout)
-        return checkout
-    checkout.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".lsa-papertrail-", dir=checkout.parent) as staging:
-        clone = Path(staging) / "clone"
-        subprocess.run(
-            ["git", "clone", "--quiet", KIT_URL.format(repository=papertrail_card().generator), str(clone)],
-            check=True,
+    digest = kit_digest(directory)
+    if digest != papertrail_card().revision:
+        raise ValueError(
+            f"{directory} has digest {digest} and the papertrail card pins {papertrail_card().revision} - "
+            "a kit that was edited is not the benchmark, so restore it or update the card with the new digest"
         )
-        subprocess.run(
-            ["git", "-C", str(clone), "checkout", "--quiet", papertrail_card().revision], check=True
-        )
-        check_kit(clone)
-        clone.rename(checkout)
-    print(f"{checkout}: the dataset repository at {papertrail_card().revision[:12]}", flush=True)
-    return checkout
+    return digest
 
 
 def prepare_papertrail(
@@ -284,7 +262,7 @@ def prepare_papertrail(
 
     Args:
         root: The data root.
-        kit: A clone of the dataset repository at the card's revision, or None for the one under the data root.
+        kit: A copy of the kit the card pins, or None for `data-assembly/papertrail/kit` in this repository.
         cache: Where the arXiv pages are kept, or None for the data root's.
         delay: Seconds between two requests to arXiv.
         max_length: The longest length to prepare, or None for every length of the card.
@@ -296,11 +274,11 @@ def prepare_papertrail(
             benchmark's and `keep_mismatched` is off.
     """
     card = papertrail_card()
-    kit_dir = Path(kit) if kit else kit_checkout(root)
+    kit_dir = Path(kit) if kit else KIT
     revision = check_kit(kit_dir)
     wanted = conditions(max_length)
     with_context = [condition for condition in wanted if condition != QUESTION_ONLY]
-    kit_data = read_kit(kit_dir / "data", card.tasks)
+    kit_data = read_kit(kit_dir, card.tasks)
     converted, mismatched = convert_papers(
         kit_data, needed_papers(kit_data, with_context), Path(cache) if cache else html_cache(root), delay
     )
@@ -358,7 +336,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--kit",
         default=None,
-        help="a clone of the dataset repository - the data root's, at the card's revision, when unset",
+        help="a copy of the kit the card pins - data-assembly/papertrail/kit in this repository when unset",
     )
     parser.add_argument(
         "--cache", default=None, help="where the arXiv pages are kept - the data root's when unset"
@@ -382,7 +360,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 def job(card: assets.DatasetCard, args: argparse.Namespace) -> tuple[Callable[..., Any], tuple[Any, ...]]:
     """Return what the job runs to prepare the files the command line names, and what it is called with.
 
-    The dataset repository is cloned and the arXiv pages the cache does not hold are fetched here, before
+    The kit is checked against the card and the arXiv pages the cache does not hold are fetched here, before
     submission, since a compute node has no internet.
 
     Args:
@@ -395,8 +373,9 @@ def job(card: assets.DatasetCard, args: argparse.Namespace) -> tuple[Callable[..
     """
     cache = os.path.abspath(args.cache) if args.cache else None
     if not args.dry_run:
-        kit_dir = Path(args.kit) if args.kit else ensure_kit(os.path.abspath(args.root))
-        kit = read_kit(kit_dir / "data", papertrail_card().tasks)
+        kit_dir = Path(args.kit) if args.kit else KIT
+        check_kit(kit_dir)
+        kit = read_kit(kit_dir, papertrail_card().tasks)
         wanted = [condition for condition in conditions(args.max_length) if condition != QUESTION_ONLY]
         fetch_pages(
             kit,

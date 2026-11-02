@@ -10,9 +10,9 @@ repos:
     hooks:
       # A patch's blank context lines are its content - stripping them corrupts the hunk, and a vendored file stays byte-identical to its release
       - id: trailing-whitespace
-        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/
+        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/|^data-assembly/papertrail/(kit/|LICENSE$)
       - id: end-of-file-fixer
-        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/
+        exclude: \.patch$|^src/lsa/evaluation/viewer/vendor/|^src/lsa/training/native/kernels/vendor/|^data-assembly/papertrail/(kit/|LICENSE$)
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml

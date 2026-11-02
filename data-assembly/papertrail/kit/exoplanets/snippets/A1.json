@@ -1,0 +1,598 @@
+{
+ "node": "A1",
+ "kind": "fake_paper",
+ "date": "2026-08-25",
+ "title": "A moderately metal-enriched envelope on the temperate sub-Neptune TOI-8264 b from JWST NIRISS/SOSS and NIRSpec/G395H transmission spectroscopy",
+ "authors": [
+  "Audrey Vachon 1,2",
+  "Raphaël Gingras 1",
+  "Nathan Pouliot 1,2",
+  "Mélanie Lapointe 3",
+  "Félix Thériault 2",
+  "Olivier Paquette 1,2"
+ ],
+ "affiliations": [
+  "1 Département de physique, Université de Montréal, 1375 Avenue Thérèse-Lavoie-Roux, Montréal, QC H2V 0B3, Canada",
+  "2 Trottier Institute for Research on Exoplanets (iREx), Université de Montréal, Montréal, QC, Canada",
+  "3 Département de physique, de génie physique et d'optique, Université Laval, Québec, QC G1V 0A6, Canada"
+ ],
+ "abstract": "We present the transmission spectrum of TOI-8264 b, a temperate sub-Neptune ($R_{p}=2.71\\pm0.08\\,R_{\\oplus}$, $M_{p}=6.38\\pm0.84\\,M_{\\oplus}$, $T_{\\rm eq}=422\\pm8$ K) on a 31.41-day orbit around a bright, moderately active K5 V star. Two transits observed with JWST NIRISS/SOSS (0.6-2.8 $\\mu$m) and one with NIRSpec/G395H (2.9-5.2 $\\mu$m) under Director's Discretionary Time program DD 9874 were reduced with two independent pipelines and combined into a 0.6-5.2 $\\mu$m spectrum at $R\\sim100$. The planetary mass is refined with 58 archival HARPS and 74 new SPIRou radial velocities. Free-chemistry retrievals with petitRADTRANS detect H2O at 4.1$\\sigma$ and CH4 at 3.2$\\sigma$, with tentative evidence for CO2 (2.7$\\sigma$), and give a mean molecular weight of $\\mu=3.58^{+0.49}_{-0.36}$ amu. A grid of chemical-equilibrium models with solar C/O yields $\\log_{10}(Z/Z_{\\odot})=1.79^{+0.20}_{-0.23}$, i.e. an atmospheric metallicity of $62^{+36}_{-26}$ times solar. Adding unocculted starspots to the model does not improve the fit ($\\Delta\\ln\\mathcal{Z}=0.4$), and the spectra of the two SOSS visits agree within their uncertainties. TOI-8264 b therefore hosts a hydrogen-dominated envelope that is moderately enriched in heavy elements, placing it close to the 3.8 amu boundary that separates gas dwarfs from more volatile-rich sub-Neptunes. At 422 K it is cooler than most sub-Neptunes with JWST spectra around K dwarfs, and it extends the comparative sample of temperate sub-Neptunes beyond M-dwarf hosts.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Planets between the size of the Earth and Neptune are the most common outcome of planet formation in the inner few tenths of an au [⟦fulton17⟧, ⟦rogers21⟧], yet their bulk compositions remain degenerate. The same mass and radius can be matched by a rocky interior beneath a percent-level hydrogen envelope or by an interior rich in water and other volatiles, and the degeneracy is sharpest for temperate planets whose envelopes have cooled [⟦luque22⟧, ⟦wilkinson26⟧]. Transmission spectroscopy breaks part of this degeneracy because the amplitude of spectral features scales with the atmospheric scale height and hence inversely with the mean molecular weight $\\mu$ [⟦benneke13⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "JWST has turned this argument into a measurement programme. Spectra of K2-18 b and TOI-270 d show CH4 and CO2 in hydrogen-rich envelopes with $\\mu\\approx3$-$5.5$ amu [⟦madhu23⟧, ⟦holmberg24⟧, ⟦benneke24⟧], GJ 9827 d hosts a steam-dominated atmosphere [⟦piaulet24⟧], and the muted spectra of GJ 1214 b and GJ 3090 b point to metal-rich envelopes beneath high-altitude aerosols [⟦kempton23⟧, ⟦schlawin24⟧, ⟦ohno25⟧, ⟦ahrer25⟧]. Hotter sub-Neptunes around Sun-like stars, such as TOI-421 b, can instead show clear, low-$\\mu$ atmospheres [⟦davenport25⟧]. Feature amplitudes measured with HST and JWST suggest that equilibrium temperature, through haze production and condensation, shapes much of this diversity [⟦crossfield17⟧, ⟦brande24⟧, ⟦nagpal26⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Most temperate sub-Neptunes with JWST spectra orbit M dwarfs, whose photospheres are both small and spotted. Unocculted active regions can imprint features of stellar origin on the transmission spectrum through the transit light source effect [⟦rackham18⟧, ⟦rackham19⟧], and recent JWST studies of M-dwarf planets have had to model this contamination explicitly, with outcomes ranging from strong contamination to none [⟦lim23⟧, ⟦moran23⟧, ⟦rosenthal26⟧, ⟦lim26⟧, ⟦ko26⟧]. K dwarfs offer a complementary regime: their larger radii lower the transit depth, but their photospheres are warmer and their spot contrasts in the near-infrared smaller than those of mid-M dwarfs [⟦rackham19⟧, ⟦rackham23⟧]. Temperate sub-Neptunes transiting bright K dwarfs remain rare, because their long orbital periods make them hard to recover from short TESS sectors."
+    },
+    {
+     "kind": "p",
+     "text": "TOI-8264 b was identified by the TESS Science Processing Operations Center [⟦jenkins16⟧] and statistically validated by Pouliot et al. [⟦pouliot26⟧], who measured a radius of 2.7 $R_{\\oplus}$ and an orbital period of 31.4 days around a $V=10.4$ K5 dwarf at 38.6 pc. With a transmission spectroscopy metric of about 70 [⟦kempton18⟧], it is one of the most accessible sub-Neptunes cooler than 450 K outside the M-dwarf sample. Here we present JWST NIRISS/SOSS and NIRSpec/G395H transit spectroscopy of the planet, together with a radial-velocity mass. Section 2 describes the observations and data reduction, Section 3 the global fit to the system, Section 4 the atmospheric retrievals, and Section 5 discusses the composition of the planet in the context of the temperate sub-Neptune population."
+    }
+   ]
+  },
+  {
+   "title": "2 Observations and data reduction",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "2.1 TESS photometry",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "TOI-8264 was observed by TESS [⟦ricker15⟧] in four sectors of the extended mission, two at 200-s full-frame-image cadence and two at 2-min cadence. We use the SPOC Presearch Data Conditioning light curves for the 2-min sectors and SPOC FFI light curves otherwise, with quality-flagged cadences removed. Five transits are covered, one of them only partially because of a momentum dump near egress. The light curves show quasi-periodic modulation with a semi-amplitude of 0.31 per cent and a period of $26.3\\pm0.9$ days, which we adopt as the stellar rotation period; it is consistent with the chromospheric activity index $\\log R^{\\prime}_{\\rm HK}=-4.61$ through the activity-rotation relation of Mamajek & Hillenbrand [⟦mamajek08⟧, see also ⟦noyes84⟧]. The modulation is removed with a Gaussian process (Matérn-3/2 kernel, [⟦fm17⟧]) fitted jointly with the transits in Section 3."
+    }
+   ]
+  },
+  {
+   "title": "2.2 Radial velocities",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We collected 74 SPIRou [⟦donati20⟧] spectra of TOI-8264 between 2025 April and 2026 March under CFHT programmes led by our group, and retrieved 58 archival HARPS [⟦mayor03⟧] spectra taken between 2019 and 2024 for an unrelated activity survey. SPIRou velocities were extracted with the line-by-line method of Artigau et al. [⟦artigau22⟧] and have a median uncertainty of 2.6 m s$^{-1}$; HARPS velocities from the ESO pipeline have a median uncertainty of 1.4 m s$^{-1}$. Both data sets show the rotational signal at 26 days, at semi-amplitudes of 3.1 m s$^{-1}$ (HARPS) and 2.2 m s$^{-1}$ (SPIRou), and the planetary signal only once activity is modelled."
+    }
+   ]
+  },
+  {
+   "title": "2.3 JWST observations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Three transits of TOI-8264 b were observed with JWST [⟦gardner23⟧] in 2026 under DD 9874. The first two, on 2026 February 11 and 2026 April 15, used NIRISS [⟦doyon23⟧] in the SOSS mode [⟦albert23⟧] with the GR700XD grism and the SUBSTRIP256 subarray, covering 0.6-2.8 $\\mu$m in orders 1 and 2. Each exposure consisted of 1284 integrations of four groups, spanning 9.8 hours centred on the 4.3-hour transit. The third transit, on 2026 May 16, used NIRSpec [⟦jakobsen22⟧] with the G395H grating, F290LP filter and SUB2048 subarray in the NRSRAPID readout [⟦birkmann22⟧], covering 2.87-5.18 $\\mu$m on the NRS1 and NRS2 detectors with 2060 integrations of 18 groups. The NIRSpec visit was scheduled one orbit after the second SOSS visit to limit changes in the stellar surface between visits."
+    }
+   ]
+  },
+  {
+   "title": "2.4 Data reduction",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We reduced the SOSS data with two pipelines. The first is exoTEDRISS [⟦radica23⟧], starting from the uncalibrated files and applying the standard Stage 1 steps with a group-level 1/$f$ noise correction, followed by background subtraction scaled to the zodiacal model, flat-fielding, and a simple box extraction of width 30 pixels; the contamination of order 1 by order 2 and by a faint field star at 1.9 arcsec is below 0.2 per cent and is ignored. The second reduction uses Eureka! [⟦bell22⟧] Stages 1-3 with an optimal extraction. The NIRSpec data were reduced with Eureka! and with an independent version of the same steps based on the jwst pipeline (calibration context jwst_1364.pmap), with a column-by-column 1/$f$ subtraction at the group level and outlier rejection at 5$\\sigma$ in time."
+    },
+    {
+     "kind": "p",
+     "text": "For both instruments the two reductions produce white-light depths that agree to better than 0.6$\\sigma$ and spectra whose differences show no wavelength structure ($\\chi^{2}_{\\nu}=1.07$ for the difference spectrum across 152 bins). We adopt the exoTEDRISS reduction for SOSS and the Eureka! reduction for G395H, and use the alternative reductions to check every retrieval in Section 4. The first ten minutes of each visit are discarded to remove the exponential ramp."
+    }
+   ]
+  },
+  {
+   "title": "2.5 Light-curve fitting",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "White-light curves are fitted with juliet [⟦espinoza19⟧], which uses batman [⟦kreidberg15⟧] for the transit model, together with a linear trend in time and, for NIRSpec, a linear decorrelation against the trace position. Limb darkening follows a quadratic law with coefficients drawn from ExoTiC-LD [⟦grant24⟧] using the 3D Stagger grid and treated as free parameters with Gaussian priors of width 0.1. The orbital period, mid-transit time, impact parameter and scaled semi-major axis are taken from the global fit of Section 3 for the spectroscopic fits. Spectroscopic light curves are binned to $R\\approx100$ (order 1 of SOSS beyond 0.85 $\\mu$m, order 2 at 0.6-0.85 $\\mu$m, and NRS1/NRS2), giving 152 channels in total. The fitted white-light parameters for each visit are given in Table 1."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: White-light transit depths and systematics parameters for each JWST visit. Uncertainties are 68 per cent credible intervals; $\\sigma_{\\rm w}$ is the fitted white-noise jitter."
+    },
+    {
+     "kind": "table",
+     "text": "Visit | Instrument | Date | $R_{p}/R_{\\star}$ | $\\sigma_{\\rm w}$ (ppm) | residual rms (ppm)\n1 | NIRISS/SOSS | 2026-02-11 | $0.03684\\pm0.00031$ | 141 | 307\n2 | NIRISS/SOSS | 2026-04-15 | $0.03671\\pm0.00029$ | 118 | 296\n3 | NIRSpec/G395H NRS1 | 2026-05-16 | $0.03702\\pm0.00036$ | 203 | 412\n3 | NIRSpec/G395H NRS2 | 2026-05-16 | $0.03659\\pm0.00041$ | 237 | 466"
+    },
+    {
+     "kind": "p",
+     "text": "The two SOSS white-light depths differ by $0.30\\sigma$, and the two SOSS spectra differ by $\\chi^{2}_{\\nu}=0.94$ over 89 common channels, with no systematic slope towards the blue. We therefore combine them by an error-weighted average. The NRS1-NRS2 offset is fitted as a free parameter in all retrievals, and the combined SOSS spectrum is anchored to its own white-light depth. The resulting transmission spectrum has a median uncertainty of 34 ppm per channel in SOSS order 1 and 47 ppm in G395H."
+    }
+   ]
+  },
+  {
+   "title": "3 Stellar and planetary parameters",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The stellar parameters (Table 2) follow from the spectral energy distribution, the Gaia DR3 parallax [⟦gaia23⟧], and a spectroscopic analysis of the co-added HARPS spectrum, following the approach of Pouliot et al. [⟦pouliot26⟧] with updated photometry. The star is a K5 V dwarf with near-solar metallicity. Its rotation period and chromospheric activity imply a gyrochronological age of $2.1\\pm0.5$ Gyr."
+    },
+    {
+     "kind": "p",
+     "text": "We fitted the TESS photometry, the three JWST white-light curves and the radial velocities jointly with juliet, modelling the stellar activity in the velocities with a quasi-periodic Gaussian process shared between the two spectrographs but with separate amplitudes. The eccentricity is consistent with zero ($e<0.21$ at 95 per cent) and we adopt a circular orbit. The velocity semi-amplitude, $K=1.64\\pm0.21$ m s$^{-1}$, gives a planetary mass of $6.38\\pm0.84\\,M_{\\oplus}$, a 7.6$\\sigma$ detection; a model without the planet is disfavoured by $\\Delta\\ln\\mathcal{Z}=21.4$. Planetary parameters are listed in Table 3. The planet has a bulk density of $1.77\\pm0.26$ g cm$^{-3}$ and a surface gravity of 8.5 m s$^{-2}$, so that for $\\mu=2.3$ amu the atmospheric scale height at $T_{\\rm eq}$ is 179 km, corresponding to 28 ppm per scale height in transit depth."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Stellar parameters of TOI-8264."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Value | Source\nGaia DR3 ID | 3468129055712344320 | Gaia DR3\n2MASS ID | J11240597-3512304 | 2MASS\nSpectral type | K5 V | this work\n$V$, $J$, $K_{s}$ (mag) | 10.43, 8.52, 7.79 | APASS, 2MASS\nParallax (mas) | $25.91\\pm0.02$ | Gaia DR3\nDistance (pc) | $38.6\\pm0.1$ | Gaia DR3\n$T_{\\rm eff}$ (K) | $4428\\pm64$ | HARPS, SED\n$\\log g$ (cgs) | $4.62\\pm0.03$ | derived\n[Fe/H] (dex) | $+0.06\\pm0.09$ | HARPS\n$R_{\\star}$ ($R_{\\odot}$) | $0.674\\pm0.019$ | SED\n$M_{\\star}$ ($M_{\\odot}$) | $0.697\\pm0.024$ | $M_{K}$ relation\n$L_{\\star}$ ($L_{\\odot}$) | $0.157\\pm0.012$ | SED\n$\\log R^{\\prime}_{\\rm HK}$ | $-4.61\\pm0.05$ | HARPS\n$P_{\\rm rot}$ (d) | $26.3\\pm0.9$ | TESS\nAge (Gyr) | $2.1\\pm0.5$ | gyrochronology"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: Planetary parameters of TOI-8264 b from the joint fit. $T_{\\rm eq}$ assumes zero albedo and full heat redistribution."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Value\n$P$ (d) | $31.40927\\pm0.00008$\n$T_{0}$ (BJD$_{\\rm TDB}$) | $2461082.8846\\pm0.0004$\n$R_{p}/R_{\\star}$ | $0.03682\\pm0.00019$\n$b$ | $0.31^{+0.09}_{-0.12}$\n$a/R_{\\star}$ | $55.1^{+1.3}_{-1.6}$\n$i$ (deg) | $89.68^{+0.13}_{-0.10}$\n$T_{14}$ (h) | $4.32\\pm0.03$\n$K$ (m s$^{-1}$) | $1.64\\pm0.21$\n$e$ | $<0.21$ (95 per cent)\n$R_{p}$ ($R_{\\oplus}$) | $2.71\\pm0.08$\n$M_{p}$ ($M_{\\oplus}$) | $6.38\\pm0.84$\n$\\rho_{p}$ (g cm$^{-3}$) | $1.77\\pm0.26$\n$a$ (au) | $0.1727\\pm0.0020$\n$S$ ($S_{\\oplus}$) | $5.27\\pm0.35$\n$T_{\\rm eq}$ (K) | $422\\pm8$"
+    }
+   ]
+  },
+  {
+   "title": "4 Atmospheric retrievals",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The combined transmission spectrum shows a clear absorption band at 1.4 $\\mu$m and weaker structure at 1.15, 1.9 and 2.3 $\\mu$m, a rise across 3.2-3.5 $\\mu$m and a narrow excess near 4.3 $\\mu$m. A flat line is rejected at $\\Delta\\ln\\mathcal{Z}=10.3$ (4.9$\\sigma$). We interpret the spectrum with two families of models, free chemistry and chemical equilibrium, using petitRADTRANS [⟦molliere19⟧] with nested sampling through PyMultiNest [⟦feroz09⟧, ⟦buchner14⟧] and 1000 live points. Detection significances are computed from Bayes factors following Benneke & Seager [⟦benneke13⟧]."
+    }
+   ]
+  },
+  {
+   "title": "4.1 Free chemistry",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The free retrieval assumes an isothermal atmosphere between $10^{-6}$ and 10 bar, constant-with-altitude volume mixing ratios of H2O, CH4, CO2, CO, NH3 and H2S with log-uniform priors between $10^{-12}$ and $10^{-0.5}$, an H2/He background in the solar ratio, and a grey cloud deck with a log-uniform prior on its top pressure. The reference radius at 10 bar, the temperature and the NRS1/NRS2 offset are free. The mean molecular weight is computed at each sample from the composition. Results are listed in Table 4."
+    },
+    {
+     "kind": "p",
+     "text": "Water is detected at 4.1$\\sigma$ with $\\log_{10}X_{\\rm H_{2}O}=-1.21^{+0.27}_{-0.31}$, and methane at 3.2$\\sigma$ with $\\log_{10}X_{\\rm CH_{4}}=-1.79^{+0.35}_{-0.48}$. CO2 is preferred at 2.7$\\sigma$, with a broad posterior centred near $10^{-3.5}$; CO, NH3 and H2S are not constrained. The retrieved temperature, $398^{+61}_{-54}$ K, is consistent with the equilibrium temperature. The cloud-top pressure has only a lower limit ($P_{\\rm cloud}>0.6$ mbar at 95 per cent), so clouds above the millibar level are disfavoured but deeper clouds are allowed. The resulting mean molecular weight is $\\mu=3.58^{+0.49}_{-0.36}$ amu: the envelope is dominated by H2 and He, with about 6 per cent of water by number."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 4: Retrieved parameters of the free-chemistry retrieval. Upper limits are 95 per cent; detection significances are from Bayes-factor comparisons with the species removed."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Prior | Posterior | Significance\n$\\log_{10}X_{\\rm H_{2}O}$ | $\\mathcal{U}(-12,-0.5)$ | $-1.21^{+0.27}_{-0.31}$ | 4.1$\\sigma$\n$\\log_{10}X_{\\rm CH_{4}}$ | $\\mathcal{U}(-12,-0.5)$ | $-1.79^{+0.35}_{-0.48}$ | 3.2$\\sigma$\n$\\log_{10}X_{\\rm CO_{2}}$ | $\\mathcal{U}(-12,-0.5)$ | $-3.48^{+0.71}_{-1.17}$ | 2.7$\\sigma$\n$\\log_{10}X_{\\rm CO}$ | $\\mathcal{U}(-12,-0.5)$ | $<-1.6$ | -\n$\\log_{10}X_{\\rm NH_{3}}$ | $\\mathcal{U}(-12,-0.5)$ | $<-3.3$ | -\n$\\log_{10}X_{\\rm H_{2}S}$ | $\\mathcal{U}(-12,-0.5)$ | $<-2.4$ | -\n$T$ (K) | $\\mathcal{U}(150,800)$ | $398^{+61}_{-54}$ | \n$\\log_{10}P_{\\rm cloud}$ (bar) | $\\mathcal{U}(-6,1)$ | $>-3.2$ | \nNRS1-NRS2 offset (ppm) | $\\mathcal{U}(-200,200)$ | $27^{+19}_{-18}$ | \n$\\mu$ (amu, derived) | - | $3.58^{+0.49}_{-0.36}$ | "
+    },
+    {
+     "kind": "p",
+     "text": "Retrievals on the alternative reductions give $\\mu=3.49^{+0.52}_{-0.33}$ amu (Eureka! SOSS) and $3.66^{+0.47}_{-0.40}$ amu (jwst-based G395H), within 0.3$\\sigma$ of the adopted value. A retrieval on the SOSS data alone recovers H2O at 3.6$\\sigma$ and a consistent $\\mu$, while the G395H spectrum on its own carries most of the CH4 and CO2 information, as expected from the band positions."
+    }
+   ]
+  },
+  {
+   "title": "4.2 Chemical-equilibrium grid",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We also fitted a grid of equilibrium-chemistry spectra computed with petitRADTRANS and easyCHEM, spanning $\\log_{10}(Z/Z_{\\odot})$ from $-1$ to 3 in steps of 0.1 dex, with the C/O ratio fixed at the solar value of 0.55 [⟦asplund09⟧], an isothermal profile and a grey cloud. Metallicity, temperature, cloud-top pressure, reference radius and the detector offset are free; spectra are interpolated linearly in log metallicity. This retrieval gives $\\log_{10}(Z/Z_{\\odot})=1.79^{+0.20}_{-0.23}$, i.e. $Z=62^{+36}_{-26}$ times solar, with $T=411^{+52}_{-47}$ K. Its Bayesian evidence is lower than that of the free retrieval by 0.7, which we do not regard as significant. The H2O and CH4 abundances predicted at the best-fitting metallicity agree with the free retrieval within 1$\\sigma$, while the predicted CO2 abundance is below the free-chemistry median; disequilibrium chemistry would raise it, but the data do not require it."
+    },
+    {
+     "kind": "p",
+     "text": "As an independent check, we repeated both retrievals with POSEIDON [⟦macdonald23⟧], using its default line lists and the same priors. The POSEIDON free retrieval gives $\\mu=3.71^{+0.55}_{-0.42}$ amu and the equilibrium retrieval $\\log_{10}(Z/Z_{\\odot})=1.84^{+0.19}_{-0.25}$, within 0.3$\\sigma$ of the petitRADTRANS values."
+    }
+   ]
+  },
+  {
+   "title": "4.3 Stellar contamination",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Because TOI-8264 is a moderately active star, we tested whether unocculted active regions contribute to the spectrum, following the one-heterogeneity parameterisation of Pinhas et al. [⟦pinhas18⟧] with PHOENIX spectra [⟦husser13⟧]. The model adds the photospheric temperature (Gaussian prior centred on 4428 K with width 64 K), the heterogeneity temperature (uniform between 2300 K and 1.2 times the photospheric temperature), and the covering fraction (uniform between 0 and 0.5). Applied to the combined spectrum with the free-chemistry atmosphere, the contamination model is not favoured: $\\Delta\\ln\\mathcal{Z}=0.4$ relative to the atmosphere-only model. The covering fraction and heterogeneity temperature are unconstrained within their priors, and the atmospheric posteriors are unchanged within 0.4$\\sigma$."
+    },
+    {
+     "kind": "p",
+     "text": "Three further considerations support the atmosphere-only interpretation. First, the two SOSS visits, taken more than two stellar rotations apart, give consistent spectra at short wavelengths, where unocculted heterogeneity would be most apparent. Second, no spot-crossing events are seen in the 152 spectroscopic light curves. Third, the photometric semi-amplitude of 0.31 per cent in the TESS band is modest for a K5 dwarf. We therefore adopt the atmosphere-only retrievals, and note that the treatment of unocculted heterogeneity on K dwarfs relies on one-dimensional stellar models whose contrasts remain uncertain [⟦rackham23⟧]."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 5: Bayesian model comparison for the combined spectrum. $\\Delta\\ln\\mathcal{Z}$ is given relative to the reference free-chemistry model."
+    },
+    {
+     "kind": "table",
+     "text": "Model | $\\Delta\\ln\\mathcal{Z}$ | Interpretation\nFree chemistry (reference) | 0 | -\nFree chemistry without H2O | $-6.9$ | H2O at 4.1$\\sigma$\nFree chemistry without CH4 | $-3.7$ | CH4 at 3.2$\\sigma$\nFree chemistry without CO2 | $-2.4$ | CO2 at 2.7$\\sigma$\nFree chemistry + unocculted heterogeneity | $+0.4$ | not favoured\nChemical equilibrium | $-0.7$ | comparable\nFlat line | $-10.3$ | rejected at 4.9$\\sigma$"
+    }
+   ]
+  },
+  {
+   "title": "5 Discussion",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "5.1 A moderately enriched hydrogen envelope",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The retrieved mean molecular weight places TOI-8264 b among the hydrogen-dominated sub-Neptunes. Its posterior lies largely below the value of 3.8 amu adopted in recent work to separate gas dwarfs, rocky cores with primordial hydrogen envelopes, from planets whose envelopes are dominated by heavier volatiles, although about 30 per cent of the posterior mass lies above that threshold. A metallicity of about 60 times solar is in the range expected for envelopes that have equilibrated with a magma ocean or accreted planetesimals during formation [⟦misener26⟧, ⟦young26⟧, ⟦marcum26⟧], and it does not require a water-rich interior. Together with the bulk density, interior models with a rocky core and a hydrogen-rich envelope of 1.5-3 per cent by mass reproduce the radius at the estimated age, whereas a 1:1 rock-ice composition without hydrogen predicts a radius about 15 per cent smaller than observed [⟦luque22⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "The detection of methane alongside water is consistent with equilibrium chemistry at 400 K, where CH4 is the main carbon carrier. The CO2 abundance suggested by the free retrieval is higher than equilibrium predicts at this metallicity; a similar tension has been reported for other temperate sub-Neptunes [⟦madhu23⟧, ⟦benneke24⟧] and may reflect vertical mixing, photochemistry or a higher metallicity than our grid prefers, but at 2.7$\\sigma$ we do not interpret it further."
+    }
+   ]
+  },
+  {
+   "title": "5.2 Comparison with other temperate sub-Neptunes",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Among the sub-Neptunes with JWST spectra and equilibrium temperatures below 500 K, TOI-8264 b is the first orbiting a K dwarf. Its mean molecular weight is similar to that retrieved for K2-18 b [⟦madhu23⟧] and lower than those of TOI-270 d [⟦benneke24⟧] and GJ 9827 d [⟦piaulet24⟧]. The clear 1.4 $\\mu$m band, with an amplitude of about 2.4 scale heights, fits the trend of larger features at $T_{\\rm eq}<500$ K reported by Brande et al. [⟦brande24⟧], which was established mostly with M-dwarf hosts. That a K-dwarf planet follows the same trend suggests that the trend is set by the planetary temperature rather than by the host's ultraviolet spectrum, although a single object cannot separate the two."
+    },
+    {
+     "kind": "p",
+     "text": "In the mass-metallicity plane, a metallicity of 62 times solar at 6.4 $M_{\\oplus}$ lies below the extrapolation of the giant-planet relations of Thorngren et al. [⟦thorngren16⟧] and Welbanks et al. [⟦welbanks19⟧], as do most sub-Neptune metallicities measured so far; the sub-Neptune population shows a scatter of more than an order of magnitude at fixed mass, which may reflect differences in formation location, envelope processing, or atmospheric escape."
+    }
+   ]
+  },
+  {
+   "title": "5.3 Limitations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our constraints rest on three transits, and only one with NIRSpec, so the CH4 and CO2 information comes from a single visit. The cloud treatment is a grey deck; hazes with wavelength-dependent opacity, expected at this temperature [⟦nagpal26⟧], could change the inferred abundances at short wavelengths. The equilibrium grid fixes C/O and assumes an isothermal profile. Finally, the mass is measured at 7.6$\\sigma$, and its uncertainty contributes about a third of the uncertainty on $\\mu$ through the surface gravity. Additional transits with NIRSpec and MIRI would refine the carbon chemistry and extend the spectral leverage on clouds [⟦binet26⟧]."
+    }
+   ]
+  },
+  {
+   "title": "6 Conclusions",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We have observed three transits of the temperate sub-Neptune TOI-8264 b with JWST and measured its mass with HARPS and SPIRou. The 0.6-5.2 $\\mu$m transmission spectrum shows H2O (4.1$\\sigma$) and CH4 (3.2$\\sigma$), with tentative CO2. Free-chemistry retrievals give $\\mu=3.58^{+0.49}_{-0.36}$ amu and a chemical-equilibrium grid gives an atmospheric metallicity of $62^{+36}_{-26}$ times solar. A model including unocculted stellar heterogeneity is not favoured ($\\Delta\\ln\\mathcal{Z}=0.4$). TOI-8264 b thus hosts a moderately enriched hydrogen envelope and is a useful counterpart, around a K dwarf, to the temperate sub-Neptunes of M dwarfs. Its long period and bright host make it a good target for further transits with JWST and, in the future, with Ariel [⟦tinetti18⟧, ⟦edwards19⟧]."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "This work is based on observations made with the NASA/ESA/CSA James Webb Space Telescope, obtained at the Space Telescope Science Institute, which is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS 5-03127; these observations are associated with program DD 9874. We thank the STScI scheduling team for their help in placing the three visits. This paper includes data collected by the TESS mission, funded by the NASA Science Mission Directorate, and is based on observations obtained at the Canada-France-Hawaii Telescope (CFHT) with SPIRou and on archival data from the ESO 3.6-m telescope with HARPS. A.V. and N.P. acknowledge support from the Fonds de recherche du Québec - Nature et technologies (FRQNT). O.P. acknowledges funding from the Natural Sciences and Engineering Research Council of Canada (NSERC) Discovery Grants program and from the Trottier Family Foundation through iREx."
+    }
+   ]
+  },
+  {
+   "title": "Data availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The JWST data are available from MAST at doi:10.17909/x4ka-7p21. The reduced transmission spectra, retrieval posteriors and radial velocities are available on Zenodo at doi:10.5281/zenodo.16483027. TESS light curves are available from MAST."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "fulton17",
+   "tag": "1",
+   "text": "B. J. Fulton, E. A. Petigura, A. W. Howard, et al. (2017). The California-Kepler Survey. III. A Gap in the Radius Distribution of Small Planets. AJ 154, 109."
+  },
+  {
+   "key": "rogers21",
+   "tag": "2",
+   "text": "J. G. Rogers and J. E. Owen (2021). Unveiling the planet population at birth. MNRAS 503, 1526."
+  },
+  {
+   "key": "luque22",
+   "tag": "3",
+   "text": "R. Luque and E. Pallé (2022). Density, not radius, separates rocky and water-rich small planets orbiting M dwarf stars. Science 377, 1211."
+  },
+  {
+   "key": "wilkinson26",
+   "tag": "4",
+   "text": "C. Wilkinson, B. Charnay, S. Mazevet, B. Perrier, A.-M. Lagrange, and L. Delaye (2026). Resolving core-envelope degeneracies in giant planets and sub-Neptunes: Constraining the equivalence in the presence of dilute gradients. arXiv e-prints."
+  },
+  {
+   "key": "benneke13",
+   "tag": "5",
+   "text": "B. Benneke and S. Seager (2013). How to Distinguish between Cloudy Mini-Neptunes and Water/Volatile-dominated Super-Earths. ApJ 778, 153."
+  },
+  {
+   "key": "madhu23",
+   "tag": "6",
+   "text": "N. Madhusudhan, S. Sarkar, S. Constantinou, M. Holmberg, A. A. A. Piette, and J. I. Moses (2023). Carbon-bearing Molecules in a Possible Hycean Atmosphere. ApJL 956, L13."
+  },
+  {
+   "key": "holmberg24",
+   "tag": "7",
+   "text": "M. Holmberg and N. Madhusudhan (2024). Possible hycean conditions in the sub-Neptune TOI-270 d. A&A 683, L2."
+  },
+  {
+   "key": "benneke24",
+   "tag": "8",
+   "text": "B. Benneke, M. Roy, L.-P. Coulombe, et al. (2024). JWST Reveals the Atmosphere of a Sub-Neptune with a Miscible-Envelope: TOI-270 d. arXiv e-prints."
+  },
+  {
+   "key": "piaulet24",
+   "tag": "9",
+   "text": "C. Piaulet-Ghorayeb, B. Benneke, M. Radica, et al. (2024). JWST/NIRISS Reveals the Water-rich \"Steam World\" Atmosphere of GJ 9827 d. ApJL 974, L10."
+  },
+  {
+   "key": "kempton23",
+   "tag": "10",
+   "text": "E. M.-R. Kempton, M. Zhang, J. L. Bean, et al. (2023). A reflective, metal-rich atmosphere for GJ 1214b from its JWST phase curve. Nature 620, 67."
+  },
+  {
+   "key": "schlawin24",
+   "tag": "11",
+   "text": "E. Schlawin, K. Ohno, T. J. Bell, et al. (2024). Possible Carbon Dioxide above the Thick Aerosols of GJ 1214 b. ApJL 974, L33."
+  },
+  {
+   "key": "ohno25",
+   "tag": "12",
+   "text": "K. Ohno, E. Schlawin, T. Bell, et al. (2025). A Possible Metal-Dominated Atmosphere Below the Thick Aerosols of GJ 1214 b Suggested by Its JWST Panchromatic Transmission Spectrum. ApJL 979, L7."
+  },
+  {
+   "key": "ahrer25",
+   "tag": "13",
+   "text": "E.-M. Ahrer, M. Radica, C. Piaulet-Ghorayeb, et al. (2025). Escaping Helium and a Highly Muted Spectrum Suggest a Metal-enriched Atmosphere on Sub-Neptune GJ 3090 b from JWST Transit Spectroscopy. ApJL 985, L10."
+  },
+  {
+   "key": "davenport25",
+   "tag": "14",
+   "text": "B. Davenport, D. Dragomir, R. MacDonald, et al. (2025). TOI-421 b: A Hot Sub-Neptune with a Haze-free, Low Mean Molecular Weight Atmosphere. ApJL 984, L44."
+  },
+  {
+   "key": "crossfield17",
+   "tag": "15",
+   "text": "I. J. M. Crossfield and L. Kreidberg (2017). Trends in Atmospheric Properties of Neptune-size Exoplanets. AJ 154, 261."
+  },
+  {
+   "key": "brande24",
+   "tag": "16",
+   "text": "J. Brande, I. J. M. Crossfield, L. Kreidberg, et al. (2024). Clouds and Clarity: Revisiting Atmospheric Feature Trends in Neptune-size Exoplanets. ApJL 961, L23."
+  },
+  {
+   "key": "nagpal26",
+   "tag": "17",
+   "text": "V. Nagpal, M. Steinrueck, D. Powell, P. Gao, D. Samra, and W. Cukier (2026). Wet Removal and Cloud Enhancement: The Microphysics of Cloud-Haze Interactions on Sub-Neptunes. arXiv e-prints."
+  },
+  {
+   "key": "rackham18",
+   "tag": "18",
+   "text": "B. V. Rackham, D. Apai, and M. S. Giampapa (2018). The Transit Light Source Effect: False Spectral Features and Incorrect Densities for M-dwarf Transiting Planets. ApJ 853, 122."
+  },
+  {
+   "key": "rackham19",
+   "tag": "19",
+   "text": "B. V. Rackham, D. Apai, and M. S. Giampapa (2019). The Transit Light Source Effect. II. The Impact of Stellar Heterogeneity on Transmission Spectra of Planets Orbiting Broadly Sun-like Stars. AJ 157, 96."
+  },
+  {
+   "key": "lim23",
+   "tag": "20",
+   "text": "O. Lim, B. Benneke, R. Doyon, et al. (2023). Atmospheric Reconnaissance of TRAPPIST-1 b with JWST/NIRISS: Evidence for Strong Stellar Contamination in the Transmission Spectra. ApJL 955, L22."
+  },
+  {
+   "key": "moran23",
+   "tag": "21",
+   "text": "S. E. Moran, K. B. Stevenson, D. K. Sing, et al. (2023). High Tide or Riptide on the Cosmic Shoreline? A Water-rich Atmosphere or Stellar Contamination for the Warm Super-Earth GJ 486b from JWST Observations. ApJL 948, L11."
+  },
+  {
+   "key": "rosenthal26",
+   "tag": "22",
+   "text": "H. Rosenthal, L. Kaltenegger, R. J. MacDonald, R. Payne, and E. Mullens (2026). Veiled in Starlight: Impacts of Stellar Contamination on Retrievals of TRAPPIST-1f's Atmospheric Composition. arXiv e-prints."
+  },
+  {
+   "key": "lim26",
+   "tag": "23",
+   "text": "O. Lim, R. Doyon, R. J. MacDonald, É. Artigau, M. Radica, M. Plotnykov, et al. (2026). Atmospheric Reconnaissance of TRAPPIST-1 f with JWST NIRISS SOSS: No Evidence for the Transit Light Source Effect. arXiv e-prints."
+  },
+  {
+   "key": "ko26",
+   "tag": "24",
+   "text": "Z. Ko, N. Espinoza, A. Jordán, D. Bayliss, E. M. Bryant, M. Schlecker, et al. (2026). JWST Transmission Spectroscopy of TOI-3235 b: Challenges in Constraining Giant Planet Atmospheres Around M Dwarfs Amid Stellar Contamination. arXiv e-prints."
+  },
+  {
+   "key": "rackham23",
+   "tag": "25",
+   "text": "B. V. Rackham, N. Espinoza, S. V. Berdyugina, et al. (2023). The effect of stellar contamination on space-based transmission spectroscopy. RAS Techniques and Instruments 2, 148."
+  },
+  {
+   "key": "jenkins16",
+   "tag": "26",
+   "text": "J. M. Jenkins, J. D. Twicken, S. McCauliff, J. Campbell, D. Sanderfer, D. Lung, et al. (2016). The TESS science processing operations center. Proc. SPIE 9913, 99133E."
+  },
+  {
+   "key": "pouliot26",
+   "tag": "27",
+   "text": "N. Pouliot, A. Vachon, M. Lapointe, R. Gingras, and O. Paquette (2026). TOI-8264 b: a temperate sub-Neptune transiting a bright, active K dwarf. AJ 171, 118."
+  },
+  {
+   "key": "kempton18",
+   "tag": "28",
+   "text": "E. M.-R. Kempton, J. L. Bean, D. R. Louie, et al. (2018). A Framework for Prioritizing the TESS Planetary Candidates Most Amenable to Atmospheric Characterization. PASP 130, 114401."
+  },
+  {
+   "key": "ricker15",
+   "tag": "29",
+   "text": "G. R. Ricker, J. N. Winn, R. Vanderspek, D. W. Latham, G. Á. Bakos, J. L. Bean, et al. (2015). Transiting Exoplanet Survey Satellite (TESS). Journal of Astronomical Telescopes, Instruments, and Systems 1, 014003."
+  },
+  {
+   "key": "mamajek08",
+   "tag": "30",
+   "text": "E. E. Mamajek and L. A. Hillenbrand (2008). Improved Age Estimation for Solar-Type Dwarfs Using Activity-Rotation Diagnostics. ApJ 687, 1264."
+  },
+  {
+   "key": "noyes84",
+   "tag": "31",
+   "text": "R. W. Noyes, L. W. Hartmann, S. L. Baliunas, D. K. Duncan, and A. H. Vaughan (1984). Rotation, convection, and magnetic activity in lower main-sequence stars. ApJ 279, 763."
+  },
+  {
+   "key": "fm17",
+   "tag": "32",
+   "text": "D. Foreman-Mackey, E. Agol, S. Ambikasaran, and R. Angus (2017). Fast and Scalable Gaussian Process Modeling with Applications to Astronomical Time Series. AJ 154, 220."
+  },
+  {
+   "key": "donati20",
+   "tag": "33",
+   "text": "J.-F. Donati, D. Kouach, C. Moutou, et al. (2020). SPIRou: NIR velocimetry and spectropolarimetry at the CFHT. MNRAS 498, 5684."
+  },
+  {
+   "key": "mayor03",
+   "tag": "34",
+   "text": "M. Mayor, F. Pepe, D. Queloz, et al. (2003). Setting New Standards with HARPS. The Messenger 114, 20."
+  },
+  {
+   "key": "artigau22",
+   "tag": "35",
+   "text": "É. Artigau, C. Cadieux, N. J. Cook, et al. (2022). Line-by-line Velocity Measurements: an Outlier-resistant Method for Precision Velocimetry. AJ 164, 84."
+  },
+  {
+   "key": "gardner23",
+   "tag": "36",
+   "text": "J. P. Gardner, J. C. Mather, R. Abbott, J. S. Abell, M. Abernathy, et al. (2023). The James Webb Space Telescope Mission. PASP 135, 068001."
+  },
+  {
+   "key": "doyon23",
+   "tag": "37",
+   "text": "R. Doyon, C. J. Willott, J. B. Hutchings, A. Sivaramakrishnan, L. Albert, D. Lafrenière, et al. (2023). The Near Infrared Imager and Slitless Spectrograph for the James Webb Space Telescope. I. Instrument Overview and in-Flight Performance. PASP 135, 098001."
+  },
+  {
+   "key": "albert23",
+   "tag": "38",
+   "text": "L. Albert, D. Lafrenière, R. Doyon, et al. (2023). The Near Infrared Imager and Slitless Spectrograph for the James Webb Space Telescope. III. Single Object Slitless Spectroscopy. PASP 135, 075001."
+  },
+  {
+   "key": "jakobsen22",
+   "tag": "39",
+   "text": "P. Jakobsen, P. Ferruit, C. Alves de Oliveira, et al. (2022). The Near-Infrared Spectrograph (NIRSpec) on the James Webb Space Telescope. I. Overview of the instrument and its capabilities. A&A 661, A80."
+  },
+  {
+   "key": "birkmann22",
+   "tag": "40",
+   "text": "S. M. Birkmann, P. Ferruit, G. Giardino, et al. (2022). The Near-Infrared Spectrograph (NIRSpec) on the James Webb Space Telescope. IV. Capabilities and predicted performance for exoplanet characterization. A&A 661, A83."
+  },
+  {
+   "key": "radica23",
+   "tag": "41",
+   "text": "M. Radica, L.-P. Coulombe, J. Taylor, L. Albert, R. Allart, B. Benneke, et al. (2023). Awesome SOSS: transmission spectroscopy of WASP-96b with NIRISS/SOSS. MNRAS 524, 835."
+  },
+  {
+   "key": "bell22",
+   "tag": "42",
+   "text": "T. J. Bell, E. Ahrer, J. Brande, A. L. Carter, A. D. Feinstein, et al. (2022). Eureka!: An End-to-End Pipeline for JWST Time-Series Observations. Journal of Open Source Software 7, 4503."
+  },
+  {
+   "key": "espinoza19",
+   "tag": "43",
+   "text": "N. Espinoza, D. Kossakowski, and R. Brahm (2019). juliet: a versatile modelling tool for transiting and non-transiting exoplanetary systems. MNRAS 490, 2262."
+  },
+  {
+   "key": "kreidberg15",
+   "tag": "44",
+   "text": "L. Kreidberg (2015). batman: BAsic Transit Model cAlculatioN in Python. PASP 127, 1161."
+  },
+  {
+   "key": "grant24",
+   "tag": "45",
+   "text": "D. Grant and H. R. Wakeford (2024). ExoTiC-LD: thirty seconds to stellar limb-darkening coefficients. Journal of Open Source Software 9, 6816."
+  },
+  {
+   "key": "gaia23",
+   "tag": "46",
+   "text": "Gaia Collaboration, A. Vallenari, A. G. A. Brown, T. Prusti, et al. (2023). Gaia Data Release 3. Summary of the content and survey properties. A&A 674, A1."
+  },
+  {
+   "key": "molliere19",
+   "tag": "47",
+   "text": "P. Mollière, J. P. Wardenier, R. van Boekel, Th. Henning, K. Molaverdikhani, and I. A. G. Snellen (2019). petitRADTRANS: a Python radiative transfer package for exoplanet characterization and retrieval. A&A 627, A67."
+  },
+  {
+   "key": "feroz09",
+   "tag": "48",
+   "text": "F. Feroz, M. P. Hobson, and M. Bridges (2009). MULTINEST: an efficient and robust Bayesian inference tool for cosmology and particle physics. MNRAS 398, 1601."
+  },
+  {
+   "key": "buchner14",
+   "tag": "49",
+   "text": "J. Buchner, A. Georgakakis, K. Nandra, et al. (2014). X-ray spectral modelling of the AGN obscuring region in the CDFS: Bayesian model selection and catalogue. A&A 564, A125."
+  },
+  {
+   "key": "asplund09",
+   "tag": "50",
+   "text": "M. Asplund, N. Grevesse, A. J. Sauval, and P. Scott (2009). The Chemical Composition of the Sun. ARA&A 47, 481."
+  },
+  {
+   "key": "macdonald23",
+   "tag": "51",
+   "text": "R. J. MacDonald (2023). POSEIDON: A Multidimensional Atmospheric Retrieval Code for Exoplanet Spectra. Journal of Open Source Software 8, 4873."
+  },
+  {
+   "key": "pinhas18",
+   "tag": "52",
+   "text": "A. Pinhas, B. V. Rackham, N. Madhusudhan, and D. Apai (2018). Retrieval of planetary and stellar properties in transmission spectroscopy with AURA. MNRAS 480, 5314."
+  },
+  {
+   "key": "husser13",
+   "tag": "53",
+   "text": "T.-O. Husser, S. Wende-von Berg, S. Dreizler, D. Homeier, A. Reiners, T. Barman, and P. H. Hauschildt (2013). A new extensive library of PHOENIX stellar atmospheres and synthetic spectra. A&A 553, A6."
+  },
+  {
+   "key": "misener26",
+   "tag": "54",
+   "text": "W. Misener, P. Gao, N. L. Wallack, M. A. Thompson, and A. Shahar (2026). Magnesium silicate condensation in sub-Neptune envelopes: the fundamental link between chemistry, structure, and observables. arXiv e-prints."
+  },
+  {
+   "key": "young26",
+   "tag": "55",
+   "text": "E. D. Young (2026). Hydrogen Engulfment into Sub-Neptune Cores through Magma Ocean Convective Surface Renewal. arXiv e-prints."
+  },
+  {
+   "key": "marcum26",
+   "tag": "56",
+   "text": "S. P. Marcum, L. Stixrude, and E. D. Young (2026). An Equation of State for Supercritical Silicate-Hydrogen Mixtures at Sub-Neptune Interior Conditions. arXiv e-prints."
+  },
+  {
+   "key": "thorngren16",
+   "tag": "57",
+   "text": "D. P. Thorngren, J. J. Fortney, R. A. Murray-Clay, and E. D. Lopez (2016). The Mass-Metallicity Relation for Giant Planets. ApJ 831, 64."
+  },
+  {
+   "key": "welbanks19",
+   "tag": "58",
+   "text": "L. Welbanks, N. Madhusudhan, N. F. Allard, I. Hubeny, F. Spiegelman, and T. Leininger (2019). Mass-Metallicity Trends in Transiting Exoplanets from Atmospheric Abundances of H2O, Na, and K. ApJL 887, L20."
+  },
+  {
+   "key": "binet26",
+   "tag": "59",
+   "text": "M. Binet, N. Madhusudhan, M. Holmberg, and S. Sarkar (2026). A Homogeneous Survey of JWST MIRI Transmission Spectra of 10 Exoplanets. arXiv e-prints."
+  },
+  {
+   "key": "tinetti18",
+   "tag": "60",
+   "text": "G. Tinetti, P. Drossart, P. Eccleston, et al. (2018). A chemical survey of exoplanets with ARIEL. Experimental Astronomy 46, 135."
+  },
+  {
+   "key": "edwards19",
+   "tag": "61",
+   "text": "B. Edwards, L. Mugnai, G. Tinetti, E. Pascale, and S. Sarkar (2019). An Updated Study of Potential Targets for Ariel. AJ 157, 242."
+  }
+ ],
+ "bib_style": "numeric"
+}

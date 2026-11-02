@@ -1,0 +1,21 @@
+{
+ "node": "B6",
+ "kind": "patch",
+ "host": "2609.33051",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.p2.1",
+   "after": 3,
+   "text": "Recall-oriented benchmarks of quantized recurrent states further find long-context retrieval failing at bit widths where perplexity is still close to that of the full-precision model (Ryu et al., 2026)."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "Ryu et al. (2026)",
+   "text": "H. Ryu, M. Kang, J. Hwang, and S. Yoon (2026). StateBits: a recall benchmark for quantized recurrent states in linear-attention and hybrid language models. arXiv preprint."
+  }
+ ]
+}

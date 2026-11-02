@@ -1,0 +1,21 @@
+{
+ "node": "A8",
+ "kind": "patch",
+ "host": "2610.03869",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.p2.1",
+   "after": 1,
+   "text": "Classical hardware decoders already operate at these latencies but pay for it in accuracy; the Kittiwake core, for instance, reaches a circuit-level threshold of $0.598\\%$, compared with about $0.7\\%$ for matching [⟦new.A8⟧], which leaves room for compact learned decoders that approach matching accuracy at comparable speed."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A8",
+   "cites_node": "A2",
+   "tag": "",
+   "text": "H. Pryce, J. Lindley, I. Firth, T. Ashworth, M. Rennie, S. Hartley, and C. Holroyd (2026). Real-time decoding of lattice surgery on a networked FPGA cluster at code distances up to 23. arXiv e-prints."
+  }
+ ]
+}

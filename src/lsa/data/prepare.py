@@ -2,14 +2,16 @@
 
     lsa data prepare glm53_flash --sources edgebench     # a tokenized card - its sources in one tokenizer's ids
     lsa data prepare edgebench --sessions <run dirs...>  # the source this repository collects
-    lsa data prepare ruler --jobs 32                     # a benchmark rendered by its generator
+    lsa data prepare gutenberg                           # a source streamed from the hub, as the first collector did
+    lsa data prepare ruler --jobs 32                    # a benchmark rendered by its generator
     lsa data prepare longbench2 --max-context 131072     # a benchmark read from the hub and truncated
     lsa data prepare papertrail                          # a benchmark copied from its own repository
     lsa data prepare production                          # the workload a production run sends
     lsa data prepare ruler --check                       # read RULER's prepared cells, submit nothing
     lsa data prepare ruler --help                        # what that card's generator takes
 
-A source or a tokenized card is prepared by [tokenize](tokenize.py), a workload by
+A source with a `collector` is collected from the hub by [collect](collect.py), the one preparer whose job reads
+the hub and so is not offline. Any other source or a tokenized card is prepared by [tokenize](tokenize.py), a workload by
 the production prompt builder, and a benchmark by the generator its card's `preparer` names - the kind alone
 does not tell RULER from LongBench v2 or PaperTrail. Each generator declares its own options, so `lsa data prepare <card>`
 takes what that card's generator does, and the slurm flags over the job it asks for.
@@ -52,6 +54,10 @@ def preparer_of(card: assets.DatasetCard) -> CardPreparer:
     Raises:
         ValueError: The card is token shards, or a benchmark that names no generator, so nothing prepares it.
     """
+    if isinstance(card, assets.SourceCard) and card.collector:
+        from lsa.data import collect
+
+        return collect
     if isinstance(card, assets.SourceCard | assets.TokenizedCard):
         from lsa.data import tokenize
 
@@ -111,6 +117,10 @@ def main() -> None:
         function, arguments = preparer.job(card, args)
     except ValueError as refusal:
         parser.error(str(refusal))
-    environment = [*env.OFFLINE_HF, *env.EVAL_DATA, *env.exports({"PYTHONUNBUFFERED": "1"})]
+    # A preparer that reads the hub names its own environment, and every other one runs offline
+    environment = [
+        *getattr(preparer, "ENVIRONMENT", (*env.OFFLINE_HF, *env.EVAL_DATA)),
+        *env.exports({"PYTHONUNBUFFERED": "1"}),
+    ]
     print(f"{card.name}: prepared by {function.__module__}.{function.__qualname__}", flush=True)
     slurm.submit(args, f"lsa-prepare-{card.name}", environment, preparer.PARAMETERS, function, *arguments)

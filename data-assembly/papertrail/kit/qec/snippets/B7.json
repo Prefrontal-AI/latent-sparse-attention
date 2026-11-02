@@ -1,0 +1,21 @@
+{
+ "node": "B7",
+ "kind": "patch",
+ "host": "2609.29267",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.SS1.SSS3.Px4.p1.1",
+   "after": 4,
+   "text": "Moving the checks to the square-octagon color code, for instance, gives a logical error rate of $4.3\\times 10^{-10}$ per accepted state at $d_{\\mathrm{cultiv}}=5$ and $p=10^{-3}$ (Hedlund et al., 2026)."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "Hedlund et al., 2026",
+   "text": "O. Hedlund, E. Sandberg, J. Wiklund, and M. Forsgren (2026). Magic state cultivation in the square-octagon colour code."
+  }
+ ]
+}

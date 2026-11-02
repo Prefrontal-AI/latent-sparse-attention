@@ -1,0 +1,21 @@
+{
+ "node": "B4",
+ "kind": "patch",
+ "host": "2609.12698",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS2.p2.1",
+   "after": 4,
+   "text": "At distance five, color-code cultivation reaches far lower accepted errors at the price of a larger code and many more postselected checks; the square-octagon cultivation circuit of Ref. [⟦new.B1⟧], for instance, reports about $4.3\\times 10^{-10}$ at the same $p$."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "O. Hedlund, E. Sandberg, J. Wiklund, and M. Forsgren (2026). Magic state cultivation in the square-octagon colour code."
+  }
+ ]
+}

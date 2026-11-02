@@ -1,0 +1,21 @@
+{
+ "node": "A7",
+ "kind": "patch",
+ "host": "2610.03007",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.p3.1",
+   "after": 2,
+   "text": "Capacity can also be tied to the input itself: AlloKV (Sadowska et al., 2026) sets the total budget at prefill in proportion to the 0.43 power of the prompt length, after finding that the budget needed to retain full-cache accuracy grows that slowly."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "Sadowska et al. (2026)",
+   "text": "I. Sadowska, F. Mowat, T. Wierzbicki, and K. Ballantyne (2026). How much cache does a longer prompt need? Allometric budgets for KV-cache eviction. arXiv preprint."
+  }
+ ]
+}

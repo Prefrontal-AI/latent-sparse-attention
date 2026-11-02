@@ -1,0 +1,21 @@
+{
+ "node": "B10",
+ "kind": "patch",
+ "host": "2609.26894",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S3.SS3.p8.1",
+   "after": 3,
+   "text": "Our $Q_{\\star}^{\\prime}$ is about an order of magnitude larger than the $Q_{\\star}^{\\prime}=1.94\\times 10^{6}$ obtained for the G dwarf KELT-29 once its transit times are corrected for the star's line-of-sight acceleration [⟦new.B10⟧]. Had TOI-2109 dissipated as efficiently, Equation 7 with $q=0.00331$ and $a/R_{\\star}=2.268$ would predict $\\dot{P}\\approx-38.1$ ms/yr for TOI-2109 b, roughly eleven times the rate we measure."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B10",
+   "cites_node": "B2",
+   "tag": "",
+   "text": "Mølgaard, I., Thygesen, K., Lauridsen, J., et al. 2026, Apparent orbital decay from line-of-sight acceleration: joint transit-timing, radial-velocity and Hipparcos–Gaia modelling of hot-Jupiter hosts, with forecasts for Gaia DR4, AJ, submitted."
+  }
+ ]
+}

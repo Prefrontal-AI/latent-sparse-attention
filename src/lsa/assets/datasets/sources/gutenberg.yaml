@@ -10,3 +10,9 @@ about: Project Gutenberg books from Common Pile, one book per document
 dataset: common-pile/project_gutenberg_filtered
 revision: 3cdf6879c807f4e4e063f2ceb23bc268d8c29ab7
 licence: per-document
+
+# Collected as one row of the hub dataset a document, kept at 64k tokens and over
+collector: text
+min_tokens: 65536
+count_tokenizer: HuggingFaceTB/SmolLM3-3B-Base
+count_tokenizer_revision: d78a42f79198603e614095753484a04c10c2b940

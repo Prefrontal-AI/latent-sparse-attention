@@ -1,0 +1,14 @@
+{
+ "node": "B4",
+ "kind": "patch",
+ "host": "2609.10850",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS3.p4.1",
+   "after": 4,
+   "text": "That explanation would not carry over to TOI-8317 b, whose host is a main-sequence G dwarf; taken at face value, its rate corresponds to $\\tau_{\\mathrm{mig}}=P/|\\dot{P}|\\approx 7.8$ Myr, shorter than solutions 1 and 2 allow at this period and compatible only with solution 3."
+  }
+ ],
+ "new_bib": []
+}

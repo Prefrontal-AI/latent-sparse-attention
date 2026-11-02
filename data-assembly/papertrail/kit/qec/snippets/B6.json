@@ -1,0 +1,27 @@
+{
+ "node": "B6",
+ "kind": "patch",
+ "host": "2609.19116",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS2.p1.1",
+   "after": 5,
+   "text": "A gap of comparable size has been found with genuine $\\ket{T}$-state simulations of the 17-qubit colour-code circuit CC17 [⟦new.B2⟧]."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS3.p1.1",
+   "after": 4,
+   "text": "For comparison, the exact $\\ket{T}$ logical error rate reported for the CC17 colour-code circuit at the same $p$ is $2.8\\times 10^{-9}$ [⟦new.B2⟧], so Rot5, at $8.1\\times 10^{-10}$, lies a factor of $\\sim 3.5$ below it despite its partially fault-tolerant S gate."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "",
+   "text": "E. Whitfield, C. Ashby, S. Hargreaves, R. Lyons, and A. Pellow (2026). Exact non-Clifford simulation of colour-code magic state cultivation under hardware-motivated noise. arXiv."
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+# The paper's SWA 128k decay reading a window of 4,608 keys, scored from its released checkpoint.
+# `evaluate` takes the checkpoint from here, so `--checkpoint` is not needed.
+defaults:
+  - decay_fineweb128k_window
+  - _self_
+
+run:
+  name: released-decay128k-swa-4608
+  evaluation:
+    checkpoint: ${root:training/native/released/decay128k-swa-4608/checkpoint/step-5866}
+
+attention:
+  window_size: 4608

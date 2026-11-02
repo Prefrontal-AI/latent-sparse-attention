@@ -10,3 +10,9 @@ about: Wikimedia pages from Common Pile
 dataset: common-pile/wikimedia_filtered
 revision: 0641bb84bd9b7162bcddf8be7836822161a9a342
 licence: per-document
+
+# Collected as one row of the hub dataset a document, kept at 64k tokens and over
+collector: text
+min_tokens: 65536
+count_tokenizer: HuggingFaceTB/SmolLM3-3B-Base
+count_tokenizer_revision: d78a42f79198603e614095753484a04c10c2b940

@@ -1,0 +1,21 @@
+{
+ "node": "A8",
+ "kind": "patch",
+ "host": "2609.35607",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p6.1",
+   "after": 3,
+   "text": "Combined NIRISS SOSS and NIRSpec G395H spectra of the temperate sub-Neptune TOI-8264 b, for example, resolved its water absorption and constrained the atmospheric metallicity to $62^{+36}_{-26}\\times$ solar [⟦new.A1⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "A. Vachon, R. Gingras, N. Pouliot, M. Lapointe, F. Thériault, and O. Paquette (2026). A moderately metal-enriched envelope on the temperate sub-Neptune TOI-8264 b from JWST NIRISS/SOSS and NIRSpec/G395H transmission spectroscopy. arXiv e-prints."
+  }
+ ]
+}

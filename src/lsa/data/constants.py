@@ -36,3 +36,9 @@ class Collected:
     # The two columns a shard carries that tokenizing reads
     DOC_ID: str = "doc_id"
     TEXT: str = "text"
+
+    # The three it carries beside them, which the collector writes - the source's name, its one licence label
+    # (spelled as the first collector spelled it) and the document's tokens under the collector's tokenizer
+    SOURCE: str = "source"
+    LICENSE: str = "license"
+    N_TOKENS: str = "n_tokens"

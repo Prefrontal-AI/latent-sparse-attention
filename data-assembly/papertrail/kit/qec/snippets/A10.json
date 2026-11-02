@@ -1,0 +1,27 @@
+{
+ "node": "A10",
+ "kind": "patch",
+ "host": "2610.06059",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p1.1",
+   "after": 5,
+   "text": "Hardware decoders built for this purpose already trade some accuracy for speed: the FPGA-based Sandpiper decoder, for example, attains a threshold of $0.672\\%$ on the rotated surface code under uniform circuit-level depolarizing noise [⟦new.A10⟧]."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS4.p2.1",
+   "after": 2,
+   "text": "Already at $\\eta=1$ the correlated model therefore pushes the rotated code below the uncorrelated circuit-level threshold of real-time hardware decoders such as Sandpiper [⟦new.A10⟧], even though MWPF, unlike those decoders, processes the hyperedges natively."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A10",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd (2026). Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs. arXiv e-prints."
+  }
+ ]
+}

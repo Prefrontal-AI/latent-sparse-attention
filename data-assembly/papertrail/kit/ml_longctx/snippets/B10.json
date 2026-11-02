@@ -1,0 +1,21 @@
+{
+ "node": "B10",
+ "kind": "patch",
+ "host": "2609.39185",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S6.SS1.SSS0.Px2.p1.1",
+   "after": 3,
+   "text": "Read through the bit-growth law of Veldhuis et al. (2026), under which the bits a Mamba state needs to keep its predictions at a fixed quality rise by 0.62 per doubling of the context, a gain of 0.25 bits corresponds to a decoded horizon about $2^{0.25/0.62}\\approx 1.32$ times longer at unchanged damage."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "Veldhuis et al. (2026)",
+   "text": "J. Veldhuis, F. Postma, R. Zwart, and M. Dekkers (2026). How many bits does a recurrent state need? Context-length scaling of state precision in Mamba and gated linear attention. arXiv preprint."
+  }
+ ]
+}

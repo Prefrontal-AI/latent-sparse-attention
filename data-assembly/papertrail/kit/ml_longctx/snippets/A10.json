@@ -1,0 +1,21 @@
+{
+ "node": "A10",
+ "kind": "patch",
+ "host": "2609.32663",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS3.SSS0.Px1.p1.1",
+   "after": 3,
+   "text": "Since the retention ratio is the same at every length, this relative saving does not grow with the context; Liu et al. (2026) estimate that a fixed 25% budget over-provisions 1M-token inputs roughly sevenfold, so a ratio that shrinks with length could compress the cache of Distance-KV further."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.SGDKV",
+   "cites_node": "A4",
+   "tag": "Liu et al. (2026)",
+   "text": "Zeyu Liu, Woomin Song, Xuandi Fu, Sai Muralidhar Jayanthi, Vivek Govindan, Aram Galstyan, Sravan Babu Bodapati, and Srikanth Ronanki (2026). SGD-KV: Summarization guided KV cache compression. arXiv preprint."
+  }
+ ]
+}

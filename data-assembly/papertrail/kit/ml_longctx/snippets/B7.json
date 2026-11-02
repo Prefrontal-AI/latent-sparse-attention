@@ -1,0 +1,27 @@
+{
+ "node": "B7",
+ "kind": "patch",
+ "host": "2609.38169",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS2.p1.1",
+   "after": 5,
+   "text": "Uniform INT8 shows the same asymmetry: it costs Qwen 8.74 points on the long-generation average but only 1.53 points on the short tasks (Table 2). This contrast is what the precision doubling cost of about 0.87 bits per state entry per doubling of context, reported by Ryu et al. (2026), would predict: our 2048-token calibration segments and the 65536-token generation cap are five doublings apart, so a uniform rowwise quantizer needs roughly 4.35 more bits at the end of a long generation than at calibration length, while short answers stay within a doubling or two of it."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S6.SS2.p1.1",
+   "after": 7,
+   "text": "Ryu et al. (2026) benchmark long-context recall under quantized GDN, KDA and Mamba-2 states and find that per-row INT8 loses recall fidelity within a few thousand tokens."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "Ryu et al. (2026)",
+   "text": "H. Ryu, M. Kang, J. Hwang, and S. Yoon (2026). StateBits: a recall benchmark for quantized recurrent states in linear-attention and hybrid language models. arXiv preprint."
+  }
+ ]
+}

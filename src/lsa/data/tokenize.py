@@ -29,7 +29,9 @@ which is a hash of the document id, picks the same documents whatever the tokeni
 **A source card collected into its own origin** is the agent trajectories, which [trajectories](trajectories.py) renders
 from the harness's run directories into the directory the card names as where it came from.
 
-**Any other source card** - one streamed from the hub, or read from elsewhere on the cluster - was collected
+**A source card with a `collector`** is streamed from the hub by [collect](collect.py), which is not this module's job.
+
+**Any other source card** - the in-house game runs, which are read from elsewhere on the cluster - was collected
 by a pipeline that predates this repository and has nothing to prepare here, and neither has a benchmark,
 whose prompts a harness renders, or a workload, which its builder writes.
 """
@@ -122,6 +124,11 @@ def require_preparable(card: assets.DatasetCard, sessions: list[str] | None = No
                 f"{card.name} is collected from harness run directories - name them with --sessions"
             )
         return
+    if isinstance(card, assets.SourceCard) and card.collector:
+        raise ValueError(
+            f"{card.name} is streamed from the hub by its collector, which `lsa data prepare` runs - "
+            "this module tokenizes what it collected"
+        )
     if isinstance(card, assets.SourceCard):
         raise ValueError(
             f"{card.name} was collected by a pipeline that predates this repository - there is nothing to "

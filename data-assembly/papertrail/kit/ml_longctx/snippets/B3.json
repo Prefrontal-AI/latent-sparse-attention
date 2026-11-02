@@ -1,0 +1,21 @@
+{
+ "node": "B3",
+ "kind": "patch",
+ "host": "2608.30386",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "A5.SS1.p1.2",
+   "after": 3,
+   "text": "Repeated requantization is the regime described by the bit-growth law of Veldhuis et al. (2026), in which the bits needed per state entry rise by about 0.62 for every doubling of the context; a single rounding per stored checkpoint does not compound in this way."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "Veldhuis et al. (2026)",
+   "text": "J. Veldhuis, F. Postma, R. Zwart, and M. Dekkers (2026). How many bits does a recurrent state need? Context-length scaling of state precision in Mamba and gated linear attention. arXiv preprint."
+  }
+ ]
+}

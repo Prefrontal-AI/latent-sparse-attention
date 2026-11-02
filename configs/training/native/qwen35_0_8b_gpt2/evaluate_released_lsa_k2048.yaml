@@ -1,0 +1,13 @@
+# The paper's N-LSA 128k decay reading 2,048 long-range keys, scored from its released checkpoint.
+# `evaluate` takes the checkpoint from here, so `--checkpoint` is not needed.
+defaults:
+  - decay_fineweb128k_lsa
+  - _self_
+
+run:
+  name: released-decay128k-lsa-2048
+  evaluation:
+    checkpoint: ${root:training/native/released/decay128k-lsa-2048/checkpoint/step-5866}
+
+attention:
+  top_k: 2048

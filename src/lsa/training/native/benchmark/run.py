@@ -386,7 +386,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument("config", help="path to the native yaml that names the checkpoint's attention")
     parser.add_argument(
-        "--checkpoint", required=True, help="the torchtitan step folder, .../checkpoint/step-N"
+        "--checkpoint",
+        default=None,
+        help="the torchtitan step folder, .../checkpoint/step-N - the config's run.evaluation.checkpoint by default",
     )
     parser.add_argument(
         "--tasks", default="core", help=f"a preset in {sorted(tasks.PRESETS)} or tasks, comma-separated"
@@ -424,7 +426,8 @@ def command(args: argparse.Namespace) -> None:
     # A replica on every rank, then the user's own overrides
     [experiment] = load(args.config, ["run.dp_shard=1", f"run.dp_replicate={ranks}", *args.overrides])
     tasks.expand(args.tasks)
-    label = args.label or default_label(args.checkpoint)
+    checkpoint = experiment.scored_checkpoint(args.checkpoint)
+    label = args.label or default_label(checkpoint)
     records_root = args.records or str(paths.training() / RECORDS)
     extra = {
         "limit": args.limit,
@@ -433,9 +436,9 @@ def command(args: argparse.Namespace) -> None:
         "max_gen_toks": args.max_gen_toks,
     }
     print(
-        f"{label}: step {step_of(args.checkpoint)}, {experiment.attention.kind}, tasks {args.tasks}, records {records_root}",
+        f"{label}: step {step_of(checkpoint)}, {experiment.attention.kind}, tasks {args.tasks}, records {records_root}",
         flush=True,
     )
     if args.dry_run:
         return
-    submit(experiment, args.checkpoint, args.tasks, label, records_root, extra, parameters, args.folder)
+    submit(experiment, checkpoint, args.tasks, label, records_root, extra, parameters, args.folder)

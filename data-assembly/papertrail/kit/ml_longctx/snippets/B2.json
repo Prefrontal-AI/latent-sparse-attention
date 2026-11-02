@@ -1,0 +1,576 @@
+{
+ "node": "B2",
+ "kind": "fake_paper",
+ "date": "2026-09-15",
+ "title": "StateBits: A Recall Benchmark for Quantized Recurrent States in Linear-Attention and Hybrid Language Models",
+ "authors": [
+  "Hyejin Ryu",
+  "Minseok Kang",
+  "Jiwoo Hwang",
+  "Sangwoo Yoon"
+ ],
+ "affiliations": [
+  "School of Electrical Engineering, KAIST, Daejeon, Republic of Korea",
+  "Graduate School of Artificial Intelligence, POSTECH, Pohang, Republic of Korea"
+ ],
+ "abstract": "Linear-attention, state-space and hybrid language models keep a fixed-size recurrent state that is rewritten at every decoding step, and serving systems increasingly store it in eight bits or fewer. Existing evaluations of state quantization measure perplexity or short-context accuracy. We introduce StateBits, a benchmark that measures how quantized recurrent states affect long-context recall. StateBits covers fourteen released models with diagonal and delta-rule recurrences, from 1.3B to 48B parameters, contexts from 4K to 128K tokens, seven storage formats, and a fidelity metric, answer-token agreement with the same model using an FP32 state, that is defined even where the model's own recall is poor. Three findings stand out. First, recall breaks before perplexity: with per-row INT8 states, 9 of 14 models keep PG-19 perplexity within 0.01 nats of FP32 at 8K tokens, but only 3 keep recall agreement above 0.98. Second, at equal width, stochastic rounding and BF16 dominate round-to-nearest integers and FP8 at long context. Third, the bits needed for faithful recall grow linearly in the logarithm of the context length, with a pooled precision doubling cost (PDC) of 0.87 bits per state entry per doubling (95% CI 0.85-0.89) that is nearly the same for diagonal and delta-rule models. The benchmark, prompts and per-model results are publicly released.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Hybrid language models that replace most attention layers with linear attention or state-space layers are now deployed at scale [⟦kimi⟧, ⟦qwen35⟧, ⟦nemoh⟧, ⟦nemo3⟧]. Their recurrent layers keep a state of fixed size, but that state is read and written at every decoding step and has to be kept for every request and every cached prefix [⟦marconi⟧, ⟦dasc⟧]. Quantizing it is the obvious way to cut both memory traffic and footprint, and several recent works do so for selective SSMs [⟦quamba2⟧, ⟦qmamba⟧] and for delta-rule models [⟦damp⟧, ⟦kozyrev⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "A recurrent state is an unusual quantization target. Every write starts from the previously quantized state, so rounding errors are fed back and can persist for as long as the channel that holds them retains information [⟦damp⟧, ⟦veldhuis⟧]. The damage therefore depends on how long the model runs on a quantized state, and an evaluation at a few thousand tokens can miss it. It also depends on what is measured. Most evaluations use perplexity or short-answer accuracy [⟦quamba2⟧, ⟦qmamba⟧, ⟦veldhuis⟧], which are dominated by local predictions. Long-context use, in contrast, is often limited by recall: the ability to retrieve a specific item written into the state many thousands of tokens earlier [⟦zoology⟧, ⟦arora⟧, ⟦jelassi⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "We introduce StateBits, a benchmark for the effect of state quantization on long-context recall. StateBits evaluates fourteen released models spanning pure SSMs, gated linear attention, delta-rule models and hybrids, at contexts from 4K to 128K tokens and in seven storage formats. Its central metric is answer-token agreement: the fraction of answer tokens on which the model with a quantized state makes the same greedy prediction as the same model with an FP32 state. Agreement isolates the effect of the storage format from the model's own recall ability, so it remains informative for small models whose FP32 recall at 128K tokens is weak."
+    },
+    {
+     "kind": "p",
+     "text": "Our contributions are: (1) the benchmark, a reference harness, and results for 14 models × 6 lengths × 7 formats (Section 3); (2) evidence that recall degrades at widths where perplexity is still essentially unchanged (Section 4.1); (3) a comparison of formats and rounding rules at long context (Section 4.2); (4) an analysis of delta-rule erasure (Section 4.3); and (5) a fit of the bits needed for faithful recall as a function of context length across all fourteen models, which yields a single per-doubling cost that holds across recurrence types (Section 4.4)."
+    }
+   ]
+  },
+  {
+   "title": "2 Related Work",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Recurrent and hybrid models. Linear attention [⟦katha⟧] and its gated variants [⟦gla⟧] summarize the past in a matrix-valued state; Mamba and Mamba-2 [⟦mamba⟧, ⟦mamba2⟧] do so with selective state-space updates, and delta-rule models add an erasure along the current key [⟦deltanet⟧, ⟦gdn⟧, ⟦gdn2⟧, ⟦rwkv7⟧]. Hybrids interleave such layers with attention [⟦zamba2⟧, ⟦falconh1⟧, ⟦nemoh⟧, ⟦nemonano2⟧, ⟦kimi⟧, ⟦qwen35⟧]. Recent analyses examine how these models store and retrieve facts in the state [⟦afendulev⟧, ⟦koren⟧, ⟦boesch⟧, ⟦cheng⟧], how long-term recall separates from short-range stability [⟦cao⟧], and how state anomalies arise at extreme lengths [⟦sane⟧]. Several studies question whether recurrent layers deliver long-context recall at all compared with simple alternatives [⟦jolicoeur⟧, ⟦fountzoulas⟧]. Uncertainty-aware updates have also been proposed for the write itself [⟦kdn⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "State and cache quantization. Quamba2 and Q-Mamba quantize the cached state of selective SSMs to eight bits [⟦quamba2⟧, ⟦qmamba⟧]. DAMP protects slowly decaying channels of GDN and KDA states with higher precision and stores the rest in INT8 [⟦damp⟧], and dasc drops short-horizon units from prefix checkpoints [⟦dasc⟧]. Nemotron 3 stores Mamba states in FP16 with stochastic rounding [⟦nemo3⟧], and four-bit weights and activations have been applied to the recurrent half of hybrid models [⟦kozyrev⟧]. For attention, KV-cache quantization [⟦kivi⟧, ⟦kvquant⟧, ⟦turboquant⟧] faces a related but easier problem, because cache entries are written once. Prefix caching for hybrids [⟦marconi⟧, ⟦tailreplay⟧] stores states as well, usually in full precision. On the context-length dependence, Veldhuis et al. [⟦veldhuis⟧] showed that the width needed to keep perplexity within a fixed tolerance of an FP32 state grows with the logarithm of the context, which they call the bit-growth law; we return to it in Section 4.4. Why post-training quantization works at all for large models is itself an open question [⟦chenptq⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Long-context recall benchmarks. Needle-in-a-haystack tests and their extensions such as RULER [⟦ruler⟧] and BABILong [⟦babilong⟧] measure whether a model retrieves information at a given depth. Synthetic associative recall tasks [⟦zoology⟧] probe the same ability in a controlled setting. StateBits reuses these task families but changes the target of measurement from the model to the storage format."
+    }
+   ]
+  },
+  {
+   "title": "3 The StateBits Benchmark",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "3.1 Models",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "StateBits contains fourteen released checkpoints (Table 1). Eight have diagonal or scalar decay and no erasure: Mamba-2 1.3B and 2.7B [⟦mamba2⟧], Falcon-Mamba-7B [⟦falconmamba⟧], GLA-1.3B [⟦gla⟧], and the hybrids Zamba2-2.7B [⟦zamba2⟧], Nemotron-H-8B [⟦nemoh⟧], Falcon-H1-1.5B [⟦falconh1⟧] and Nemotron-Nano-9B-v2 [⟦nemonano2⟧]. Six use a delta-rule update: DeltaNet-1.3B [⟦deltanet⟧], Gated DeltaNet-1.3B [⟦gdn⟧], RWKV-7 1.5B [⟦rwkv7⟧], and the hybrids Qwen3.5-9B [⟦qwen35⟧], Qwen3.6-35B-A3B [⟦qwen36⟧] and Kimi-Linear-48B-A3B-Instruct [⟦kimi⟧]. In hybrids only the recurrent layers are quantized; the attention KV cache stays in BF16. Short convolution states are kept in BF16 for all models."
+    },
+    {
+     "kind": "table",
+     "text": "Model | params | recurrence | decay | hybrid\nMamba-2 1.3B | 1.3B | SSD | per head | no\nMamba-2 2.7B | 2.7B | SSD | per head | no\nFalcon-Mamba-7B | 7.3B | Mamba-1 | per channel | no\nGLA-1.3B | 1.3B | GLA | per key channel | no\nZamba2-2.7B | 2.7B | Mamba-2 | per head | yes\nNemotron-H-8B | 8B | Mamba-2 | per head | yes\nFalcon-H1-1.5B | 1.5B | Mamba-2 | per head | yes (parallel)\nNemotron-Nano-9B-v2 | 9B | Mamba-2 | per head | yes\nDeltaNet-1.3B | 1.3B | delta rule | none | no\nGated DeltaNet-1.3B | 1.3B | gated delta | per head | no\nRWKV-7 1.5B | 1.5B | generalized delta | per key channel | no\nQwen3.5-9B | 9B | gated delta | per head | yes\nQwen3.6-35B-A3B | 35B (3B act.) | gated delta | per head | yes\nKimi-Linear-48B-A3B-Instruct | 48B (3B act.) | KDA | per key channel | yes"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: Models in StateBits. The first eight have no erase term; the last six use a delta-rule update."
+    }
+   ]
+  },
+  {
+   "title": "3.2 Tasks and the agreement metric",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each model is evaluated at six context lengths, T ∈ {4K, 8K, 16K, 32K, 64K, 128K}, with 200 prompts per length: 100 multi-key needle prompts and 50 passkey prompts generated with the RULER templates [⟦ruler⟧], and 50 synthetic key-value retrieval prompts in which 64 key-value pairs are spread uniformly over the context and four are queried at the end. We also run BABILong qa1-qa3 [⟦babilong⟧] at the same lengths as a natural-text check. Prompts are tokenized with each model's own tokenizer and padded with PG-19 [⟦pg19⟧] filler text to the target length."
+    },
+    {
+     "kind": "p",
+     "text": "For every prompt we first run the model with an FP32 state and record its greedy answer. We then run the model with a quantized state, teacher-forcing the FP32 answer, and count the answer tokens on which the quantized model's argmax agrees with the FP32 model's. Answer-token agreement is the mean of this fraction over prompts. Because the reference is the model itself, agreement is defined and informative even when FP32 recall is low; at 128K tokens the FP32 multi-key accuracy of the 1.3B models is below 20%, but their quantized states can still be more or less faithful to the FP32 computation. A model meets the recall criterion at width b and length T if its agreement is at least 0.98. For comparison we also measure the excess NLL on 32 PG-19 books, using the criterion of Veldhuis et al. [⟦veldhuis⟧]: excess NLL at most 0.01 nats over positions (T/2, T]."
+    }
+   ]
+  },
+  {
+   "title": "3.3 Formats and write-back",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We evaluate seven formats: BF16 and FP8 (E4M3, per-row FP32 scale) with round-to-nearest, per-row symmetric INT8 with round-to-nearest (rtn) and with stochastic rounding (sr), MXFP6 and per-row INT6 [⟦mx⟧], and NVFP4 with 16-element blocks [⟦fouroversix⟧]. Integer formats use one FP16 absmax scale per row of the state, where a row is one key channel of one head. For the context-length fits in Section 4.4 we additionally sweep per-row INT-b with rtn from 5 to 14 bits in half-bit steps, mixing row widths for fractional values, which is the format used in [⟦veldhuis⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "The state is quantized after every token, both during prefill and during the answer. This is stricter than serving systems that process the prompt in chunks and store the state only at chunk boundaries, and it isolates the per-token decoding regime in which errors accumulate fastest. Section 4.2 reports one chunked variant."
+    }
+   ]
+  },
+  {
+   "title": "3.4 Infrastructure",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Pure recurrent models run with the recurrent kernels of flash-linear-attention [⟦fla⟧] and the mamba_ssm reference implementation; hybrids run through their released Hugging Face implementations [⟦hf⟧] with the recurrent step replaced by our quantizing step kernel. We verified for every model that the step kernel with an FP32 state reproduces the reference logits to within 10^-4 at every position. Models up to 9B parameters run on single NVIDIA H100 80GB GPUs; Qwen3.6-35B-A3B and Kimi-Linear-48B-A3B-Instruct run with tensor parallelism over four A100 80GB GPUs. The complete benchmark took about 9,400 GPU-hours."
+    }
+   ]
+  },
+  {
+   "title": "4 Results",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "4.1 Recall breaks before perplexity",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 counts, for per-row INT8 states with rtn, how many of the fourteen models meet each criterion at each length. At 4K tokens the two criteria nearly agree. Already at 8K they diverge: 9 models keep perplexity within 0.01 nats, but only 3 (DeltaNet-1.3B, Gated DeltaNet-1.3B and RWKV-7 1.5B) keep agreement at or above 0.98. From 16K tokens on, no model meets the recall criterion with an INT8 state, while four still meet the perplexity criterion."
+    },
+    {
+     "kind": "table",
+     "text": "Criterion | 4K | 8K | 16K | 32K | 64K | 128K\nexcess NLL ≤ 0.01 nats | 13 | 9 | 4 | 1 | 0 | 0\nagreement ≥ 0.98 | 11 | 3 | 0 | 0 | 0 | 0"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Number of models (of 14) that meet each criterion with per-row INT8 states (rtn, requantized every token)."
+    },
+    {
+     "kind": "p",
+     "text": "The gap has a simple interpretation. Most next-token predictions in book text depend on the last few hundred tokens, which are held in quickly decaying channels whose quantization error saturates. A recall query depends on a few slowly decaying channels that carry the needle across the whole context. Their error keeps growing, and a small perturbation of exactly those channels flips the answer while hardly changing the average NLL. The same mechanism explains why mixed-precision schemes that protect slowly decaying channels work well [⟦damp⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Agreement failures are not uniform across task types. At 16K tokens with INT8 states, the synthetic key-value task fails first (mean agreement 0.88), followed by multi-key needles (0.92), passkeys (0.97) and BABILong (0.95). Passkeys are easier because the answer is a short digit string that the model can copy with high confidence."
+    }
+   ]
+  },
+  {
+   "title": "4.2 Formats and rounding",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 3 compares the seven formats at 16K tokens, averaged over the fourteen models. BF16, which keeps an 8-bit significand with a per-element exponent, gives the highest agreement, closely followed by INT8 with stochastic rounding. INT8 with rtn is clearly worse, and FP8 E4M3, with only three mantissa bits, is far worse than INT8 despite its dynamic range. Six-bit formats and NVFP4 are not usable at this length without further measures such as mixed precision or outlier handling."
+    },
+    {
+     "kind": "table",
+     "text": "Format | bits/entry | agreement (16K) | agreement (64K)\nBF16 (rtn) | 16 | 0.97 | 0.91\nINT8 sr | 8.13 | 0.95 | 0.86\nINT8 rtn | 8.13 | 0.93 | 0.74\nFP8 E4M3 | 8.25 | 0.71 | 0.43\nMXFP6 | 6.25 | 0.62 | 0.31\nINT6 rtn | 6.13 | 0.58 | 0.27\nNVFP4 | 4.5 | 0.21 | 0.06"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: Mean answer-token agreement over the fourteen models for each state format, per-token requantization. Bits per entry include scale overhead."
+    },
+    {
+     "kind": "p",
+     "text": "The gap between rtn and sr widens with context length (0.02 at 16K, 0.12 at 64K), consistent with rtn discarding updates smaller than half a step, so that its error grows like a drift rather than a random walk [⟦croci⟧, ⟦gupta⟧]. Quantizing the state only once every 64 tokens, as in chunked prefill, raises INT8 rtn agreement at 64K from 0.74 to 0.90; per-token requantization during the answer then accounts for most of the remaining loss."
+    }
+   ]
+  },
+  {
+   "title": "4.3 Delta-rule erasure",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Delta-rule models remove part of the state along the current key before writing [⟦deltanet⟧, ⟦gdn⟧], which also removes the component of accumulated rounding error along that key. One might therefore expect delta-rule states to tolerate lower precision. At short context they do: averaged over models, the width needed for faithful recall at 4K tokens is 7.53 bits for the six delta-rule models and 7.75 bits for the eight diagonal ones, and the three models that meet the recall criterion at 8K with INT8 are all non-hybrid delta-rule models."
+    },
+    {
+     "kind": "p",
+     "text": "The advantage does not grow with context. Error components orthogonal to the keys that are written later are never erased, and in a long context with diverse keys most of the accumulated error lies in such directions. As a result the required width grows at nearly the same rate for both families (Section 4.4): the gap between the family means is 0.2 bits at 4K and 0.4 bits at 128K, far from what the erasure of all accumulated error would give."
+    }
+   ]
+  },
+  {
+   "title": "4.4 Context-length scaling: the precision doubling cost",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For every model and length we find b*_R(T), the smallest per-row INT-b width with rtn at which the model meets the recall criterion, interpolating agreement linearly in b between grid points. Table 4 lists b*_R at 4K and 128K tokens. For every model b*_R grows close to linearly in log2 T, and we summarize this growth by the precision doubling cost (PDC): the number of additional bits per state entry needed to keep recall faithful when the context doubles. The PDC is the slope κ of the bit-growth law of Veldhuis et al. [⟦veldhuis⟧], b*(T) = b_0 + κ log2 T, which they fitted with their perplexity criterion on five checkpoints up to 32K tokens and found κ = 0.62 bits per doubling. We use a separate name because we measure it with a recall criterion and over a longer range, and because the per-doubling reading is the one practitioners need."
+    },
+    {
+     "kind": "equation",
+     "text": "b*_R(T) = b*_R(4K) + PDC · log2(T / 4096)   (1)"
+    },
+    {
+     "kind": "table",
+     "text": "Model | b*_R(4K) | b*_R(128K) | PDC\nMamba-2 1.3B | 7.6 | 11.8 | 0.82\nMamba-2 2.7B | 7.6 | 12.1 | 0.89\nFalcon-Mamba-7B | 8.3 | 12.9 | 0.91\nGLA-1.3B | 7.4 | 11.6 | 0.82\nZamba2-2.7B | 7.7 | 12.1 | 0.90\nNemotron-H-8B | 7.9 | 12.5 | 0.91\nFalcon-H1-1.5B | 7.2 | 11.7 | 0.91\nNemotron-Nano-9B-v2 | 8.3 | 12.5 | 0.86\nDeltaNet-1.3B | 6.9 | 11.1 | 0.82\nGated DeltaNet-1.3B | 7.2 | 11.3 | 0.84\nRWKV-7 1.5B | 7.2 | 11.5 | 0.87\nQwen3.5-9B | 7.7 | 12.1 | 0.90\nQwen3.6-35B-A3B | 8.4 | 12.6 | 0.86\nKimi-Linear-48B-A3B-Instruct | 7.8 | 11.9 | 0.83\npooled (all 14) | – | – | 0.87\ndiagonal (8) | – | – | 0.88\ndelta rule (6) | – | – | 0.86"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 4: Required width for faithful recall (agreement ≥ 0.98; per-row INT-b, rtn, per-token requantization) and precision doubling cost (bits per state entry per doubling of context), from a least-squares fit of Eq. (1) to six lengths from 4K to 128K. Pooled values use a common slope with per-model intercepts."
+    },
+    {
+     "kind": "p",
+     "text": "The pooled PDC is 0.87 bits per doubling (95% CI 0.85-0.89, bootstrap over models and prompts). Per-model values range from 0.82 to 0.91, and the families differ by only 0.02 (0.88 for diagonal, 0.86 for delta-rule models), which is within the uncertainty. On the four checkpoints shared with Veldhuis et al. [⟦veldhuis⟧] (Mamba-2 1.3B and 2.7B, Falcon-Mamba-7B and GLA-1.3B) our recall-based PDC is 0.82-0.91, clearly above their perplexity-based pooled value of 0.62. Residuals of the per-model fits are below 0.2 bits everywhere, with no visible curvature up to 128K tokens."
+    },
+    {
+     "kind": "p",
+     "text": "Why is the recall-based slope steeper? In the simple model of Veldhuis et al., an unbiased random walk of rounding errors costs 0.5 bits per doubling and coherent drift costs one bit, and channels whose time constant is shorter than the context saturate and stop contributing. Perplexity averages over all channels and is dominated by the saturated, short-lived ones. Recall depends on the slow channels that carry the needle, which have not saturated at any length we test, and under rtn their error is close to a drift, so the slope moves toward one bit. Consistent with this, the slope with stochastic rounding, measured on six models, is lower (0.71 pooled) but still above the perplexity-based value."
+    },
+    {
+     "kind": "p",
+     "text": "For deployments that depend on long-context retrieval we therefore recommend budgeting state precision with the recall-based PDC of 0.87 rather than with the perplexity-based slope. As a rule of thumb, a format that is faithful at 4K tokens loses that property after about one doubling per 0.87 bits of headroom; a model that needs 7.7 bits at 4K needs about 12 bits at 128K."
+    }
+   ]
+  },
+  {
+   "title": "4.5 Free-running generation",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Agreement is measured with teacher forcing. To check that it predicts end-task behaviour, we also let six models generate freely on BABILong qa1-qa3 at 32K tokens with INT8 rtn and BF16 states. The drop in task accuracy relative to FP32 correlates with one minus agreement across models and formats (Pearson 0.83). In free-running mode a single disagreeing token can derail the answer, so accuracy losses are on average 1.6 times larger than the disagreement rate."
+    }
+   ]
+  },
+  {
+   "title": "4.6 Which state entries fail",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For four models (Mamba-2 2.7B, GLA-1.3B, Gated DeltaNet-1.3B and Qwen3.5-9B) we located the state entries responsible for disagreements by restoring FP32 precision in one group of rows at a time. Groups are formed by sorting rows by their mean retention over the prompt. Restoring the slowest-decaying 10% of rows recovers between 61% and 78% of the lost agreement at 32K tokens, whereas restoring the fastest-decaying 50% recovers less than 10%. In the two hybrids we tested this way, the recurrent layers directly after the first attention layer account for a disproportionate share of failures, in line with analyses that find recurrent layers carrying retrieval keys between attention layers [⟦afendulev⟧, ⟦cheng⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "This pattern supports precision allocation by decay, as in DAMP [⟦damp⟧]. It also suggests why a fixed allocation calibrated at short context can fail later: the set of rows that matter for recall is small, and their precision requirement grows with length while the rest of the state saturates."
+    }
+   ]
+  },
+  {
+   "title": "4.7 Implications for serving",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Serving systems choose one state format for all requests. Our results suggest three practical rules. First, validate state formats with a recall-sensitive metric at the longest context the deployment supports; perplexity at a few thousand tokens is not a sufficient test. Second, prefer stochastic rounding or chunked write-back when an integer format is used for decoding, since round-to-nearest loses most at long context. Third, when memory must be saved, spend the bits on slowly decaying rows rather than lowering precision uniformly. StateBits makes each of these checks cheap to run: a full evaluation of one model and one format takes between 4 and 60 GPU-hours depending on model size."
+    }
+   ]
+  },
+  {
+   "title": "5 Limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "StateBits measures fidelity to the FP32-state model, not task accuracy, and most numbers are teacher-forced. The fits in Section 4.4 use one format family (per-row integers) and per-token requantization; chunked write-back and mixed-precision allocation shift the intercepts substantially and may change the slopes. We did not evaluate models above 48B parameters or contexts beyond 128K tokens. Two further hybrids we tried could not be verified against their reference logits with our step kernel and are not included. Finally, our prompts are synthetic retrieval tasks plus BABILong; recall in agentic or multi-document settings may stress the state differently."
+    }
+   ]
+  },
+  {
+   "title": "6 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "StateBits shows that recurrent-state quantization should be judged by recall at the deployment length. Recall fails before perplexity, round-to-nearest formats degrade fastest, delta-rule erasure helps only at short context, and the width needed for faithful recall grows by a nearly universal 0.87 bits per doubling of context across fourteen models. We hope the benchmark makes it easy to place new state formats and allocation schemes on the same axes."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A Prompt Construction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Multi-key needles follow the RULER niah_multikey_2 template: the haystack consists of distractor key-value sentences, one of which holds the queried key, and the answer is a seven-digit number. Passkeys follow the niah_single_1 template with a five-digit passkey. The synthetic key-value task places 64 pairs of random two-token keys and four-digit values at uniformly random depths, separated by PG-19 filler, and asks for four of them in sequence. All needles are placed at depths drawn uniformly from 10% to 90% of the context. Prompts are generated once per tokenizer family and shared by all models with that tokenizer."
+    },
+    {
+     "kind": "p",
+     "text": "For BABILong we use the released qa1-qa3 splits at 4K-128K and score agreement on the single-word answer. Because BABILong answers are short and drawn from a small vocabulary, its agreement saturates faster than for the numeric needles."
+    }
+   ]
+  },
+  {
+   "title": "Appendix B Fitting Details",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Agreement is evaluated on a half-bit grid of widths. We locate the crossing of 0.98 by linear interpolation between the bracketing widths; interpolating in logit(agreement) instead changes b*_R by at most 0.05 bits. Eq. (1) is fitted by least squares to the six lengths of each model. The pooled fit uses a common slope and one intercept per model. Confidence intervals come from 1,000 bootstrap replicates that resample prompts within each model and length, and resample models for the pooled values. Dropping the 128K point changes the pooled PDC by less than 0.02 bits per doubling, and dropping the 4K point by less than 0.03."
+    },
+    {
+     "kind": "p",
+     "text": "At 128K tokens, three models (Falcon-Mamba-7B, Nemotron-H-8B and Qwen3.6-35B-A3B) reach the agreement criterion only at 12.5 bits or more, where the FP16 per-row scale starts to limit precision for rows with a large dynamic range. Rerunning those cells with FP32 scales changed b*_R by less than 0.1 bits, so we keep FP16 scales throughout."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "This work was supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (No. RS-2025-02317764) and by an Institute of Information & Communications Technology Planning & Evaluation (IITP) grant (No. RS-2026-00419283). We thank the KAIST Supercomputing Center for GPU time."
+    }
+   ]
+  },
+  {
+   "title": "Data and Code Availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The StateBits prompts, the evaluation harness and per-model, per-format results are available at https://github.com/statebits/statebits and on the Hugging Face Hub (statebits/statebits-v1)."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "kimi",
+   "tag": "1",
+   "text": "K. Team, Y. Zhang, Z. Lin et al., “Kimi Linear: An expressive, efficient attention architecture,” arXiv preprint arXiv:2510.26692, 2025."
+  },
+  {
+   "key": "qwen35",
+   "tag": "2",
+   "text": "Qwen Team, “Qwen3.5: Towards native multimodal agents,” February 2026."
+  },
+  {
+   "key": "nemoh",
+   "tag": "3",
+   "text": "A. Blakeman, A. Basant, A. Khattar et al., “Nemotron-H: A family of accurate and efficient hybrid Mamba-Transformer models,” arXiv preprint arXiv:2504.03624, 2025."
+  },
+  {
+   "key": "nemo3",
+   "tag": "4",
+   "text": "A. Chandiramani, A. Blakeman, A. Olaoye et al., “Nemotron 3 Super: Open, efficient mixture-of-experts hybrid Mamba-Transformer model for agentic reasoning,” arXiv preprint arXiv:2604.12374, 2026."
+  },
+  {
+   "key": "marconi",
+   "tag": "5",
+   "text": "R. Pan, Z. Wang, Z. Jia, C. Karakus, L. Zancato, T. Dao, Y. Wang, and R. Netravali, “Marconi: Prefix caching for the era of hybrid LLMs,” in Proceedings of Machine Learning and Systems, 2025."
+  },
+  {
+   "key": "dasc",
+   "tag": "6",
+   "text": "Y. Yu, P. Sun, J. Tan et al., “dasc: Decay-aware state compression for hybrid linear-attention serving,” arXiv preprint arXiv:2608.30386, 2026."
+  },
+  {
+   "key": "quamba2",
+   "tag": "7",
+   "text": "H.-Y. Chiang, C.-C. Chang, N. Frumkin, K.-C. Wu, M. S. Abdelfattah, and D. Marculescu, “Quamba2: A robust and scalable post-training quantization framework for selective state space models,” in International Conference on Machine Learning, 2025."
+  },
+  {
+   "key": "qmamba",
+   "tag": "8",
+   "text": "C. Tianqi, Y. Chen, P. Wang, W. Xu, Z. Zhu, and J. Cheng, “Q-Mamba: Towards more efficient Mamba models via post-training quantization,” in Findings of the Association for Computational Linguistics: ACL 2025, 2025, pp. 10594–10610."
+  },
+  {
+   "key": "damp",
+   "tag": "9",
+   "text": "T. Zhang, J. Tan, P. Sun et al., “DAMP: Decay-aware mixed-precision recurrent-state quantization,” arXiv preprint arXiv:2608.27513, 2026."
+  },
+  {
+   "key": "kozyrev",
+   "tag": "10",
+   "text": "S. Kozyrev and D. Maiboroda, “Why Gated DeltaNet survives 4-bit quantization: NVFP4 W4A4 for the recurrent half of a hybrid 27B LLM,” arXiv preprint arXiv:2609.04098, 2026."
+  },
+  {
+   "key": "veldhuis",
+   "tag": "11",
+   "text": "J. Veldhuis, F. Postma, R. Zwart, and M. Dekkers, “How many bits does a recurrent state need? Context-length scaling of state precision in Mamba and gated linear attention,” arXiv preprint, 2026."
+  },
+  {
+   "key": "zoology",
+   "tag": "12",
+   "text": "S. Arora, S. Eyuboglu, A. Timalsina, I. Johnson, M. Poli, J. Zou, A. Rudra, and C. Ré, “Zoology: Measuring and improving recall in efficient language models,” in International Conference on Learning Representations, 2024."
+  },
+  {
+   "key": "arora",
+   "tag": "13",
+   "text": "S. Arora, S. Eyuboglu, M. Zhang, A. Timalsina, S. Alberti, J. Zou, A. Rudra, and C. Ré, “Simple linear attention language models balance the recall-throughput tradeoff,” in International Conference on Machine Learning, 2024."
+  },
+  {
+   "key": "jelassi",
+   "tag": "14",
+   "text": "S. Jelassi, D. Brandfonbrener, S. M. Kakade, and E. Malach, “Repeat after me: Transformers are better than state space models at copying,” in International Conference on Machine Learning, 2024."
+  },
+  {
+   "key": "katha",
+   "tag": "15",
+   "text": "A. Katharopoulos, A. Vyas, N. Pappas, and F. Fleuret, “Transformers are RNNs: Fast autoregressive transformers with linear attention,” in International Conference on Machine Learning, 2020, pp. 5156–5165."
+  },
+  {
+   "key": "gla",
+   "tag": "16",
+   "text": "S. Yang, B. Wang, Y. Shen, R. Panda, and Y. Kim, “Gated linear attention transformers with hardware-efficient training,” in International Conference on Machine Learning, 2024."
+  },
+  {
+   "key": "mamba",
+   "tag": "17",
+   "text": "A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with selective state spaces,” arXiv preprint arXiv:2312.00752, 2023."
+  },
+  {
+   "key": "mamba2",
+   "tag": "18",
+   "text": "T. Dao and A. Gu, “Transformers are SSMs: Generalized models and efficient algorithms through structured state space duality,” in International Conference on Machine Learning, 2024."
+  },
+  {
+   "key": "deltanet",
+   "tag": "19",
+   "text": "S. Yang, B. Wang, Y. Zhang, Y. Shen, and Y. Kim, “Parallelizing linear transformers with the delta rule over sequence length,” in Advances in Neural Information Processing Systems, vol. 37, 2024."
+  },
+  {
+   "key": "gdn",
+   "tag": "20",
+   "text": "S. Yang, J. Kautz, and A. Hatamizadeh, “Gated delta networks: Improving Mamba2 with delta rule,” in International Conference on Learning Representations, 2025."
+  },
+  {
+   "key": "gdn2",
+   "tag": "21",
+   "text": "A. Hatamizadeh, Y. Choi, and J. Kautz, “Gated DeltaNet-2: Decoupling erase and write in linear attention,” arXiv preprint arXiv:2605.22791, 2026."
+  },
+  {
+   "key": "rwkv7",
+   "tag": "22",
+   "text": "B. Peng, R. Zhang, D. Goldstein et al., “RWKV-7 “Goose” with expressive dynamic state evolution,” arXiv preprint arXiv:2503.14456, 2025."
+  },
+  {
+   "key": "zamba2",
+   "tag": "23",
+   "text": "P. Glorioso, Q. Anthony, Y. Tokpanov et al., “The Zamba2 suite: Technical report,” arXiv preprint arXiv:2411.15242, 2024."
+  },
+  {
+   "key": "falconh1",
+   "tag": "24",
+   "text": "J. Zuo, M. Velikanov, I. Chahed et al., “Falcon-H1: A family of hybrid-head language models redefining efficiency and performance,” arXiv preprint arXiv:2507.22448, 2025."
+  },
+  {
+   "key": "nemonano2",
+   "tag": "25",
+   "text": "NVIDIA, “NVIDIA Nemotron Nano 2: An accurate and efficient hybrid Mamba-Transformer reasoning model,” arXiv preprint arXiv:2508.14444, 2025."
+  },
+  {
+   "key": "afendulev",
+   "tag": "26",
+   "text": "K. Afendulev, A. Dontsov, E. Tutubalina, and A. Korznikov, “What attention recalls and recurrence controls in hybrid language models,” arXiv preprint, 2026."
+  },
+  {
+   "key": "koren",
+   "tag": "27",
+   "text": "Y. Koren, A. Ben-Kish, R. Giryes, L. Wolf, and I. Zimerman, “On the recall scaling laws in Mamba: A theoretical and mechanistic study via hashing,” arXiv preprint, 2026."
+  },
+  {
+   "key": "boesch",
+   "tag": "28",
+   "text": "J. Boesch and A. Wee, “Anatomy of associative recall in fixed-state recurrences: A matched-state decomposition, an interference wall, and a curriculum that breaks it,” arXiv preprint, 2026."
+  },
+  {
+   "key": "cheng",
+   "tag": "29",
+   "text": "K. Cheng, X. Xu, Y. Chen et al., “The token before the value is the key: How hybrid architectures organize induction circuits,” arXiv preprint, 2026."
+  },
+  {
+   "key": "cao",
+   "tag": "30",
+   "text": "P. Cao, X. Zhang, J. Tang, X. Li, S. Li, and Q. Pei, “Separating stream stability from long-term recall in language models,” arXiv preprint, 2026."
+  },
+  {
+   "key": "sane",
+   "tag": "31",
+   "text": "Q. Lin, B. Xu, X. Liu, Z. Hao, and R. Cai, “SANE: State anomaly neutralization for stable extreme-context delta-rule models,” arXiv preprint, 2026."
+  },
+  {
+   "key": "jolicoeur",
+   "tag": "32",
+   "text": "A. Jolicoeur-Martineau, R. S. Sukthanker, P. Cameron, and E. Gervais, “Sliding-window beats linear attention,” arXiv preprint, 2026."
+  },
+  {
+   "key": "fountzoulas",
+   "tag": "33",
+   "text": "G. Fountzoulas, “Kathleen remembers: Length-invariant one-shot recall without attention,” arXiv preprint, 2026."
+  },
+  {
+   "key": "kdn",
+   "tag": "34",
+   "text": "N. Bui, T. Huang, and R. Ying, “Kalman delta networks: Uncertainty-aware associative memory,” arXiv preprint, 2026."
+  },
+  {
+   "key": "kivi",
+   "tag": "35",
+   "text": "Z. Liu, J. Yuan, H. Jin et al., “KIVI: A tuning-free asymmetric 2bit quantization for KV cache,” in International Conference on Machine Learning, 2024."
+  },
+  {
+   "key": "kvquant",
+   "tag": "36",
+   "text": "C. Hooper, S. Kim, H. Mohammadzadeh et al., “KVQuant: Towards 10 million context length LLM inference with KV cache quantization,” in Advances in Neural Information Processing Systems, vol. 37, 2024."
+  },
+  {
+   "key": "turboquant",
+   "tag": "37",
+   "text": "A. Zandieh, M. Daliri, M. Hadian, and V. Mirrokni, “TurboQuant: Online vector quantization with near-optimal distortion rate,” in International Conference on Learning Representations, 2026."
+  },
+  {
+   "key": "tailreplay",
+   "tag": "38",
+   "text": "Y. Liu, R. Qi, X. Wu, P. Liu, and J. Chen, “Tail-Replay: Escaping the curse of linear attention in prefix caching for hybrid LLMs,” arXiv preprint, 2026."
+  },
+  {
+   "key": "chenptq",
+   "tag": "39",
+   "text": "Y. Chen, M. Beyer, J. Zhu, and J. Chen, “Why does post-training quantization work?” arXiv preprint, 2026."
+  },
+  {
+   "key": "ruler",
+   "tag": "40",
+   "text": "C.-P. Hsieh, S. Sun, S. Kriman et al., “RULER: What's the real context size of your long-context language models?” arXiv preprint arXiv:2404.06654, 2024."
+  },
+  {
+   "key": "babilong",
+   "tag": "41",
+   "text": "Y. Kuratov, A. Bulatov, P. Anokhin, I. Rodkin, D. Sorokin, A. Sorokin, and M. Burtsev, “BABILong: Testing the limits of LLMs with long context reasoning-in-a-haystack,” in Advances in Neural Information Processing Systems Datasets and Benchmarks Track, 2024."
+  },
+  {
+   "key": "falconmamba",
+   "tag": "42",
+   "text": "J. Zuo, M. Velikanov, D. E. Rhaiem, I. Chahed, Y. Belkada, G. Kunsch, and H. Hacid, “Falcon Mamba: The first competitive attention-free 7B language model,” arXiv preprint arXiv:2410.05355, 2024."
+  },
+  {
+   "key": "qwen36",
+   "tag": "43",
+   "text": "Qwen Team, “Qwen3.6-35B-A3B: Agentic coding power, now open to all,” 2026."
+  },
+  {
+   "key": "pg19",
+   "tag": "44",
+   "text": "J. W. Rae, A. Potapenko, S. M. Jayakumar, C. Hillier, and T. P. Lillicrap, “Compressive transformers for long-range sequence modelling,” in International Conference on Learning Representations, 2020."
+  },
+  {
+   "key": "mx",
+   "tag": "45",
+   "text": "B. D. Rouhani, R. Zhao, A. More et al., “Microscaling data formats for deep learning,” arXiv preprint arXiv:2310.10537, 2023."
+  },
+  {
+   "key": "fouroversix",
+   "tag": "46",
+   "text": "J. Cook, J. Guo, G. Xiao et al., “Four over six: More accurate NVFP4 quantization with adaptive block scaling,” arXiv preprint arXiv:2512.02010, 2025."
+  },
+  {
+   "key": "fla",
+   "tag": "47",
+   "text": "S. Yang and Y. Zhang, “FLA: A Triton-based library for hardware-efficient implementations of linear attention mechanism,” https://github.com/fla-org/flash-linear-attention, 2024."
+  },
+  {
+   "key": "hf",
+   "tag": "48",
+   "text": "T. Wolf, L. Debut, V. Sanh et al., “Transformers: State-of-the-art natural language processing,” in Proceedings of EMNLP 2020: System Demonstrations, 2020, pp. 38–45."
+  },
+  {
+   "key": "croci",
+   "tag": "49",
+   "text": "M. Croci, M. Fasi, N. J. Higham, T. Mary, and M. Mikaitis, “Stochastic rounding: Implementation, error analysis and applications,” Royal Society Open Science, vol. 9, no. 3, 2022."
+  },
+  {
+   "key": "gupta",
+   "tag": "50",
+   "text": "S. Gupta, A. Agrawal, K. Gopalakrishnan, and P. Narayanan, “Deep learning with limited numerical precision,” in International Conference on Machine Learning, 2015, pp. 1737–1746."
+  }
+ ],
+ "bib_style": "numeric"
+}

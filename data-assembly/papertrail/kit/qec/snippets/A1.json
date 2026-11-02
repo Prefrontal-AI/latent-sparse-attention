@@ -1,0 +1,585 @@
+{
+ "node": "A1",
+ "kind": "fake_paper",
+ "date": "2026-08-25",
+ "title": "Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs",
+ "authors": [
+  "Thomas Ashworth 1",
+  "Hannah Pryce 1",
+  "Kieran Doyle 1",
+  "Ananya Rao 2",
+  "Catherine Holroyd 1"
+ ],
+ "affiliations": [
+  "1 School of Electronic and Electrical Engineering, University of Leeds, Leeds LS2 9JT, United Kingdom",
+  "2 School of Physics and Astronomy, University of Leeds, Leeds LS2 9JT, United Kingdom"
+ ],
+ "abstract": "Superconducting surface-code processors produce a round of syndrome data roughly every microsecond, and a decoder that cannot keep pace accumulates a backlog that stalls any computation relying on feed-forward. Hardware decoders based on cluster growth are fast but lose accuracy relative to minimum-weight perfect matching, while hardware matching engines remain expensive at moderate code distance. We present Sandpiper, a streaming decoder that grows weighted clusters inside a sliding window of syndrome rounds, resolves every neutral cluster by exact minimum-weight matching restricted to that cluster, and commits the oldest round of the window in every cycle. We implement Sandpiper on an AMD Alveo U280 card and benchmark it, together with a bit-exact software model, against sliding-window PyMatching on rotated surface-code memory circuits under uniform circuit-level depolarizing noise. Sandpiper reaches a circuit-level threshold of $0.672(9)\\%$, compared with $0.711(7)\\%$ for sliding-window matching on the same circuits, and its logical error rate per round stays within a factor of 1.6 of matching at a physical error rate of $0.1\\%$ for distances 5 to 11. At distance 11 and $p=0.1\\%$ the design occupies $61.4\\%$ of the card's look-up tables and finishes each syndrome round in 437 ns on average (862 ns at the 99.9th percentile), inside a $1~\\mu\\mathrm{s}$ syndrome cycle. The RTL, the software model and all data are openly available.",
+ "sections": [
+  {
+   "title": "I Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Quantum error correction protects logical information by measuring stabilizers repeatedly and handing the outcomes to a classical decoder, which infers the most plausible error history [⟦dennis2002⟧, ⟦terhal2015⟧]. The rotated surface code remains the leading candidate for superconducting hardware because it needs only nearest-neighbour interactions and tolerates physical error rates near $1\\%$ [⟦fowler2012⟧, ⟦wang2011⟧]. Recent experiments have crossed below its threshold, with logical error rates that fall as the code distance grows [⟦google2023⟧, ⟦google2025⟧]. These demonstrations decoded most of their data offline, however, and the classical side of the loop is now widely seen as one of the main engineering bottlenecks on the way to fault-tolerant computation [⟦battistel2023⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Two requirements make decoding hard in practice. The first is throughput: a superconducting device completes a syndrome-extraction round in about $1~\\mu\\mathrm{s}$, and a decoder that processes rounds more slowly than they arrive builds up a backlog that grows without bound [⟦terhal2015⟧]. The second is latency. Logical operations such as magic-state injection through lattice surgery require a decoded outcome before the next operation can be chosen [⟦horsman2012⟧], so the time between the last measurement of a round and the corresponding correction directly stretches the logical clock. Parallel window decoding solves the throughput problem with enough classical hardware [⟦skoric2023⟧, ⟦tan2023⟧, ⟦bombin2023⟧], but each window still has to be decoded once it is complete, and the reaction time of a computation is set by how quickly the last, open window can be closed [⟦viszlai2025⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "A wide range of decoders now targets this regime. In software, sparse blossom brings minimum-weight perfect matching (MWPM) to about a million errors per core-second [⟦higgott2022pm⟧, ⟦higgott2025sb⟧], and fusion blossom parallelises it across cores [⟦wu2023fusion⟧]. In hardware, union-find (UF) decoders [⟦delfosse2021⟧, ⟦huang2020⟧] have been mapped onto FPGAs with distributed cluster growth [⟦liyanage2023⟧, ⟦liyanage2024⟧, ⟦valentino2025⟧], collision clustering has been demonstrated as a compact FPGA and ASIC design [⟦barber2025⟧], and the local clustering decoder adapts its weights on the fly [⟦ziad2025⟧]. Micro Blossom implements exact MWPM in programmable logic [⟦wu2025micro⟧]. Lookup tables and local pre-decoders shrink the problem handed to a slower global decoder [⟦das2022lilliput⟧, ⟦smith2023⟧, ⟦chamberland2023⟧, ⟦vittal2023⟧, ⟦alavisamani2024⟧, ⟦wegmann2026⟧, ⟦gao2026⟧], superconducting-logic decoders aim at operation inside the cryostat [⟦holmes2020⟧, ⟦ueno2022qecool⟧], and neural decoders now reach real-time throughput on dedicated accelerators [⟦bausch2024⟧, ⟦senior2025⟧]. Streaming variants of cluster growth process rounds as they arrive [⟦chan2023actis⟧, ⟦chan2026snowflake⟧, ⟦kasamura2025⟧, ⟦itoh2026⟧], and high-performance computing clusters have been used to keep up with multi-patch workloads [⟦lao2026⟧]. A recurring trade-off runs through this list. Decoders built purely on cluster growth are simple enough for hardware but have lower circuit-level thresholds than matching, because peeling inside a cluster ignores the relative weights of competing corrections. Exact matching engines recover that accuracy, but their logic grows quickly with the number of defects they have to handle at once."
+    },
+    {
+     "kind": "p",
+     "text": "In this work we combine the two approaches in a streaming design. Sandpiper grows weighted clusters, as UF does, inside a window of syndrome rounds that slides forward by one round per cycle. When a cluster becomes neutral, the defects it contains are paired by an exact minimum-weight matching restricted to the cluster, which for the small clusters that dominate below threshold can be computed by enumeration in a few clock cycles. The oldest round of the window is committed in every cycle, so the decoder never waits for a complete block of $d$ rounds. Our contributions are: (i) the Sandpiper algorithm and a bit-exact software model (Sec. III); (ii) an implementation on an AMD Alveo U280 card that streams syndromes at one round per microsecond (Sec. IV); and (iii) a characterisation of its threshold, sub-threshold logical error rates, latency and resource use for distances 5 to 11, with sliding-window PyMatching as the reference (Sec. V)."
+    }
+   ]
+  },
+  {
+   "title": "II Background",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "II.1 Surface-code memory and noise model",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We consider the rotated surface code of distance $d$ with $d^{2}$ data qubits and $d^{2}-1$ measure qubits [⟦fowler2012⟧, ⟦horsman2012⟧]. Each memory experiment prepares $|0\\rangle_{L}$, performs $3d$ rounds of stabilizer measurement with the standard four-layer CNOT schedule, and reads out all data qubits in the $Z$ basis. Detectors compare each $Z$-type stabilizer outcome with its value in the previous round, and the final data readout closes the last layer. Circuits are generated and sampled with Stim [⟦gidney2021stim⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Noise follows the uniform circuit-level depolarizing model often labelled SD6 [⟦gidney2021honeycomb⟧, ⟦stephens2014⟧]: every single-qubit gate and idle location is followed by a single-qubit depolarizing channel of strength $p$, every CNOT by a two-qubit depolarizing channel of strength $p$, and every reset and measurement is flipped with probability $p$. We compile each circuit into its detector error model (DEM) and decompose hyperedges into graphlike edges with Stim's built-in decomposition, so that every decoder in this paper sees the same matching graph. The prior of each edge $e$ sets its weight $w_{e}=\\log[(1-p_{e})/p_{e}]$."
+    }
+   ]
+  },
+  {
+   "title": "II.2 Real-time constraints",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We distinguish throughput from latency, following Ref. [⟦battistel2023⟧]. A streaming decoder is throughput-stable if, on average, it finishes the work for one round before the next round arrives. Its per-round latency is the time between the arrival of the last syndrome bit of a round and the moment the decoder has absorbed that round and committed whatever part of the correction falls out of the window. For superconducting processors both numbers must sit below the syndrome cycle of about $1~\\mu\\mathrm{s}$ [⟦google2025⟧]; for the tail of the latency distribution the relevant bound depends on how much slack the control system offers before a stall becomes necessary [⟦viszlai2025⟧, ⟦ikari2026⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Windowed decoding is the usual way to bound both quantities. Overlapping windows of height of order $d$ are decoded independently and only the lower part of each correction is committed [⟦skoric2023⟧, ⟦tan2023⟧]. A frugal alternative advances the window by a single round and carries the cluster state forward, so that no work is repeated [⟦chan2026snowflake⟧]. Sandpiper follows the second pattern."
+    }
+   ]
+  },
+  {
+   "title": "II.3 Cluster growth and matching",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The UF decoder grows clusters around defects in half-edge steps, merges clusters that touch, and stops growing a cluster once it contains an even number of defects or reaches a boundary [⟦delfosse2021⟧]. A peeling decoder then produces a correction inside each cluster. Weighted growth, in which an edge is traversed at a speed set by its weight, recovers much of the accuracy lost by uniform growth [⟦huang2020⟧], but peeling still picks an arbitrary spanning-forest correction and does not compare alternatives. MWPM, implemented with the blossom algorithm [⟦edmonds1965⟧, ⟦kolmogorov2009⟧], selects the lightest pairing globally and is the usual accuracy reference for surface codes. Fowler showed that matching can be performed locally with average constant parallel time [⟦fowler2015⟧]; the sparse-blossom and Micro Blossom implementations exploit the same locality in software and hardware [⟦higgott2025sb⟧, ⟦wu2025micro⟧]. Hierarchical schemes pass only hard syndromes to a global decoder [⟦delfosse2020hier⟧, ⟦das2022afs⟧]."
+    }
+   ]
+  },
+  {
+   "title": "III The Sandpiper decoder",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "III.1 Overview",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Sandpiper maintains a window of $H$ consecutive detector layers of the matching graph. We use $H=d$ throughout. In each cycle a new layer of detection events enters at the top of the window, the cluster state is updated, and the bottom layer leaves the window: edges of the current correction that lie entirely below the new bottom layer are committed to the Pauli frame. The decoder keeps three pieces of state between cycles: the set of clusters with their boundaries and parities, the tentative correction inside every neutral cluster, and the committed frame. The structure is close to that of Snowflake [⟦chan2026snowflake⟧], with two differences: growth is weighted, and neutral clusters are resolved by matching rather than by pushing defects to a root."
+    }
+   ]
+  },
+  {
+   "title": "III.2 Weighted cluster growth",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Edge weights are quantised to four-bit integers,"
+    },
+    {
+     "kind": "equation",
+     "text": "$$\\hat{w}_{e}=\\min\\left\\{15,\\ \\mathrm{round}\\left(\\kappa\\,\\log\\frac{1-p_{e}}{p_{e}}\\right)\\right\\},\\qquad(1)$$"
+    },
+    {
+     "kind": "p",
+     "text": "with $\\kappa$ chosen so that the heaviest edge of the DEM maps to 15. Every non-neutral cluster advances its frontier by one weight unit per growth step, and an edge becomes part of the cluster once the growth on both of its endpoints adds up to $\\hat{w}_{e}$, as in weighted UF [⟦huang2020⟧]. Two clusters that share an edge merge, and a cluster that reaches a spatial boundary becomes neutral. Each cycle runs a fixed budget of $G=16$ growth steps; a cluster that is still odd after the budget is carried into the next cycle with its growth state. With four-bit weights this quantisation changes the logical error rate of an otherwise identical floating-point model by less than its statistical uncertainty at all points of Table 3."
+    }
+   ]
+  },
+  {
+   "title": "III.3 Cluster-restricted matching",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A neutral cluster with $m$ defects is resolved by computing the minimum-weight perfect matching of those defects, with the boundary treated as a virtual defect of free parity, using path lengths measured inside the cluster only. For $m\\leq K=8$ the number of perfect matchings is at most $7!!=105$, and the matching engine enumerates them all in a pipelined tree of adders and comparators. Path lengths between defects are obtained during growth: each cluster cell records the distance to the defect it was reached from, and merges combine the records of the two clusters. Clusters with more than $K$ defects are rare below threshold; for these, Sandpiper falls back to peeling on a spanning forest of the cluster, as UF would. At $d=11$ and $p=0.1\\%$ the fallback is triggered for $0.021\\%$ of resolved clusters; at $p=0.5\\%$ for $1.3\\%$."
+    },
+    {
+     "kind": "p",
+     "text": "Matching inside a cluster can differ from global MWPM when the lightest pairing of two defects would leave the cluster. In practice cluster growth has already absorbed every edge that is lighter than the path inside the cluster at the moment the cluster becomes neutral, so the two agree for the vast majority of syndromes; we measure agreement of the committed frame with sliding-window PyMatching on $99.84\\%$ of rounds at $d=11$, $p=0.1\\%$."
+    }
+   ]
+  },
+  {
+   "title": "III.4 Commit rule",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A neutral cluster that does not touch the top layer of the window is final and its matched paths are kept. A neutral cluster that touches the top layer stays tentative: if a new defect enters it in the next cycle, its parity flips and growth resumes. When the window advances, the part of every correction lying in the layer that leaves the window is committed, and defects whose partner is still inside the window are replaced by their projection onto the new bottom layer, so that the remaining matching problem stays consistent. This is the same projection used by frugal sliding-window decoders [⟦chan2026snowflake⟧, ⟦tahaab2026⟧]. Because a cluster may extend over at most $H=d$ layers before it reaches the bottom of the window, the commit rule never discards a timelike chain shorter than $d$."
+    }
+   ]
+  },
+  {
+   "title": "III.5 Software model",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A C++ model reproduces the hardware cycle by cycle, including the four-bit weights, the growth budget $G$, the matching capacity $K$ and the order in which merges are processed. We checked bit-exact agreement between the model and the FPGA on $2\\times 10^{7}$ replayed shots per distance at $p=0.1\\%$ and $p=0.5\\%$. All logical error rates below are obtained with the model, which runs about 40 times slower than the hardware but can be distributed over a CPU cluster; latencies and resource figures come from the hardware."
+    }
+   ]
+  },
+  {
+   "title": "IV FPGA implementation",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "IV.1 Architecture",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The design targets an AMD Alveo U280 data-centre card (Virtex UltraScale+ XCU280) and was built with Vivado and Vitis 2025.1. Detection events arrive over one of the card's QSFP28 ports from a second U280 that acts as a syndrome source: it replays Stim-sampled detection events at a fixed rate of one round per microsecond, framed as one Ethernet packet per round. This arrangement mimics the interface of a control system that streams syndromes to a separate decoding card, as in Refs. [⟦barber2025⟧, ⟦liyanage2025⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "The core of the decoder is a two-dimensional array of processing elements (PEs), one per $Z$-type detector of a layer, replicated over the $H$ layers of the window and arranged as a circular buffer so that advancing the window only moves a pointer. Each PE stores its cluster label, parity, growth counter and the distance record used for matching, and exchanges messages with its graph neighbours in the same and adjacent layers. Cluster labels are merged with a two-phase label-propagation scheme similar to the distributed UF of Ref. [⟦liyanage2024⟧]. A pool of 16 matching engines is shared by all clusters; neutral clusters are queued to the pool by a small arbiter. A commit unit writes the committed edges into the Pauli frame and returns logical observable flips to the host over PCIe for verification. The design closes timing at 250 MHz for $d\\leq 11$."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Resource use and per-round latency of Sandpiper on the Alveo U280 at $p=0.1\\%$. Latency is measured from the arrival of the last packet of a round to the end of the commit for that round, over $10^{6}$ rounds per distance.\n$d$ | LUT (%) | FF (%) | BRAM (%) | mean latency (ns) | p99.9 latency (ns)\n5 | 9.8 | 6.1 | 4.2 | 168 | 372\n7 | 19.6 | 11.8 | 7.9 | 236 | 498\n9 | 37.2 | 22.5 | 13.4 | 329 | 671\n11 | 61.4 | 36.9 | 21.7 | 437 | 862"
+    }
+   ]
+  },
+  {
+   "title": "IV.2 Resource scaling",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 1 lists post-implementation resource use. The PE array dominates and grows as $d^{3}$, since the window holds $H=d$ layers of $(d^{2}-1)/2$ detectors; the matching pool is a fixed cost of roughly $3\\%$ of the LUTs. A distance-13 build exceeded the routing capacity of the device at 250 MHz, and we do not report it. Distances beyond 11 therefore require either a larger part or a design that splits the window over several devices; we return to this point in Sec. VI."
+    }
+   ]
+  },
+  {
+   "title": "V Results",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "V.1 Threshold",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We estimate logical error rates for $d\\in\\{5,7,9,11\\}$ and physical error rates from $0.30\\%$ to $1.00\\%$ in steps of $0.05\\%$, collecting samples with sinter until 2000 logical errors or $10^{8}$ shots are reached. The same circuits are decoded by Sandpiper and by PyMatching 2.2 run in sliding-window mode with windows of $2d$ rounds and a commit region of $d$ rounds [⟦higgott2025sb⟧, ⟦skoric2023⟧]. For each pair of neighbouring distances we locate the crossing of the logical-error curves by local quadratic interpolation, and we fit all points near threshold with the standard ansatz $p_{L}=A+Bx+Cx^{2}$, $x=(p-p_{\\mathrm{th}})\\,d^{1/\\nu}$ [⟦wang2011⟧, ⟦stephens2014⟧]. Uncertainties are bootstrap standard errors over shots."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: Pairwise crossing points and fitted thresholds (in $\\%$) under SD6 noise, memory-$Z$ experiments with $3d$ rounds.\ncrossing | Sandpiper | PyMatching (sliding window)\n$d=5/7$ | 0.681(12) | 0.716(9)\n$d=7/9$ | 0.665(14) | 0.705(11)\n$d=9/11$ | 0.674(17) | 0.713(13)\nfit $p_{\\mathrm{th}}$ | 0.672(9) | 0.711(7)\nfit $\\nu$ | 1.31(9) | 1.42(8)"
+    },
+    {
+     "kind": "p",
+     "text": "Table 2 collects the results. The three pairwise crossings of Sandpiper scatter around the fitted value without a clear trend, and the fit gives a circuit-level threshold of $p_{\\mathrm{th}}=0.672(9)\\%$. The sliding-window matching reference reaches $0.711(7)\\%$, in line with the range usually quoted for MWPM under this noise model [⟦stephens2014⟧, ⟦higgott2025sb⟧]. Sandpiper therefore gives up about $5\\%$ of the matching threshold. For comparison, cluster-growth decoders without a matching step typically sit further below matching under circuit-level noise [⟦huang2020⟧, ⟦chan2026snowflake⟧], although differences in noise convention make direct comparisons approximate."
+    }
+   ]
+  },
+  {
+   "title": "V.2 Sub-threshold performance",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "table",
+     "text": "Table 3: Logical error rate per round at $p=0.1\\%$ (memory-$Z$, $3d$ rounds). The last row gives the suppression factor $\\Lambda$ between consecutive distances for Sandpiper.\n$d$ | Sandpiper | PyMatching | ratio\n5 | $1.12\\times 10^{-4}$ | $9.1\\times 10^{-5}$ | 1.23\n7 | $1.86\\times 10^{-5}$ | $1.37\\times 10^{-5}$ | 1.36\n9 | $2.9\\times 10^{-6}$ | $2.0\\times 10^{-6}$ | 1.45\n11 | $4.7\\times 10^{-7}$ | $3.1\\times 10^{-7}$ | 1.52\n$\\Lambda$ (5→7, 7→9, 9→11) | 6.0, 6.4, 6.2 | | "
+    },
+    {
+     "kind": "p",
+     "text": "At $p=0.1\\%$ Sandpiper's logical error rate per round is between 1.23 and 1.52 times that of sliding-window matching (Table 3), and the ratio grows slowly with distance. The suppression factor between consecutive distances stays close to 6, so the decoder retains the full exponential suppression expected below threshold. The $d=11$ entries rest on 412 and 287 logical errors respectively and carry relative uncertainties of about $6\\%$; the others are below $3\\%$. We did not observe any logical failure that could be traced to the commit rule alone in a targeted search over weight-$\\lfloor d/2\\rfloor$ timelike chains, consistent with the argument in Sec. III.4."
+    }
+   ]
+  },
+  {
+   "title": "V.3 Latency",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The latency figures in Table 1 are measured on the hardware with the U280 syndrome source running at one round per microsecond. At $d=11$ and $p=0.1\\%$ the mean per-round latency is 437 ns and the 99.9th percentile is 862 ns, so even the tail stays within one syndrome cycle. Latency increases with distance mainly because label propagation across the array takes longer, and with physical error rate because clusters grow for more steps and more of them queue for the matching pool (Table 4). From $p=0.2\\%$ upward the 99.9th percentile exceeds $1~\\mu\\mathrm{s}$; the decoder stays throughput-stable up to $p=0.5\\%$ because slow rounds are rare and the next round can enter the window while the previous commit finishes."
+    },
+    {
+     "kind": "table",
+     "text": "Table 4: Per-round latency of Sandpiper at $d=11$ versus physical error rate.\n$p$ (%) | mean (ns) | p99.9 (ns) | matching-pool occupancy (%)\n0.05 | 391 | 718 | 2.4\n0.10 | 437 | 862 | 4.6\n0.20 | 518 | 1094 | 9.3\n0.30 | 604 | 1387 | 14.8"
+    }
+   ]
+  },
+  {
+   "title": "V.4 Comparison with other hardware decoders",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Direct comparisons between hardware decoders are complicated by different devices, noise models and latency definitions [⟦battistel2023⟧]. Qualitatively, Sandpiper occupies a middle ground. Distributed UF designs such as Helios reach larger distances on a single device and lower latency at equal distance because their PEs are simpler [⟦liyanage2023⟧, ⟦liyanage2024⟧], and collision clustering is considerably more economical in logic [⟦barber2025⟧]; both inherit the accuracy of cluster growth with peeling. Micro Blossom achieves exact MWPM accuracy with sub-microsecond latency at moderate distance by accelerating the blossom algorithm itself [⟦wu2025micro⟧], at the price of a more complex control flow. Sandpiper keeps the fixed, local control flow of cluster growth and buys back most of the accuracy of matching with a small shared matching pool. Like Snowflake and the online UF decoders of Refs. [⟦kasamura2025⟧, ⟦itoh2026⟧] it processes rounds as they arrive, which keeps the reaction time independent of the number of rounds since the last logical operation."
+    }
+   ]
+  },
+  {
+   "title": "V.5 Design-parameter ablations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The three main design parameters are the window height $H$, the growth budget per cycle $G$ and the matching capacity $K$. Table 5 varies each of them around the default at $d=9$, using the software model for logical error rates near threshold ($p=0.6\\%$, $2\\times 10^{6}$ shots per entry) and the hardware for latency at $p=0.1\\%$. Shrinking the window below $d$ costs accuracy, as expected from the commit argument of Sec. III.4, while a taller window buys almost nothing and adds latency because label propagation has more layers to cover. A growth budget of 8 steps leaves too many clusters unresolved at the end of a cycle near threshold; 24 steps behaves like 16. Reducing $K$ to 6 shrinks each matching engine by about $40\\%$ but sends more clusters to the peeling fallback, which shows up as a higher logical error rate."
+    },
+    {
+     "kind": "table",
+     "text": "Table 5: Ablations at $d=9$. Logical error probability per shot ($3d$ rounds) at $p=0.6\\%$ from the software model; mean per-round latency at $p=0.1\\%$ from the hardware. Statistical uncertainties on $p_{L}$ are about $0.0007$.\nconfiguration | $p_{L}$ at $p=0.6\\%$ | mean latency (ns)\ndefault ($H=d$, $G=16$, $K=8$) | 0.1183 | 329\n$H=d-2$ | 0.1297 | 301\n$H=d+2$ | 0.1176 | 391\n$G=8$ | 0.1268 | 318\n$G=24$ | 0.1180 | 347\n$K=6$ | 0.1241 | 322"
+    },
+    {
+     "kind": "p",
+     "text": "We also checked that the default configuration is not tuned to a particular distance: repeating the growth-budget scan at $d=5$ and $d=11$ gives the same ordering, and the logical error rates at $G=16$ and $G=24$ agree within their uncertainties at both distances (not shown)."
+    }
+   ]
+  },
+  {
+   "title": "VI Discussion and limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Several limitations apply. First, all results are for memory experiments under a single noise model. Lattice surgery introduces time-varying decoding graphs at merge boundaries [⟦horsman2012⟧, ⟦lin2025⟧, ⟦liyanage2025⟧], which the current commit unit does not support. Second, we used the decomposed graphlike DEM; hyperedge information that correlated matching or belief-matching exploit is discarded, as it is for the PyMatching reference. Third, latencies were measured with a replayed syndrome stream rather than a quantum processor, so they exclude readout and the control system's own processing. Fourth, the U280 limits us to $d\\leq 11$ at 250 MHz. Larger distances will require a bigger device or a partitioned window."
+    },
+    {
+     "kind": "p",
+     "text": "The matching capacity $K=8$ is a design choice. Increasing it to 10 would raise the number of enumerated matchings to 945 and roughly double the area of each engine; at the error rates of interest the fallback rate is already small, so we kept $K=8$. Combining Sandpiper with a pre-decoder that removes isolated defect pairs [⟦smith2023⟧, ⟦alavisamani2024⟧] would reduce the load on the matching pool further. Finally, the same structure applies to other codes with graphlike DEMs, and to decoders for logical operations where streaming commit is essential [⟦maurer2025⟧, ⟦lao2026⟧]."
+    }
+   ]
+  },
+  {
+   "title": "VII Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Sandpiper shows that a streaming decoder can combine the regular, local control flow of cluster growth with exact matching inside clusters, and that the combination fits on a single data-centre FPGA for distances up to 11. Under uniform circuit-level depolarizing noise it reaches a threshold of $0.672(9)\\%$, close to the $0.711(7)\\%$ of sliding-window matching, while finishing each syndrome round in well under a microsecond. Extending the design to lattice surgery and to larger devices is the natural next step."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A: Matching engine",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each matching engine receives up to $K=8$ defects of a neutral cluster together with the $\\binom{8}{2}=28$ pairwise path lengths and the eight defect-to-boundary distances recorded during growth. If the cluster touches a boundary and holds an odd number of defects, a virtual boundary defect is appended; if it holds an even number, the virtual defect is still offered, but it may only be paired together with a second boundary pairing, which the engine represents by allowing two defects to match to the boundary at the cost of the sum of their boundary distances. The engine enumerates all perfect matchings with a fixed recursive schedule: the lowest-index unmatched defect is paired with each remaining candidate in turn, which unrolls into a tree with $7\\times 5\\times 3=105$ leaves for eight defects. Eight 12-bit adders evaluate eight leaves per clock cycle, so a full cluster takes 14 cycles including the comparator tree and write-back; clusters with two defects, the most common case below threshold, are resolved in three cycles by a bypass path."
+    },
+    {
+     "kind": "p",
+     "text": "Ties between matchings of equal weight are broken by the leaf index, which makes the result deterministic and is what allows bit-exact agreement with the software model. The engine stores no state between clusters, so the arbiter can hand clusters to any free engine. In the $d=11$ build the 16 engines together use 39,800 LUTs, about $3\\%$ of the device."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank colleagues in the Leeds quantum technologies group for discussions, and the AMD University Program for the donation of the two Alveo U280 cards. Simulations were run on ARC4, part of the High Performance Computing facilities at the University of Leeds. This work was supported by the Engineering and Physical Sciences Research Council (EPSRC) under grant EP/Y03561X/1 and by a UKRI Future Leaders Fellowship (MR/Y017842/1) awarded to C.H."
+    }
+   ]
+  },
+  {
+   "title": "Data and code availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The Sandpiper RTL, the C++ software model, the Stim circuits and the raw sampling statistics behind Tables 1–5 are available at https://github.com/leeds-qec/sandpiper and archived at Zenodo (doi:10.5281/zenodo.16938825)."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "dennis2002",
+   "tag": "1",
+   "text": "E. Dennis, A. Kitaev, A. Landahl, and J. Preskill, Topological quantum memory, J. Math. Phys. 43, 4452 (2002)."
+  },
+  {
+   "key": "terhal2015",
+   "tag": "2",
+   "text": "B. M. Terhal, Quantum error correction for quantum memories, Rev. Mod. Phys. 87, 307 (2015)."
+  },
+  {
+   "key": "fowler2012",
+   "tag": "3",
+   "text": "A. G. Fowler, M. Mariantoni, J. M. Martinis, and A. N. Cleland, Surface codes: Towards practical large-scale quantum computation, Phys. Rev. A 86, 032324 (2012)."
+  },
+  {
+   "key": "wang2011",
+   "tag": "4",
+   "text": "D. S. Wang, A. G. Fowler, and L. C. L. Hollenberg, Surface code quantum computing with error rates over 1%, Phys. Rev. A 83, 020302 (2011)."
+  },
+  {
+   "key": "google2023",
+   "tag": "5",
+   "text": "Google Quantum AI, Suppressing quantum errors by scaling a surface code logical qubit, Nature 614, 676 (2023)."
+  },
+  {
+   "key": "google2025",
+   "tag": "6",
+   "text": "Google Quantum AI and Collaborators, Quantum error correction below the surface code threshold, Nature 638, 920 (2025)."
+  },
+  {
+   "key": "battistel2023",
+   "tag": "7",
+   "text": "F. Battistel, C. Chamberland, K. Johar, R. W. J. Overwater, F. Sebastiano, L. Skoric, Y. Ueno, and M. Usman, Real-time decoding for fault-tolerant quantum computing: progress, challenges and outlook, Nano Futures 7, 032003 (2023)."
+  },
+  {
+   "key": "horsman2012",
+   "tag": "8",
+   "text": "D. Horsman, A. G. Fowler, S. Devitt, and R. Van Meter, Surface code quantum computing by lattice surgery, New J. Phys. 14, 123011 (2012)."
+  },
+  {
+   "key": "skoric2023",
+   "tag": "9",
+   "text": "L. Skoric, D. E. Browne, K. M. Barnes, N. I. Gillespie, and E. T. Campbell, Parallel window decoding enables scalable fault tolerant quantum computation, Nat. Commun. 14, 7040 (2023)."
+  },
+  {
+   "key": "tan2023",
+   "tag": "10",
+   "text": "X. Tan, F. Zhang, R. Chao, Y. Shi, and J. Chen, Scalable surface-code decoders with parallelization in time, PRX Quantum 4, 040344 (2023)."
+  },
+  {
+   "key": "bombin2023",
+   "tag": "11",
+   "text": "H. Bombín, C. Dawson, Y.-H. Liu, N. Nickerson, F. Pastawski, and S. Roberts, Modular decoding: parallelizable real-time decoding for quantum computers, arXiv:2303.04846 (2023)."
+  },
+  {
+   "key": "viszlai2025",
+   "tag": "12",
+   "text": "J. Viszlai, J. D. Chadwick, S. Joshi, G. S. Ravi, Y. Li, and F. T. Chong, SWIPER: Minimizing fault-tolerant quantum program latency via speculative window decoding, in Proceedings of the 52nd Annual International Symposium on Computer Architecture (ISCA '25) (2025) pp. 1386–1401."
+  },
+  {
+   "key": "higgott2022pm",
+   "tag": "13",
+   "text": "O. Higgott, PyMatching: A Python package for decoding quantum codes with minimum-weight perfect matching, ACM Trans. Quantum Comput. 3, 1 (2022)."
+  },
+  {
+   "key": "higgott2025sb",
+   "tag": "14",
+   "text": "O. Higgott and C. Gidney, Sparse Blossom: correcting a million errors per core second with minimum-weight matching, Quantum 9, 1600 (2025)."
+  },
+  {
+   "key": "wu2023fusion",
+   "tag": "15",
+   "text": "Y. Wu and L. Zhong, Fusion Blossom: Fast MWPM decoders for QEC, in 2023 IEEE International Conference on Quantum Computing and Engineering (QCE), Vol. 1 (2023) pp. 928–938."
+  },
+  {
+   "key": "delfosse2021",
+   "tag": "16",
+   "text": "N. Delfosse and N. H. Nickerson, Almost-linear time decoding algorithm for topological codes, Quantum 5, 595 (2021)."
+  },
+  {
+   "key": "huang2020",
+   "tag": "17",
+   "text": "S. Huang, M. Newman, and K. R. Brown, Fault-tolerant weighted union-find decoding on the toric code, Phys. Rev. A 102, 012419 (2020)."
+  },
+  {
+   "key": "liyanage2023",
+   "tag": "18",
+   "text": "N. Liyanage, Y. Wu, A. Deters, and L. Zhong, Scalable quantum error correction for surface codes using FPGA, in 2023 IEEE International Conference on Quantum Computing and Engineering (QCE), Vol. 1 (2023) pp. 916–927."
+  },
+  {
+   "key": "liyanage2024",
+   "tag": "19",
+   "text": "N. Liyanage, Y. Wu, S. Tagare, and L. Zhong, FPGA-based distributed union-find decoder for surface codes, IEEE Trans. Quantum Eng. 5, 1 (2024)."
+  },
+  {
+   "key": "valentino2025",
+   "tag": "20",
+   "text": "F. Valentino, B. Branchini, D. Conficconi, D. Sciuto, and M. D. Santambrogio, QUEKUF: an FPGA union find decoder for quantum error correction on the toric code, ACM Trans. Reconfigurable Technol. Syst. 18, 1 (2025)."
+  },
+  {
+   "key": "barber2025",
+   "tag": "21",
+   "text": "B. Barber, K. M. Barnes, T. Bialas, O. Buğdaycı, E. T. Campbell, N. I. Gillespie, K. Johar, R. Rajan, A. W. Richardson, L. Skoric, C. Topal, M. L. Turner, and A. B. Ziad, A real-time, scalable, fast and resource-efficient decoder for a quantum computer, Nat. Electron. 8, 84 (2025)."
+  },
+  {
+   "key": "ziad2025",
+   "tag": "22",
+   "text": "A. B. Ziad, A. Zalawadiya, C. Topal, J. Camps, G. P. Gehér, M. P. Stafford, and M. L. Turner, Local clustering decoder as a fast and adaptive hardware decoder for the surface code, Nat. Commun. 16, 11048 (2025)."
+  },
+  {
+   "key": "wu2025micro",
+   "tag": "23",
+   "text": "Y. Wu, N. Liyanage, and L. Zhong, Micro Blossom: Accelerated minimum-weight perfect matching decoding for quantum error correction, in Proceedings of the 30th ACM International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS '25) (2025)."
+  },
+  {
+   "key": "das2022lilliput",
+   "tag": "24",
+   "text": "P. Das, A. Locharla, and C. Jones, LILLIPUT: a lightweight low-latency lookup-table decoder for near-term quantum error correction, in Proceedings of the 27th ACM International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS '22) (2022) pp. 541–553."
+  },
+  {
+   "key": "smith2023",
+   "tag": "25",
+   "text": "S. C. Smith, B. J. Brown, and S. D. Bartlett, Local predecoder to reduce the bandwidth and latency of quantum error correction, Phys. Rev. Appl. 19, 034050 (2023)."
+  },
+  {
+   "key": "chamberland2023",
+   "tag": "26",
+   "text": "C. Chamberland, L. Goncalves, P. Sivarajah, E. Peterson, and S. Grimberg, Techniques for combining fast local decoders with global decoders under circuit-level noise, Quantum Sci. Technol. 8, 045011 (2023)."
+  },
+  {
+   "key": "vittal2023",
+   "tag": "27",
+   "text": "S. Vittal, P. Das, and M. Qureshi, Astrea: Accurate quantum error-decoding via practical minimum-weight perfect-matching, in Proceedings of the 50th Annual International Symposium on Computer Architecture (ISCA '23) (2023)."
+  },
+  {
+   "key": "alavisamani2024",
+   "tag": "28",
+   "text": "N. Alavisamani, S. Vittal, R. Ayanzadeh, P. Das, and M. Qureshi, Promatch: extending the reach of real-time quantum error correction with adaptive predecoding, in Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 3 (ASPLOS '24) (2024)."
+  },
+  {
+   "key": "wegmann2026",
+   "tag": "29",
+   "text": "P. Wegmann, T. Augoustis, A. Świerkowska, E. Giortamis, and P. Bhatotia, ZeroG: A pre-decoder-aware decoder for quantum error correction, arXiv e-prints (2026)."
+  },
+  {
+   "key": "gao2026",
+   "tag": "30",
+   "text": "P. Gao, X.-S. Xu, J.-Z. Han, J.-W. Wen, L. Qian, X. Lv, et al., QuantiSpect: A structure-aware lightweight 3D CNN pre-decoder for scalable surface code quantum error correction, arXiv e-prints (2026)."
+  },
+  {
+   "key": "holmes2020",
+   "tag": "31",
+   "text": "A. Holmes, M. R. Jokar, G. Pasandi, Y. Ding, M. Pedram, and F. T. Chong, NISQ+: Boosting quantum computing power by approximating quantum error correction, in Proceedings of the 47th Annual International Symposium on Computer Architecture (ISCA '20) (2020) pp. 556–569."
+  },
+  {
+   "key": "ueno2022qecool",
+   "tag": "32",
+   "text": "Y. Ueno, M. Kondo, M. Tanaka, Y. Suzuki, and Y. Tabuchi, QECOOL: On-line quantum error correction with a superconducting decoder for surface code, in Proceedings of the 58th ACM/IEEE Design Automation Conference (DAC '21) (2021) pp. 451–456."
+  },
+  {
+   "key": "bausch2024",
+   "tag": "33",
+   "text": "J. Bausch, A. W. Senior, F. J. H. Heras, T. Edlich, A. Davies, M. Newman, et al., Learning high-accuracy error decoding for quantum processors, Nature 635, 834 (2024)."
+  },
+  {
+   "key": "senior2025",
+   "tag": "34",
+   "text": "A. W. Senior, T. Edlich, F. J. H. Heras, L. M. Zhang, O. Higgott, J. S. Spencer, et al., A scalable and real-time neural decoder for topological quantum codes, arXiv:2512.07737 (2025)."
+  },
+  {
+   "key": "chan2023actis",
+   "tag": "35",
+   "text": "T. Chan and S. C. Benjamin, Actis: A strictly local union–find decoder, Quantum 7, 1183 (2023)."
+  },
+  {
+   "key": "chan2026snowflake",
+   "tag": "36",
+   "text": "T. Chan, Snowflake: a distributed streaming decoder, Quantum 10, 2033 (2026)."
+  },
+  {
+   "key": "kasamura2025",
+   "tag": "37",
+   "text": "T. Kasamura, J. Kadomoto, and H. Irie, Design of an online surface code decoder using union-find algorithm, in 2025 IEEE 43rd International Conference on Computer Design (ICCD) (2025) pp. 823–830."
+  },
+  {
+   "key": "itoh2026",
+   "tag": "38",
+   "text": "L. Itoh, T. Kasamura, H. Irie, and J. Kadomoto, Design of a quantum error correction decoder exploiting temporal parallelism, accepted at IEEE International Conference on Quantum Computing and Engineering (QCE) (2026)."
+  },
+  {
+   "key": "lao2026",
+   "tag": "39",
+   "text": "L. Lao, Q. Wang, Y. Liu, Y. Liu, H. Wang, Y. Chen, et al., Real-time decoding of quantum error correction codes using high-performance computing, arXiv e-prints (2026)."
+  },
+  {
+   "key": "gidney2021stim",
+   "tag": "40",
+   "text": "C. Gidney, Stim: a fast stabilizer circuit simulator, Quantum 5, 497 (2021)."
+  },
+  {
+   "key": "gidney2021honeycomb",
+   "tag": "41",
+   "text": "C. Gidney, M. Newman, A. Fowler, and M. Broughton, A fault-tolerant honeycomb memory, Quantum 5, 605 (2021)."
+  },
+  {
+   "key": "stephens2014",
+   "tag": "42",
+   "text": "A. M. Stephens, Fault-tolerant thresholds for quantum error correction with the surface code, Phys. Rev. A 89, 022321 (2014)."
+  },
+  {
+   "key": "ikari2026",
+   "tag": "43",
+   "text": "S. Ikari, Y. Hirai, Y. Suzuki, H. Nakamura, and Y. Ueno, Do not let CNOTs overwhelm the decoder: Scheduling transversal gates for fast FTQC, arXiv e-prints (2026)."
+  },
+  {
+   "key": "edmonds1965",
+   "tag": "44",
+   "text": "J. Edmonds, Paths, trees, and flowers, Can. J. Math. 17, 449 (1965)."
+  },
+  {
+   "key": "kolmogorov2009",
+   "tag": "45",
+   "text": "V. Kolmogorov, Blossom V: a new implementation of a minimum cost perfect matching algorithm, Math. Program. Comput. 1, 43 (2009)."
+  },
+  {
+   "key": "fowler2015",
+   "tag": "46",
+   "text": "A. G. Fowler, Minimum weight perfect matching of fault-tolerant topological quantum error correction in average O(1) parallel time, Quantum Inf. Comput. 15, 145 (2015)."
+  },
+  {
+   "key": "delfosse2020hier",
+   "tag": "47",
+   "text": "N. Delfosse, Hierarchical decoding to reduce hardware requirements for quantum computing, arXiv:2001.11427 (2020)."
+  },
+  {
+   "key": "das2022afs",
+   "tag": "48",
+   "text": "P. Das, C. A. Pattison, S. Manne, D. M. Carmean, K. M. Svore, M. Qureshi, and N. Delfosse, AFS: Accurate, fast, and scalable error-decoding for fault-tolerant quantum computers, in 2022 IEEE International Symposium on High-Performance Computer Architecture (HPCA) (2022) pp. 259–273."
+  },
+  {
+   "key": "tahaab2026",
+   "tag": "49",
+   "text": "M. Tahaab, T. Chan, J. Kirkman, and S. C. Benjamin, Stream decoding with confidence scores at room and cryogenic temperatures, arXiv e-prints (2026)."
+  },
+  {
+   "key": "liyanage2025",
+   "tag": "50",
+   "text": "N. Liyanage, Y. Wu, E. Houghton, and L. Zhong, Network-integrated decoding system for real-time quantum error correction with lattice surgery, in 2025 IEEE International Conference on Quantum Computing and Engineering (QCE), Vol. 1 (2025) pp. 1148–1159."
+  },
+  {
+   "key": "lin2025",
+   "tag": "51",
+   "text": "S. F. Lin, E. C. Peterson, K. Sankar, and P. Sivarajah, Spatially parallel decoding for multi-qubit lattice surgery, Quantum Sci. Technol. 10, 035007 (2025)."
+  },
+  {
+   "key": "maurer2025",
+   "tag": "52",
+   "text": "T. Maurer, M. Bühler, M. Kröner, F. Haverkamp, T. Müller, D. Vandeth, and B. R. Johnson, Real-time decoding of the gross code memory with FPGAs, arXiv:2510.21600 (2025)."
+  }
+ ],
+ "bib_style": "numeric"
+}

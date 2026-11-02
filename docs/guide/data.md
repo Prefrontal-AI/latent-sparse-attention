@@ -48,7 +48,7 @@ lsa data prepare <card> --dry-run # what would be submitted
 ```
 
 One verb prepares every dataset, and it always submits - nothing is generated where the command is typed.
-The card's kind says what runs: a tokenized or a collected source card uses the shared tokenizer preparation, a workload is the production prompt builder, and a benchmark is the generator its card's `preparer` names, because RULER and LongBench v2 are both benchmarks and the kind alone does not tell them apart.
+The card's kind says what runs: a source card with a `collector` is streamed from the hub, a tokenized card uses the shared tokenizer preparation, a workload is the production prompt builder, and a benchmark is the generator its card's `preparer` names, because RULER and LongBench v2 are both benchmarks and the kind alone does not tell them apart.
 A generator's own options - lengths, tasks, parallel jobs - are flags of `lsa data prepare`, and `--cpus`, `--mem-gb`, `--hours`, `--partition` and `--reservation` change what the job asks for.
 
 ## Sources
@@ -56,7 +56,7 @@ A generator's own options - lengths, tasks, parallel jobs - are flags of `lsa da
 A source card is its own origin: `dataset` is the hub dataset it was streamed from at `revision`, or `collected_from` the directory of a source that never left the cluster.
 Its text is one folder of parquet shards, each carrying a `doc_id` and a `text` column, with a `_DONE` marker written when collecting finished.
 The nine collected sources are `data/sources/<card>` under the shared root.
-The collector streamed `main` and recorded no revision, so each is the one that was its dataset's head that day, read off the commit history afterwards.
+The collector streamed `main` and recorded no revision, so each card's `revision` is the one that was its dataset's head that day, read off the commit history afterwards - except `code`, whose dataset is gated and whose revision nobody could read.
 
 `licence` is an SPDX id, `internal`, or `per-document`.
 A shard's own `license` column is the collector's one label per source, and arxiv's is wrong - upstream holds CC BY-SA and public-domain papers beside CC BY and CC0.
@@ -64,8 +64,8 @@ So a `per-document` source has a `manifest.parquet` beside its shards, one row p
 `card.document_licences()` reads its `licence` column.
 A manifest says what upstream says and no more - hansard's calls every document the Open Parliament Licence, although 780 are from the Scottish Parliament, the Northern Ireland Assembly and the Senedd, whose terms differ, and their `doc_id` prefixes `sp`, `ni` and `senedd` are what tells them apart.
 
-`games` and `edgebench` are `internal`.
-`code` is The Stack, which is gated, and our token is not on its list - so its revision and its per-file licences are unrecorded, and its licence is `other`, as the dataset itself declares, until someone with access pins them.
+`games` and `edgebench` are `internal`, and are to be released as the text they were rendered to.
+`code` is The Stack, which is gated, so its revision and its per-file licences are unrecorded, and its licence is `other`, as the dataset itself declares, until someone with access pins them.
 
 The agent trajectories are a source too, rendered from EdgeBench sessions:
 
@@ -73,8 +73,43 @@ The agent trajectories are a source too, rendered from EdgeBench sessions:
 lsa data prepare edgebench --sessions <run shard dirs...>
 ```
 
-Preparing a source card renders it only when it was collected into the directory it names as its origin, which is the trajectories alone - every other source was collected by a pipeline that predates this repository, and preparing one refuses rather than collecting it again.
+Preparing a source card with no collector renders it only when it was collected into the directory it names as its origin, which is the trajectories alone - `games` was read from run directories this repository does not hold, and preparing it refuses.
 The harness's run directories are not on the card, so `--sessions` names them, and every session is rendered through GLM-5.3-Flash's own chat template into the card's folder.
+
+## Collecting a source from the hub
+
+```bash
+lsa data prepare gutenberg                        # one source, as a CPU job that reads the hub
+lsa data prepare gutenberg --limit-docs 200       # the first 200 documents the stream gives, to see that it runs
+lsa data prepare gutenberg --verify <lock file>   # after it finishes - compare what was collected with a lock file
+lsa data prepare gutenberg --write-lock <out>     # write the lock file of shards that exist
+```
+
+Eight sources have a `collector`: arxiv, doab, gutenberg, hansard, usgpo and wikimedia from the Common Pile, swe from Open-SWE-Traces, and code from The Stack.
+Each is the first collector's rules, ported and not changed, because a change to one is a different corpus.
+The job is the one that reads the hub, so unlike every other preparing job it is not offline.
+It never replaces a collection that is already there - it refuses, and the folder is moved aside by hand - and it writes into a staging folder that is moved into place with the `_DONE` marker last, so a killed job leaves nothing that looks collected.
+
+**What a document is** depends on the card's `collector`.
+A `text` source is one row of its hub dataset, named by its id.
+A `repositories` source is the files of one repository joined as `# <path>` and the file, in the order of the paths, named `<language>/<owner>/<repo>`.
+The Stack stores a repository's files scattered, so each language is read in the stream's order until its files hold the card's `buffer_chars`, and a repository's files beyond that slice are not in its document.
+A `traces` source is one agent trajectory, rendered as each turn's role, reasoning, content and tool calls.
+
+**What is kept** is a document of at least the card's `min_tokens` - 64k - counted with no special tokens by the card's tokenizer at its pinned revision, SmolLM3-3B-Base, which is not the tokenizer a corpus is later tokenized with.
+A document shorter than 2.5 characters for each of those 64k tokens could never reach them, so it is dropped before it is counted.
+Collection stops at the first batch that takes the kept tokens past the card's `max_tokens`, which is 3B for usgpo, swe and code, so the last batch can pass it.
+
+Two things in the first collector are not what its labels say, and both are kept:
+
+- A file whose repository lists no licence passes the filter, and only the first licence it does list is looked at.
+- The permitted list holds ISC, MPL-2.0, CC0-1.0, CC-BY-4.0 and others, but every `code` document carries the label `mit/apache/bsd`.
+
+**What cannot be read off the card** is the order a hub dataset streams in, and for `code` the revision.
+Where the revision is pinned the order follows from it.
+Where it is not, a lock file is how a reader tells a collection that reproduced the corpus from one that did not.
+It holds the sha256 of every document the corpus was collected with, in order, and `--verify` names each document that is missing, extra or changed, and says when the documents they share are in another order - which is a different corpus, since a tokenized row lands where the documents before it put it.
+A collection that matches its lock is the corpus, and one that does not is a reader's own, which is reproducible only as far as its lock says.
 
 ## Tokenized datasets
 

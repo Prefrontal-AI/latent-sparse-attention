@@ -1,0 +1,27 @@
+{
+ "node": "B3",
+ "kind": "patch",
+ "host": "2609.10965",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.SS3.p3.1",
+   "after": 2,
+   "text": "Variants on other color-code lattices, such as the square-octagon construction of Ref. [⟦new.B1⟧], shorten the distance-five stage by cultivating in a smaller code with fewer postselected checks."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS5.SSS2.p4.1",
+   "after": 2,
+   "text": "Under the allocation $\\epsilon_{\\mathrm{NC}}=10^{-2}$ of Eq. (46), for example, the fault-distance-5 square-octagon cultivation output of Ref. [⟦new.B1⟧], $p_{T}^{\\mathrm{out}}=4.3\\times 10^{-10}$ at $p_{\\mathrm{phys}}=10^{-3}$, satisfies Eq. (31) for computations consuming up to $N_{T}\\approx 2.3\\times 10^{7}$ states, compared with $N_{T}\\approx 5.0\\times 10^{6}$ for the Gidney fault-distance-5 entry ($2.0\\times 10^{-9}$) of the cultivation catalogue in Sec. S6.2."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "O. Hedlund, E. Sandberg, J. Wiklund, and M. Forsgren (2026). Magic state cultivation in the square-octagon colour code. arXiv preprint."
+  }
+ ]
+}

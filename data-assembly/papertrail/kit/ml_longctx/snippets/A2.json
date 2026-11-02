@@ -1,0 +1,560 @@
+{
+ "node": "A2",
+ "kind": "fake_paper",
+ "date": "2026-09-10",
+ "title": "Lossless KV Budgets from Long Prompts to Long Reasoning Traces: A Length-Controlled Study of Cache Eviction",
+ "authors": [
+  "Fraser Mowat",
+  "Eilidh Cowan",
+  "Ilona Sadowska",
+  "Rajat Menon",
+  "Kirsty Ballantyne"
+ ],
+ "affiliations": [
+  "School of Informatics, University of Edinburgh, Edinburgh, United Kingdom"
+ ],
+ "abstract": "Eviction methods for the key-value (KV) cache are usually compared at a few fixed budgets, yet a deployed model sees prompts from a few thousand to more than a hundred thousand tokens and, when it reasons, writes traces that keep growing during decoding. We present a length-controlled study of seven eviction methods that measures, for each method, the lossless budget, the smallest cache that keeps accuracy within 1.0 point of the full cache, and how it scales with length. We cover two regimes: compression of long prompts from 16K to 128K tokens on RULER with Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct and Qwen3-8B, and decode-time eviction of reasoning traces of up to 32K generated tokens on AIME and MATH-500 with DeepSeek-R1-Distill-Llama-8B and Qwen3-8B. For long prompts, lossless budgets grow sublinearly but more steeply than shorter-context measurements suggest, with exponents from 0.61 (SuBA) to 0.97 (StreamingLLM); the steepening between 32K and 128K is driven by variable tracking and aggregation tasks. For reasoning traces, budgets grow almost linearly (exponents 0.83-0.91 for the four online methods that have a lossless budget), so at equal length a trace leaves far less room for eviction than a prompt. We release the harness, all budget searches and the per-task scores.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "KV-cache eviction is now a standard tool for long-context inference, and the number of proposed selection rules is large [⟦h2o⟧, ⟦snapkv⟧, ⟦streaming⟧, ⟦pyramid⟧, ⟦adakv⟧, ⟦tova⟧, ⟦cake⟧]. Two developments have changed what these rules are asked to do. Context windows of 128K tokens are routine for open 7-8B models [⟦llama3⟧, ⟦qwen25⟧, ⟦qwen3⟧], so prompts in a single deployment can differ in length by a factor of thirty. And reasoning models generate traces of tens of thousands of tokens [⟦r1⟧, ⟦qwen3⟧], which turns the cache into something that grows during decoding rather than a fixed object to be compressed once after prefill [⟦rkv⟧, ⟦thinkv⟧, ⟦lazy⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Evaluation has not followed. Most papers report accuracy at fixed token budgets or fixed fractions of the prompt [⟦yuan⟧], and the few studies that vary length do so at a fixed budget. In earlier work we proposed to invert this and report the lossless budget, the smallest budget at which accuracy stays within a tolerance of the full cache, and measured how it scales with the prompt length for one method between 4K and 32K tokens [⟦allokv⟧]. That study left open how other methods behave, whether the scaling persists at the context lengths where eviction saves the most memory, and whether it says anything about reasoning traces."
+    },
+    {
+     "kind": "p",
+     "text": "This paper is a systematic answer to those questions. We measure lossless budgets for seven methods with one protocol in two regimes. In the prefill regime, prompts of 16K to 128K tokens are compressed once and the model then answers a RULER question [⟦ruler⟧]. In the decode regime, a reasoning model solves AIME or MATH-500 problems [⟦math⟧, ⟦lightman⟧, ⟦aime⟧] while its cache is pruned every 128 generated tokens. For every method, model and length we locate the lossless budget by bisection and fit a power law $B^{*}\\propto L^{\\beta}$ across lengths."
+    },
+    {
+     "kind": "p",
+     "text": "The main findings are as follows. (1) In the prefill regime the exponent orders the methods clearly: 0.61 for SuBA, 0.65 for Ada-KV, 0.68 for SnapKV, 0.70 for PyramidKV, 0.79 for H2O and 0.97 for StreamingLLM. All are steeper than measurements below 32K suggest, and the steepening comes from variable tracking and common-word extraction, whose relevant tokens grow with the haystack. (2) In the decode regime budgets grow almost in proportion to the trace, with exponents from 0.83 to 0.91, and StreamingLLM has no lossless budget below 75% of the trace. (3) Fitted exponents are good guides for budget schedules within the fitted range but should not be extrapolated far beyond it; we give concrete recommendations in Section 7."
+    }
+   ]
+  },
+  {
+   "title": "2 Related Work",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Eviction after prefill. Heavy-hitter methods keep tokens with large accumulated attention [⟦h2o⟧, ⟦scissor⟧]; StreamingLLM keeps sinks and a recent window [⟦streaming⟧]; SnapKV scores prompt tokens with an observation window [⟦snapkv⟧]. Allocation methods split the budget across layers [⟦pyramid⟧, ⟦cake⟧, ⟦dynamickv⟧] or heads [⟦adakv⟧, ⟦headkv⟧, ⟦duo⟧], and recent work revisits the selection rule from probabilistic [⟦geh⟧], frequency-based [⟦twinkv⟧], consistency-based [⟦catekv⟧] and information-geometric [⟦jacap⟧] viewpoints. Query-agnostic compression [⟦kvzip⟧, ⟦restorekv⟧] and reconstruction of evicted contributions [⟦reskv⟧] address the case in which the question is not yet known."
+    },
+    {
+     "kind": "p",
+     "text": "Reasoning traces. R-KV combines attention with key redundancy for decode-time compression of reasoning traces [⟦rkv⟧], LazyEviction delays eviction based on recurring attention [⟦lazy⟧], ThinKV adapts compression to thought types [⟦thinkv⟧] and RaaS keeps milestone tokens [⟦raas⟧]. ReasonAlloc reallocates head budgets online during decoding [⟦reasonalloc⟧], BeaconKV anticipates revisits with clustered beacon queries [⟦beaconkv⟧], and random selection has been shown to be a surprisingly strong baseline for reasoning [⟦randomattn⟧]. Agentic traces raise similar questions [⟦stepkv⟧, ⟦compaction⟧]. These papers report accuracy at fixed budgets; to our knowledge none reports how the lossless budget scales with trace length."
+    },
+    {
+     "kind": "p",
+     "text": "Budgets and lengths. Benchmarks of long-context compression vary the compression ratio at fixed lengths [⟦yuan⟧, ⟦longbench⟧, ⟦infbench⟧]. Error certificates [⟦xie⟧] and counterfactual selectivity tests [⟦ren⟧] study what eviction preserves at a given budget. Our earlier study [⟦allokv⟧] introduced the lossless budget and a length-scaled schedule; here the protocol is applied to seven methods, two regimes and contexts four times longer. Power-law fitting follows standard practice in scaling studies [⟦kaplan⟧, ⟦hoffmann⟧]."
+    }
+   ]
+  },
+  {
+   "title": "3 Protocol",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Lossless budget. For a model, a method $\\pi$ and a length $L$, let $s_{\\mathrm{full}}(L)$ be the score with the full cache and $s_{\\pi}(L,B)$ the score when $\\pi$ keeps on average $B$ entries per KV head. The lossless budget is"
+    },
+    {
+     "kind": "equation",
+     "text": "$$B^{*}_{\\pi}(L)=\\min\\{B\\in\\mathcal{G}:\\;s_{\\mathrm{full}}(L)-s_{\\pi}(L,B)\\leq 1.0\\},$$ (1)"
+    },
+    {
+     "kind": "p",
+     "text": "with $\\mathcal{G}$ a 256-token grid in the prefill regime and a 128-token grid in the decode regime, where budgets are smaller. $B^{*}$ is located by bisection; we verify every reported value by evaluating its two grid neighbours, and report the smallest budget that passes together with its upper neighbour when the score is not monotone (7 of 128 searches)."
+    },
+    {
+     "kind": "p",
+     "text": "Prefill regime. We use the 13 RULER tasks with 100 samples per task and length [⟦ruler⟧] at 16K, 32K, 64K and 128K tokens. The models are Llama-3.1-8B-Instruct [⟦llama3⟧], Qwen2.5-7B-Instruct [⟦qwen25⟧] and Qwen3-8B [⟦qwen3⟧]. Following their model cards, we enable YaRN rope scaling [⟦yarn⟧] with factor 4 for both Qwen models, only for inputs longer than 32K. Mistral-7B-Instruct-v0.3, used in [⟦allokv⟧], is not included because its context window is 32K. The cache is compressed once after prefill, with the question at the end of the prompt; generated tokens are always kept."
+    },
+    {
+     "kind": "p",
+     "text": "Decode regime. We use DeepSeek-R1-Distill-Llama-8B [⟦r1⟧] and Qwen3-8B in thinking mode on AIME 2024, AIME 2025 and MATH-500 [⟦aime⟧, ⟦lightman⟧], sampling 8 traces per problem at temperature 0.6 with top-$p$ 0.95 and a 36K-token cap. The prompt is short, so the cache consists almost entirely of the trace. Eviction runs every 128 generated tokens and keeps the budget $B$ per head. Because trace length cannot be set directly, we bin problems by the median length $L$ of their full-cache traces and use four bins centred at 4K, 8K, 16K and 32K tokens ($\\pm 25\\%$), with 61 to 140 problems per bin. The score is mean accuracy over the 8 samples and over the problems of a bin; the tolerance is again 1.0 point."
+    },
+    {
+     "kind": "p",
+     "text": "Methods. We evaluate StreamingLLM [⟦streaming⟧], H2O [⟦h2o⟧], SnapKV [⟦snapkv⟧], PyramidKV [⟦pyramid⟧], Ada-KV [⟦adakv⟧], R-KV [⟦rkv⟧] and SuBA. SuBA (sublinear budget allocation) is the length-scaled schedule we introduced as AlloKV in [⟦allokv⟧]; because in this study the schedule is also placed on top of other scorers (Section 7), we use the name SuBA from here on, and by SuBA without further qualification we mean the original configuration with pooled observation-window scores and an entropy-based split across heads. For B* the schedule itself plays no role, since the bisection sets the budget directly at each length. In the decode regime SnapKV is applied periodically with the last 32 generated tokens as window, and SuBA likewise; PyramidKV and Ada-KV are prefill-only in their reference implementations and R-KV is decode-only."
+    },
+    {
+     "kind": "p",
+     "text": "Implementation. All methods run in one harness built on kvpress [⟦kvpress⟧] and HuggingFace transformers with FlashAttention-2 [⟦fa2⟧]; we checked each method against its official numbers at one setting and were within 0.6 points everywhere. Decode-regime sampling uses vLLM [⟦vllm⟧] for the full-cache references and our harness for compressed runs, with identical sampling seeds. Experiments used about 21,000 H100 GPU-hours, 74% of them for the 64K and 128K prefill searches."
+    }
+   ]
+  },
+  {
+   "title": "4 Long Prompts: Budgets from 16K to 128K",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Full-cache RULER averages at 16K, 32K, 64K and 128K are 92.4, 88.1, 84.3 and 77.2 for Llama, 92.8, 89.3, 81.6 and 72.9 for Qwen2.5 and 93.5, 90.6, 85.2 and 78.8 for Qwen3. Lossless budgets are defined relative to these references, so a model that is already weak at 128K is not penalised twice."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: Lossless budgets $B^{*}$ (tokens per KV head) of SuBA on RULER, with the fraction of the prompt in parentheses. The 16K and 32K values for Llama and Qwen2.5 are those reported in [⟦allokv⟧]."
+    },
+    {
+     "kind": "table",
+     "text": "Model | 16K | 32K | 64K | 128K | $\\beta$\nLlama-3.1-8B-Instruct | 4,352 (26.6%) | 6,144 (18.8%) | 9,216 (14.1%) | 16,128 (12.3%) | 0.63\nQwen2.5-7B-Instruct | 5,120 (31.2%) | 6,400 (19.5%) | 10,752 (16.4%) | 16,896 (12.9%) | 0.59\nQwen3-8B | 4,096 (25.0%) | 5,632 (17.2%) | 9,472 (14.5%) | 14,336 (10.9%) | 0.62"
+    },
+    {
+     "kind": "p",
+     "text": "Table 1 shows the budgets for SuBA. Fitting $\\log B^{*}=\\log c_{m}+\\beta\\log L$ with one intercept per model gives $\\beta=0.61\\pm 0.03$ over 16K-128K, and per-model fits give 0.63, 0.59 and 0.62. This is steeper than the exponent of 0.43 that we reported for the same method from fits over 4K-32K [⟦allokv⟧]. The difference is not a change in protocol: the 16K and 32K budgets of Llama and Qwen2.5 are the same measurements. It comes from the long end. On Llama the budget grows by a factor of 1.41 from 16K to 32K but by 2.6 from 32K to 128K, which corresponds to a local exponent of about 0.70. A single power law over 4K-128K therefore fits poorly, with residuals that are curved in log-log space, and for schedules aimed at long prompts we now use 0.61; the released harness sets this as SuBA's default."
+    },
+    {
+     "kind": "p",
+     "text": "Fitting details. All exponents are least-squares slopes in log-log space with one intercept per model, and standard errors are computed from the residuals. A task-level bootstrap with 1,000 resamples gives a 95% interval of [0.55, 0.67] for SuBA, and intervals of similar width for the other methods. To test whether a single power law describes SuBA on Llama over the whole range, we combine the six lengths from 4K to 128K and add a quadratic term in $\\log L$; the term is positive and significant ($p=0.004$), whereas over 16K-128K alone it is not ($p=0.41$). We therefore report exponents only within the range in which they were fitted."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Pooled exponents of the lossless budget (model-specific intercepts, standard errors in parentheses). Prefill: RULER, 16K-128K, three models. Decode: AIME and MATH-500 traces, 4K-32K, two models. A dash marks methods that do not run in that regime; n/a means no lossless budget below 75% of the length was found."
+    },
+    {
+     "kind": "table",
+     "text": "Method | Prefill $\\beta$ | Decode $\\beta$\nStreamingLLM | 0.97 (0.04) | n/a\nH2O | 0.79 (0.04) | 0.91 (0.05)\nSnapKV | 0.68 (0.03) | 0.88 (0.04)\nPyramidKV | 0.70 (0.03) | -\nAda-KV | 0.65 (0.03) | -\nR-KV | - | 0.86 (0.04)\nSuBA | 0.61 (0.03) | 0.83 (0.04)"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: Lossless budgets on Llama-3.1-8B-Instruct at 32K and 128K for all prefill methods (tokens per KV head), with the fraction of the prompt in parentheses and the cache size at 128K in bfloat16."
+    },
+    {
+     "kind": "table",
+     "text": "Method | 32K | 128K | KV at 128K\nFull cache | 32,768 (100%) | 131,072 (100%) | 16.0 GiB\nStreamingLLM | 21,760 (66.4%) | 82,944 (63.3%) | 10.1 GiB\nH2O | 13,312 (40.6%) | 39,680 (30.3%) | 4.84 GiB\nSnapKV | 9,472 (28.9%) | 24,320 (18.6%) | 2.97 GiB\nPyramidKV | 9,984 (30.5%) | 26,112 (19.9%) | 3.19 GiB\nAda-KV | 8,192 (25.0%) | 19,968 (15.2%) | 2.44 GiB\nSuBA | 6,144 (18.8%) | 16,128 (12.3%) | 1.97 GiB"
+    },
+    {
+     "kind": "p",
+     "text": "Table 2 compares methods. StreamingLLM is nearly proportional, as expected for a rule that ignores content: anything it keeps beyond the sinks is a recency window, which must cover the needle wherever it is placed. H2O is clearly sublinear but steeper than the observation-window methods, because accumulated attention over the prompt favours early tokens. Among the observation-window methods the head-allocating ones (Ada-KV, SuBA) have the smallest exponents, and the layer schedule of PyramidKV gives no advantage over uniform SnapKV at long lengths. The ordering is the same on all three models, although per-model exponents vary by up to 0.05."
+    },
+    {
+     "kind": "p",
+     "text": "In absolute terms the differences are large. At 128K, SuBA keeps 1.97 GiB of the 16 GiB cache of Llama, SnapKV 2.97 GiB and StreamingLLM more than 10 GiB (Table 3). For serving, where the cache of all concurrent requests has to fit next to the weights, the gap between the best and the median observation-window method is large: next to the 16 GB of bfloat16 weights, an 80 GB GPU holds the lossless caches of about 30 concurrent 128K requests with SuBA and about 20 with SnapKV."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 4: Task that fails first as the budget shrinks, as a share of all prefill searches at each length (six methods, three models)."
+    },
+    {
+     "kind": "table",
+     "text": "Binding task | 16K | 32K | 64K | 128K\nMulti-key / multi-value needle | 61% | 44% | 22% | 16%\nVariable tracking | 14% | 24% | 36% | 41%\nCommon- / frequent-word extraction | 19% | 29% | 37% | 37%\nSingle needle | 6% | 0% | 0% | 0%\nQA | 0% | 3% | 5% | 6%"
+    },
+    {
+     "kind": "p",
+     "text": "What sets the budget at long lengths. Table 4 records, for every search, which task fails first as the budget shrinks. At 16K the binding task is a multi-key needle task in 61% of searches; at 128K it is variable tracking or common-word extraction in 78%. Both tasks have relevant information that grows with the haystack: the variable chains of RULER are spread across the context, and frequent-word statistics require many positions. Needle retrieval alone would give much flatter curves; restricting the criterion to the eight needle tasks lowers the SuBA exponent to 0.48, and to 0.52 for SnapKV."
+    }
+   ]
+  },
+  {
+   "title": "5 Reasoning Traces: Budgets during Decoding",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Full-cache accuracy is 50.8, 37.9 and 89.4 on AIME 2024, AIME 2025 and MATH-500 for DeepSeek-R1-Distill-Llama-8B, and 74.6, 66.3 and 96.8 for Qwen3-8B, in line with the reported numbers [⟦r1⟧, ⟦qwen3⟧]. Table 5 gives the lossless budgets of SuBA in the decode regime."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 5: Decode-regime lossless budgets $B^{*}$ (active entries per KV head) of SuBA, by full-cache trace length bin, with the fraction of the bin centre in parentheses."
+    },
+    {
+     "kind": "table",
+     "text": "Model | 4K | 8K | 16K | 32K | $\\beta$\nDeepSeek-R1-Distill-Llama-8B | 1,536 (37.5%) | 2,816 (34.4%) | 4,992 (30.5%) | 8,576 (26.2%) | 0.83\nQwen3-8B | 1,408 (34.4%) | 2,176 (26.6%) | 3,712 (22.7%) | 8,064 (24.6%) | 0.83"
+    },
+    {
+     "kind": "p",
+     "text": "At short lengths decode-time budgets are smaller than prefill budgets at the same length, but they grow much faster and exceed them by 32K: the pooled exponent of SuBA is $0.83\\pm 0.04$, and R-KV, periodic SnapKV and H2O give 0.86, 0.88 and 0.91 (Table 2). StreamingLLM loses more than a point on every bin down to 75% of the trace. A reasoning trace thus behaves quite differently from a long prompt: the model refers back to intermediate results, revisits earlier plans and checks its own arithmetic, so the share of the trace that remains relevant falls only slowly with its length. This agrees with the observation that recency-based scoring misses tokens that are revisited after long gaps [⟦beaconkv⟧, ⟦lazy⟧]."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 6: Decode-regime lossless budgets on DeepSeek-R1-Distill-Llama-8B for the four online methods (active entries per KV head)."
+    },
+    {
+     "kind": "table",
+     "text": "Method | 4K | 8K | 16K | 32K\nH2O | 1,920 | 3,584 | 6,912 | 12,928\nSnapKV (periodic) | 1,792 | 3,200 | 6,016 | 11,264\nR-KV | 1,664 | 3,072 | 5,632 | 9,984\nSuBA | 1,536 | 2,816 | 4,992 | 8,576"
+    },
+    {
+     "kind": "p",
+     "text": "Table 6 shows that the ordering of methods in the decode regime is the same as for long prompts, but the spread is smaller: at 32K the largest lossless budget (H2O) is 1.5 times the smallest (SuBA), against 2.5 times between H2O and SuBA at 128K in the prefill regime. Redundancy-aware scoring (R-KV) is the strongest of the published baselines here, which matches its design for repetitive reasoning traces [⟦rkv⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Length and difficulty are confounded in this regime, because long traces come from hard problems. To separate them we repeated the decode searches on MATH-500 problems whose traces were lengthened by a system prompt asking the model to double-check every step. The lengthened traces of easy problems give an exponent of 0.79 for SuBA, slightly lower than 0.83 but still far above the prefill values, so difficulty explains only a small part of the gap."
+    },
+    {
+     "kind": "p",
+     "text": "Failure modes. When the budget is too small, the dominant failure in the decode regime is not a wrong final answer but a trace that never terminates: at half of $B^{*}$, 31% of the compressed Qwen3-8B AIME traces hit the 36K cap, against 2% with the full cache. Loops of repeated verification are the typical pattern, consistent with reports on other reasoning-cache methods [⟦rkv⟧, ⟦thinkv⟧]."
+    }
+   ]
+  },
+  {
+   "title": "6 Sensitivity Analyses",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Tolerance. With a 2.0-point tolerance all budgets fall by one or two grid steps and the prefill exponents change by at most 0.03; the ordering of methods is unchanged. A 0.5-point tolerance is below the noise floor for 23% of the 128K searches and is not reported."
+    },
+    {
+     "kind": "p",
+     "text": "Sample size. Bootstrapping the 100 samples per task gives standard deviations of the RULER average between 0.3 and 0.6 points at 128K. Re-running the bisection on two independent bootstrap replicates for SuBA on Llama changed $B^{*}$ by at most one grid step and the fitted exponent by 0.02."
+    },
+    {
+     "kind": "p",
+     "text": "Window size. Doubling the observation window to 64 tokens leaves the prefill exponents of SnapKV and SuBA unchanged within their standard errors; halving it to 16 raises both by about 0.04, mostly through larger budgets at 128K."
+    },
+    {
+     "kind": "p",
+     "text": "Model size. As a limited check of scale we ran the prefill searches for SuBA and SnapKV on Qwen3-14B at 32K and 128K only. The two-point exponents are 0.58 and 0.66, close to the pooled values of the 8B models, and the budgets themselves are 6-9% smaller than for Qwen3-8B, so a larger model of the same family does not need a larger cache to stay lossless."
+    },
+    {
+     "kind": "p",
+     "text": "Question position. RULER places the question after the context, which favours observation-window methods. Moving the question before the context (and keeping only a generic instruction at the end) removes most of the advantage of window scoring: SnapKV and SuBA then have no lossless budget below 50% at 64K and 128K. This matches the known weakness of query-aware eviction when the query is not visible at compression time [⟦kvzip⟧, ⟦restorekv⟧], and we do not fit exponents for this setting."
+    },
+    {
+     "kind": "p",
+     "text": "Precision. All runs keep the retained entries in bfloat16. In a smaller check on Llama at 64K, combining SuBA with 2-bit KIVI quantization [⟦kivi⟧] did not change $B^{*}$, so the budgets reported here can be read as token counts independent of the bytes per token."
+    }
+   ]
+  },
+  {
+   "title": "7 Recommendations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Report lossless budgets at several lengths. A single compression ratio conflates methods that differ in how their budgets scale. At 20% retention, for example, SuBA on Llama is lossless on RULER at 32K but not at 16K, while at 128K it needs only 12.3% (Table 1)."
+    },
+    {
+     "kind": "p",
+     "text": "Scale budgets with length, but within the fitted range. On a length-mixed 16K-128K workload with equal numbers of prompts per length, budgets that follow the measured $B^{*}$ of SuBA on Llama keep 14.6% of all cached entries, against 26.6% for the smallest fixed fraction that is lossless at every length; with SnapKV the figures are 22.8% and 40.6%. The SuBA schedule $B(L)=B_{\\mathrm{ref}}(L/L_{\\mathrm{ref}})^{\\beta}$ with $\\beta=0.61$ and $L_{\\mathrm{ref}}=32$K keeps 13.8% and stays within 1.6 points of the full cache at every length; it falls slightly short of $B^{*}$ at 16K and 128K. With $\\beta=0.43$, the value fitted over 4K-32K, the schedule keeps 12.3% but loses 5.8 points at 128K, where the budgets are largest. The schedule also transfers to other scorers when $\\beta$ is the scorer's own prefill exponent."
+    },
+    {
+     "kind": "p",
+     "text": "Treat reasoning traces separately. Decode-time budgets grow nearly linearly, so fixed-fraction budgets are a reasonable default for traces, and memory savings from eviction during reasoning are bounded by the 23-38% lossless fractions of Table 5 rather than the 11-13% of long prompts at 128K."
+    }
+   ]
+  },
+  {
+   "title": "8 Limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We study 7-8B models with grouped-query attention; larger models, multi-head latent attention and hybrid architectures may scale differently. The lossless criterion is defined on benchmark averages with a 1.0-point tolerance; per-task or per-request criteria would give larger budgets. RULER is synthetic, and the decode regime is limited to mathematical reasoning. YaRN is required for the Qwen models beyond 32K, so their 64K and 128K budgets include any effect of rope scaling on attention patterns. Finally, power-law exponents summarise curves over a finite range; Section 4 shows that the range matters."
+    }
+   ]
+  },
+  {
+   "title": "Broader Impact",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Lower memory per request reduces the hardware needed to serve long-context and reasoning models. Eviction can also change model behaviour in ways that averages do not show, for example by dropping safety-relevant instructions from a long prompt; our lossless criterion is defined on task accuracy and does not cover such effects."
+    }
+   ]
+  },
+  {
+   "title": "9 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Measured with one protocol, the lossless budgets of seven eviction methods grow sublinearly with prompt length between 16K and 128K, with exponents between 0.61 and 0.97, and almost linearly with the length of reasoning traces. The first result makes length-scaled budgets worthwhile for long prompts; the second limits what eviction can save during long reasoning. We hope that lossless budgets at several lengths become a routine part of reporting eviction results."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "This work was supported by EPSRC grant EP/Y03724X/1 and by a studentship from the UKRI Centre for Doctoral Training in Natural Language Processing (EP/S022481/1) to E.C. Computing time was provided by the Edinburgh International Data Facility (EIDF) GPU service at EPCC. We thank the EIDF support team for extending our allocation during the 128K searches."
+    }
+   ]
+  },
+  {
+   "title": "Data and Code Availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The evaluation harness, the SuBA implementation, the logs of all 128 bisection searches and the per-task scores of every probed budget are available at https://github.com/isadowska/allokv (branch suba) and archived on Zenodo (doi:10.5281/zenodo.17214486)."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A Search Details",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each bisection starts from the interval $[256, L]$ in the prefill regime and $[128, L]$ in the decode regime and stops when the interval spans one grid step; with the neighbour checks this takes 7 to 11 evaluations per search. In the prefill regime one evaluation is a full pass over 1,300 RULER prompts; in the decode regime it is 8 sampled traces for every problem of the bin. We cache the prefill of every RULER prompt once per model and reuse it across budgets, which reduces the cost of a 128K evaluation from about 9.1 to 3.4 GPU-hours on 8 H100 GPUs with tensor parallelism. Decode-regime evaluations cannot reuse work across budgets because the trace itself depends on the budget."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 7: Compute used per part of the study (H100 GPU-hours, rounded)."
+    },
+    {
+     "kind": "table",
+     "text": "Part | Searches | GPU-hours\nPrefill, 16K-32K | 32 | 1,100\nPrefill, 64K-128K | 36 | 15,500\nDecode, all bins | 40 | 3,300\nDifficulty control and bootstrap replicates | 16 | 900\nQwen3-14B check | 4 | 200"
+    },
+    {
+     "kind": "p",
+     "text": "The 16K and 32K points of SuBA on Llama-3.1-8B-Instruct and Qwen2.5-7B-Instruct are taken from [⟦allokv⟧] and not repeated, which is why the prefill rows contain four searches fewer than the 6 x 3 x 4 grid. We re-ran one of them (Llama, 32K) with the new harness as a check and obtained the same budget of 6,144 tokens."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "h2o",
+   "tag": "1",
+   "text": "Z. Zhang, Y. Sheng, T. Zhou, T. Chen, L. Zheng, R. Cai, Z. Song, Y. Tian, C. Ré, C. Barrett, Z. Wang, and B. Chen. H2O: heavy-hitter oracle for efficient generative inference of large language models. In Advances in Neural Information Processing Systems 36, 2023."
+  },
+  {
+   "key": "snapkv",
+   "tag": "2",
+   "text": "Y. Li, Y. Huang, B. Yang, B. Venkitesh, A. Locatelli, H. Ye, T. Cai, P. Lewis, and D. Chen. SnapKV: LLM knows what you are looking for before generation. In Advances in Neural Information Processing Systems 37, 2024."
+  },
+  {
+   "key": "streaming",
+   "tag": "3",
+   "text": "G. Xiao, Y. Tian, B. Chen, S. Han, and M. Lewis. Efficient streaming language models with attention sinks. In International Conference on Learning Representations, 2024."
+  },
+  {
+   "key": "pyramid",
+   "tag": "4",
+   "text": "Z. Cai, Y. Zhang, B. Gao, Y. Liu, T. Liu, K. Lu, W. Xiong, Y. Dong, B. Chang, J. Hu, and W. Xiao. PyramidKV: dynamic KV cache compression based on pyramidal information funneling. arXiv preprint arXiv:2406.02069, 2024."
+  },
+  {
+   "key": "adakv",
+   "tag": "5",
+   "text": "Y. Feng, J. Lv, Y. Cao, X. Xie, and S. K. Zhou. Ada-KV: optimizing KV cache eviction by adaptive budget allocation for efficient LLM inference. arXiv preprint arXiv:2407.11550, 2024."
+  },
+  {
+   "key": "tova",
+   "tag": "6",
+   "text": "M. Oren, M. Hassid, N. Yarden, Y. Adi, and R. Schwartz. Transformers are multi-state RNNs. In Proceedings of EMNLP, 2024."
+  },
+  {
+   "key": "cake",
+   "tag": "7",
+   "text": "Z. Qin, Y. Cao, M. Lin, W. Hu, S. Fan, K. Cheng, W. Lin, and J. Li. CAKE: cascading and adaptive KV cache eviction with layer preferences. In International Conference on Learning Representations, 2025."
+  },
+  {
+   "key": "llama3",
+   "tag": "8",
+   "text": "A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Kadian, et al. The Llama 3 herd of models. arXiv preprint arXiv:2407.21783, 2024."
+  },
+  {
+   "key": "qwen25",
+   "tag": "9",
+   "text": "A. Yang, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, et al. Qwen2.5 technical report. arXiv preprint arXiv:2412.15115, 2024."
+  },
+  {
+   "key": "qwen3",
+   "tag": "10",
+   "text": "A. Yang, A. Li, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Gao, C. Huang, C. Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388, 2025."
+  },
+  {
+   "key": "r1",
+   "tag": "11",
+   "text": "DeepSeek-AI. DeepSeek-R1: incentivizing reasoning capability in LLMs via reinforcement learning. arXiv preprint arXiv:2501.12948, 2025."
+  },
+  {
+   "key": "rkv",
+   "tag": "12",
+   "text": "Z. Cai, W. Xiao, H. Sun, C. Luo, Y. Zhang, K. Wan, Y. Li, Y. Zhou, L. Chang, J. Gu, Z. Dong, A. Anandkumar, A. Asi, and J. Hu. R-KV: redundancy-aware KV cache compression for reasoning models. arXiv preprint arXiv:2505.24133, 2025."
+  },
+  {
+   "key": "thinkv",
+   "tag": "13",
+   "text": "A. Ramachandran, M. Neseem, C. Sakr, R. Venkatesan, B. Khailany, and T. Krishna. ThinKV: thought-adaptive KV cache compression for efficient reasoning models. In International Conference on Learning Representations, 2026."
+  },
+  {
+   "key": "lazy",
+   "tag": "14",
+   "text": "H. Zhang, H. Zhang, X. Ma, J. Zhang, and S. Guo. LazyEviction: lagged KV eviction with attention pattern observation for efficient long reasoning. arXiv preprint, 2025."
+  },
+  {
+   "key": "yuan",
+   "tag": "15",
+   "text": "J. Yuan, H. Liu, S. Zhong, Y. Chuang, S. Li, G. Wang, D. Le, H. Jin, V. Chaudhary, Z. Xu, Z. Liu, and X. Hu. KV cache compression, but what must we give in return? A comprehensive benchmark of long context capable approaches. In Findings of EMNLP, 2024."
+  },
+  {
+   "key": "allokv",
+   "tag": "16",
+   "text": "I. Sadowska, F. Mowat, T. Wierzbicki, and K. Ballantyne. How much cache does a longer prompt need? Allometric budgets for KV-cache eviction. arXiv preprint, 2026."
+  },
+  {
+   "key": "ruler",
+   "tag": "17",
+   "text": "C. Hsieh, S. Sun, S. Kriman, S. Acharya, D. Rekesh, F. Jia, and B. Ginsburg. RULER: what's the real context size of your long-context language models? In First Conference on Language Modeling, 2024."
+  },
+  {
+   "key": "math",
+   "tag": "18",
+   "text": "D. Hendrycks, C. Burns, S. Kadavath, A. Arora, S. Basart, E. Tang, D. Song, and J. Steinhardt. Measuring mathematical problem solving with the MATH dataset. In NeurIPS Datasets and Benchmarks Track, 2021."
+  },
+  {
+   "key": "lightman",
+   "tag": "19",
+   "text": "H. Lightman, V. Kosaraju, Y. Burda, H. Edwards, B. Baker, T. Lee, J. Leike, J. Schulman, I. Sutskever, and K. Cobbe. Let's verify step by step. arXiv preprint arXiv:2305.20050, 2023."
+  },
+  {
+   "key": "aime",
+   "tag": "20",
+   "text": "Mathematical Association of America. American Invitational Mathematics Examination (AIME) 2024 and 2025 problems."
+  },
+  {
+   "key": "scissor",
+   "tag": "21",
+   "text": "Z. Liu, A. Desai, F. Liao, W. Wang, V. Xie, Z. Xu, A. Kyrillidis, and A. Shrivastava. Scissorhands: exploiting the persistence of importance hypothesis for LLM KV cache compression at test time. In Advances in Neural Information Processing Systems 36, 2023."
+  },
+  {
+   "key": "dynamickv",
+   "tag": "22",
+   "text": "X. Zhou, W. Wang, M. Zeng, J. Guo, X. Liu, L. Shen, M. Zhang, and L. Ding. DynamicKV: task-aware adaptive KV cache compression for long context LLMs. In Findings of EMNLP, 2025."
+  },
+  {
+   "key": "headkv",
+   "tag": "23",
+   "text": "Y. Fu, Z. Cai, A. Asi, W. Xiong, Y. Dong, and W. Xiao. Not all heads matter: a head-level KV cache compression method with integrated retrieval and reasoning. In International Conference on Learning Representations, 2025."
+  },
+  {
+   "key": "duo",
+   "tag": "24",
+   "text": "G. Xiao, J. Tang, J. Zuo, J. Guo, S. Yang, H. Tang, Y. Fu, and S. Han. DuoAttention: efficient long-context LLM inference with retrieval and streaming heads. In International Conference on Learning Representations, 2025."
+  },
+  {
+   "key": "geh",
+   "tag": "25",
+   "text": "R. Geh, A. Chen, D. Israel, A. Grover, and G. Van den Broeck. A probabilistic interpretation of KV cache eviction. arXiv preprint, 2026."
+  },
+  {
+   "key": "twinkv",
+   "tag": "26",
+   "text": "H. Chen, Y. Zeng, Y. Huang, Z. Ouyang, D. Zheng, J. Zhang, et al. Small frequency corrections can change what survives KV cache compression. arXiv preprint, 2026."
+  },
+  {
+   "key": "catekv",
+   "tag": "27",
+   "text": "H. Jiang, H. Li, J. Zhang, F. Huang, Q. Hu, M. Sun, et al. CateKV: on sequential consistency for long-context LLM inference acceleration. arXiv preprint, 2026."
+  },
+  {
+   "key": "jacap",
+   "tag": "28",
+   "text": "J. Yang, C. Tang, L. Zhen, C. Zhang, and J. Lv. Jacap: robust KV cache eviction via Jacobian-based nonlinear information capacity preservation. arXiv preprint, 2026."
+  },
+  {
+   "key": "kvzip",
+   "tag": "29",
+   "text": "J. Kim, J. Kim, S. Kwon, J. W. Lee, S. Yun, and H. O. Song. KVzip: query-agnostic KV cache compression with context reconstruction. In Advances in Neural Information Processing Systems 38, 2025."
+  },
+  {
+   "key": "restorekv",
+   "tag": "30",
+   "text": "C. Baek, S. Shin, and K. Kong. RestoreKV: recovering full-cache behavior under aggressive query-agnostic KV cache eviction. arXiv preprint, 2026."
+  },
+  {
+   "key": "reskv",
+   "tag": "31",
+   "text": "Y. Zhan, L. Chen, and S. Shang. ResKV: reconstructing omitted attention contributions for fixed-budget KV cache compression. arXiv preprint, 2026."
+  },
+  {
+   "key": "raas",
+   "tag": "32",
+   "text": "J. Hu, W. Huang, W. Wang, Z. Li, T. Hu, Z. Liu, X. Chen, T. Xie, and Y. Shan. RaaS: reasoning-aware attention sparsity for efficient LLM reasoning. arXiv preprint, 2025."
+  },
+  {
+   "key": "reasonalloc",
+   "tag": "33",
+   "text": "W. Liu, H. Shi, Y. Li, W. Fei, X. Wang, M. Ruan, H. Hou, P. Wang, L. Song, and S. Qiu. ReasonAlloc: hierarchical decoding-time KV cache budget allocation for reasoning models. arXiv preprint, 2026."
+  },
+  {
+   "key": "beaconkv",
+   "tag": "34",
+   "text": "J. Kim, M. Kim, K. Shim, and J. Choi. BeaconKV: key-value cache compression guided by beacon queries for efficient large reasoning model inference. arXiv preprint, 2026."
+  },
+  {
+   "key": "randomattn",
+   "tag": "35",
+   "text": "H. Wang, J. Qiu, W. Zhao, C. Qian, L. Yang, W. Zhang, et al. Random attention: rethinking KV cache eviction for efficient reasoning. arXiv preprint, 2026."
+  },
+  {
+   "key": "stepkv",
+   "tag": "36",
+   "text": "B. Feng. StepKV: step-aware KV cache compression for LLM agents. arXiv preprint, 2026."
+  },
+  {
+   "key": "compaction",
+   "tag": "37",
+   "text": "Y. Liu, J. Ji, L. An, R. Jain, G. Polatkan, S. Zhu, and S. Chang. Practical online KV cache compaction for LLM agents: an empirical study. arXiv preprint, 2026."
+  },
+  {
+   "key": "longbench",
+   "tag": "38",
+   "text": "Y. Bai, X. Lv, J. Zhang, H. Lyu, J. Tang, Z. Huang, Z. Du, X. Liu, A. Zeng, L. Hou, Y. Dong, J. Tang, and J. Li. LongBench: a bilingual, multitask benchmark for long context understanding. In Proceedings of ACL, 2024."
+  },
+  {
+   "key": "infbench",
+   "tag": "39",
+   "text": "X. Zhang, Y. Chen, S. Hu, Z. Xu, J. Chen, M. K. Hao, X. Han, Z. L. Thai, S. Wang, Z. Liu, and M. Sun. InfiniteBench: extending long context evaluation beyond 100K tokens. In Proceedings of ACL, 2024."
+  },
+  {
+   "key": "xie",
+   "tag": "40",
+   "text": "P. Xie and A. Alanwar. Error certificates for KV-cache eviction via randomized design. arXiv preprint, 2026."
+  },
+  {
+   "key": "ren",
+   "tag": "41",
+   "text": "X. Ren, Y. Sun, C. Yi, and H. Yang. Understanding sparse attention selectivity in long-context foundation models via counterfactual evaluation. arXiv preprint, 2026."
+  },
+  {
+   "key": "kaplan",
+   "tag": "42",
+   "text": "J. Kaplan, S. McCandlish, T. Henighan, T. B. Brown, B. Chess, R. Child, S. Gray, A. Radford, J. Wu, and D. Amodei. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361, 2020."
+  },
+  {
+   "key": "hoffmann",
+   "tag": "43",
+   "text": "J. Hoffmann, S. Borgeaud, A. Mensch, E. Buchatskaya, T. Cai, E. Rutherford, et al. Training compute-optimal large language models. In Advances in Neural Information Processing Systems 35, 2022."
+  },
+  {
+   "key": "yarn",
+   "tag": "44",
+   "text": "B. Peng, J. Quesnelle, H. Fan, and E. Shippole. YaRN: efficient context window extension of large language models. In International Conference on Learning Representations, 2024."
+  },
+  {
+   "key": "kvpress",
+   "tag": "45",
+   "text": "NVIDIA. kvpress: LLM KV cache compression made easy. https://github.com/NVIDIA/kvpress, 2024."
+  },
+  {
+   "key": "fa2",
+   "tag": "46",
+   "text": "T. Dao. FlashAttention-2: faster attention with better parallelism and work partitioning. In International Conference on Learning Representations, 2024."
+  },
+  {
+   "key": "vllm",
+   "tag": "47",
+   "text": "W. Kwon, Z. Li, S. Zhuang, Y. Sheng, L. Zheng, C. H. Yu, J. E. Gonzalez, H. Zhang, and I. Stoica. Efficient memory management for large language model serving with PagedAttention. In Proceedings of SOSP, 2023."
+  },
+  {
+   "key": "kivi",
+   "tag": "48",
+   "text": "Z. Liu, J. Yuan, H. Jin, S. Zhong, Z. Xu, V. Braverman, B. Chen, and X. Hu. KIVI: a tuning-free asymmetric 2bit quantization for KV cache. In Proceedings of ICML, 2024."
+  }
+ ],
+ "bib_style": "numeric"
+}

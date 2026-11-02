@@ -67,6 +67,30 @@ def test_a_trunk_to_branch_from_must_be_an_absolute_path():
     assert RunConfig(output="/tmp/native", init_from="/trunk/checkpoint/step-3000").init_from.endswith("3000")
 
 
+def test_a_checkpoint_to_score_must_be_an_absolute_path():
+    with pytest.raises(ValueError, match="run.evaluation.checkpoint"):
+        EvaluationConfig(checkpoint="released/checkpoint/step-5866")
+    assert EvaluationConfig(checkpoint="/released/checkpoint/step-5866").checkpoint.endswith("5866")
+
+
+def test_an_evaluation_scores_the_checkpoint_the_command_line_names_before_the_one_the_config_names():
+    named = NativeConfig(
+        run=RunConfig(
+            output="/tmp/native", name="scored", evaluation=EvaluationConfig(checkpoint="/a/step-1")
+        )
+    )
+    assert named.scored_checkpoint() == "/a/step-1"
+    assert named.scored_checkpoint("/b/step-2") == "/b/step-2"
+
+
+def test_an_evaluation_that_names_no_checkpoint_anywhere_is_refused_saying_what_to_pass():
+    unnamed = NativeConfig(run=RunConfig(output="/tmp/native", name="scored"))
+    with pytest.raises(ValueError, match="--checkpoint") as raised:
+        unnamed.scored_checkpoint()
+    assert "scored" in str(raised.value) and "run.evaluation.checkpoint" in str(raised.value)
+    assert unnamed.scored_checkpoint("/b/step-2") == "/b/step-2"
+
+
 def test_the_retrieval_probe_defaults_to_six_distances_from_inside_the_window_to_the_far_end():
     config = EvaluationConfig()
     assert config.retrieval_distances == [256, 1024, 2048, 4096, 8192, 15000]

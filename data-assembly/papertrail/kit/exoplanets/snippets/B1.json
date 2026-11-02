@@ -1,0 +1,622 @@
+{
+ "node": "B1",
+ "kind": "fake_paper",
+ "date": "2026-08-28",
+ "title": "Sixteen years of transit timing of the massive hot Jupiter TOI-8317 b: evidence for tidal orbital decay around a main-sequence G dwarf",
+ "authors": [
+  "Tomás Fuenzalida 1",
+  "Camila Riquelme 1",
+  "Ignacio Arancibia 2",
+  "Valentina Henríquez 1",
+  "Benjamín Toledo 2",
+  "Javiera Contreras 1"
+ ],
+ "affiliations": [
+  "1 Departamento de Astronomía, Universidad de Chile, Camino El Observatorio 1515, Las Condes, Santiago, Chile",
+  "2 Instituto de Astronomía, Universidad Católica del Norte, Avenida Angamos 0610, Antofagasta, Chile"
+ ],
+ "abstract": "We present an analysis of 61 transit mid-times of the hot Jupiter TOI-8317 b spanning 16.2 years, combining two precovery epochs from archival SuperWASP-North photometry, five sectors of TESS data, eight archival CHEOPS visits and 27 dedicated ground-based light curves. TOI-8317 b is a massive ($4.42\\pm0.13\\,M_{\\rm J}$, $1.16\\pm0.03\\,R_{\\rm J}$) planet on a 1.06-day orbit around a $V=9.31$ G0 dwarf with $M_\\star=1.07\\,M_\\odot$ and $R_\\star=1.21\\,R_\\odot$, whose mass we measure from 31 FEROS radial velocities. A model with a constant period derivative is preferred over a constant-period ephemeris by $\\Delta{\\rm BIC}=14.2$ and over an apsidal-precession model by a similar margin, and gives $\\dot{P}=-11.7\\pm2.9$ ms yr$^{-1}$. Interpreted as tidal orbital decay in the constant-phase-lag framework, this corresponds to a modified stellar tidal quality factor $Q'_\\star=(6.5^{+2.2}_{-1.3})\\times10^{5}$ and a remaining lifetime of 1.8 Myr. Such efficient dissipation in a main-sequence solar-type star is difficult to reconcile with equilibrium tides, but is in the range predicted when tidally excited gravity waves break near the stellar centre. If confirmed, TOI-8317 b would be the second hot Jupiter, after WASP-12 b, with a measured decay rate, and the first around a G dwarf.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Hot Jupiters on orbits of a few days or less raise tides on their host stars that transfer orbital angular momentum to the stellar spin, so that the orbit is expected to shrink until the planet is disrupted or engulfed (⟦rasio96⟧; ⟦levrard09⟧; ⟦jackson09⟧). The rate at which this happens is usually written in terms of the modified stellar tidal quality factor $Q'_\\star$ (⟦goldreich66⟧; ⟦ogilvie14⟧), a parameter that compresses a great deal of poorly understood physics into a single number. Theoretical expectations for solar-type stars span more than four orders of magnitude, from $Q'_\\star\\sim10^{8}$ or more for equilibrium tides with turbulent viscosity reduced at short forcing periods (⟦zahn77⟧; ⟦ogilvie14⟧) down to $10^{5}$–$10^{6}$ when internal gravity waves launched at the base of the convective envelope steepen and break near the centre of the star (⟦barker10⟧; ⟦essick16⟧; ⟦barker20⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "Population studies give indirect constraints. The tidal spin-up of hot-Jupiter hosts (⟦penev18⟧; ⟦tejada21⟧), the paucity of hot Jupiters around old stars (⟦hamer19⟧; ⟦hu26⟧) and the shape of the period distribution (⟦collier18⟧) all point to efficient dissipation in at least some systems, but each relies on assumptions about ages, initial conditions or the formation channel (⟦he26⟧). A direct measurement requires the detection of a shrinking orbital period. So far this has been achieved convincingly only for WASP-12 b, whose period decreases by about 29 ms yr$^{-1}$ (⟦maciejewski16⟧; ⟦patra17⟧; ⟦yee20⟧; ⟦wong22⟧), implying $Q'_\\star\\approx2\\times10^{5}$ for its late-F host. Whether WASP-12 is on the main sequence or a subgiant is still debated (⟦weinberg17⟧; ⟦bailey19⟧; ⟦golonka26⟧), and this matters, because dissipation in subgiants is expected to be much more efficient (⟦barker20⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "Several other candidates for orbital decay have been proposed and later weakened or withdrawn. The early arrival of WASP-4 b (⟦bouma19⟧) and the apparent decay of Kepler-1658 b (⟦vissapragada22⟧) were reconsidered by Winn & Stefánsson (2025), and the case of TrES-1 b remains ambiguous (⟦hagey25⟧). Homogeneous searches over tens of systems have yielded upper limits and marginal trends (⟦ivshina22⟧; ⟦kokori23⟧; ⟦adams24⟧), while for the shortest-period object known, TOI-2109 b, the evidence depends on the treatment of a periodic TTV signal (⟦wong21⟧; ⟦harre24⟧). The limiting factor is usually the length of the timing baseline: for $Q'_\\star\\sim10^{6}$ the accumulated shift of the transit times grows only to a couple of minutes per decade."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we present TOI-8317 b, a massive hot Jupiter on a 1.06-day orbit around a bright G dwarf, for which archival wide-field photometry extends the timing baseline back to 2008. Its large planet-to-star mass ratio and small $a/R_\\star$ make it one of the most favourable main-sequence systems for a decay measurement. We describe the observations in Sect. 2, the stellar parameters in Sect. 3 and the global and timing analyses in Sect. 4. The implications are discussed in Sect. 5, and Sect. 6 summarises our conclusions."
+    }
+   ]
+  },
+  {
+   "title": "2 Observations and data reduction",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "2.1 TESS photometry",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "TOI-8317 (2MASS J05415311+2106278) lies close to the ecliptic and was first observed by TESS (⟦ricker15⟧) in Sectors 43, 44 and 45 (2021 September 16 to December 2), only in the 600-s full-frame images. We identified the transit signal in our own box-least-squares search of quick-look light curves (⟦huang20⟧) of bright stars near the ecliptic, to which we had added the former SuperWASP candidates of the field (Sect. 2.4), and reported it to ExoFOP as a community candidate in early 2022; the object was later assigned its TOI number. The star was observed again at 2-min cadence in Sectors 71 and 72 (2023 October 16 to December 7), for which we used the PDCSAP light curves produced by the SPOC pipeline (⟦jenkins16⟧). For the full-frame images we extracted light curves from the calibrated images with a 2-pixel circular aperture and removed the background with an annulus; the $V\\approx12$ neighbour 24 arcsec away (Sect. 2.4) falls inside this aperture and contributes about 8 per cent of the flux in the TESS band, which we removed from the transit depths before fitting."
+    },
+    {
+     "kind": "p",
+     "text": "Each light curve was detrended with a Gaussian process (Matérn-3/2 kernel) fitted simultaneously with the transit model, as described in Sect. 4. Three transits in Sector 44 fall in the data gap near the orbit perigee and two others are affected by scattered light; we excluded these five events. Because the individual 600-s transits have timing precision of only 60–90 s, we fitted the remaining full-frame-image transits in groups of three consecutive events, which yields 15 transit times for Sectors 43–45. In the 2-min data the individual transits have precisions of 30–45 s and we grouped them in pairs, giving nine more times. This choice has no effect on the results of Sect. 4.3, but keeps the TESS points from dominating the fit by number."
+    }
+   ]
+  },
+  {
+   "title": "2.2 CHEOPS",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "TOI-8317 was observed eight times by CHEOPS (⟦benz21⟧) between 2022 November and 2024 December, in a Guest Observers programme that targeted bright TESS hot Jupiters for timing (programme ID CH_PR240093); the data became public before our analysis. Each visit lasted 8.1 to 9.4 h and covered one transit. We used the light curves from the Data Reduction Pipeline with the default aperture and decorrelated them against roll angle, background and the centroid position, with the roll-angle term modelled as a sum of three harmonics. The transit times have uncertainties between 22 and 34 s."
+    }
+   ]
+  },
+  {
+   "title": "2.3 Ground-based photometry",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Between 2022 August and 2025 February we obtained 27 transit light curves from the ground. Seventeen were observed with the 1-m telescopes and Sinistro cameras of the Las Cumbres Observatory network (⟦brown13⟧) at McDonald, Teide and Cerro Tololo, in the Sloan $i'$ or $z_s$ filters; six with the 0.6-m TRAPPIST-North telescope at Oukaïmeden (⟦jehin11⟧) with an $I+z$ filter; and four with the 0.6-m Planewave telescope at Observatorio El Sauce in Río Hurtado, Chile, in the $R_c$ band. Exposure times ranged between 25 and 60 s depending on the telescope and the conditions. Images were calibrated with the standard pipelines of each facility and aperture photometry was extracted with AstroImageJ, choosing the aperture and comparison stars that minimised the out-of-transit scatter. Two further LCOGT light curves (2023 January 3 and 2024 February 11) covered only egress under variable cirrus and were discarded, because their mid-times depended strongly on the detrending model."
+    },
+    {
+     "kind": "p",
+     "text": "All time stamps were converted to BJD$_{\\rm TDB}$ following Eastman et al. (2010). For the LCOGT data we verified the header times against the shutter-opening logs supplied by the observatory; for TRAPPIST-North and El Sauce we checked the computer clocks against network time servers before each run."
+    }
+   ]
+  },
+  {
+   "title": "2.4 Archival SuperWASP photometry",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The field was monitored by SuperWASP-North on La Palma (⟦pollacco06⟧) in the 2008/09 and 2009/10 observing seasons. The star was flagged as a transit candidate in the 2009/10 season but was given a low priority and not followed up: the pre-Gaia reduced-proper-motion classification used to rank candidates placed it among the subgiants, with a radius that implied a companion too large to be a planet, and the transits are partly diluted by a $V\\approx12$ neighbour 24 arcsec away, inside the SuperWASP photometric aperture. We retrieved the public light curves, removed the dilution using the magnitude of the neighbour, and fitted each season separately with the transit shape fixed to the TESS solution, leaving only the mid-time and a linear baseline free. The two seasonal light curves contain 31 and 26 partial or full transits, and the resulting reference mid-times have uncertainties of 75 and 82 s. These two points define the early end of the baseline."
+    }
+   ]
+  },
+  {
+   "title": "2.5 FEROS spectroscopy",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We obtained 31 spectra with the FEROS spectrograph (⟦kaufer99⟧) on the MPG 2.2-m telescope at La Silla between 2022 October and 2024 March, with exposure times of 900 to 1200 s and signal-to-noise ratios of 60–110 per resolution element at 5500 Å. The data were reduced and the radial velocities extracted with the CERES pipeline (⟦brahm17a⟧), which cross-correlates the spectra with a G2 binary mask. The typical internal uncertainty is 8–12 m s$^{-1}$. The bisector spans show no correlation with the velocities (Pearson $r=0.08$). A generalised Lomb-Scargle periodogram (⟦zechmeister09⟧) of the velocities has its highest peak at the transit period, and no significant peak remains in the residuals of the orbital fit. The chromospheric emission in the Ca II H and K lines, measured on the co-added spectrum, gives $\\log R'_{\\rm HK}=-5.02\\pm0.08$, typical of an inactive star of this age, and the TESS light curves show no rotational modulation above 0.5 mmag. Spot-induced timing noise is therefore expected to be well below the measurement uncertainties."
+    }
+   ]
+  },
+  {
+   "title": "3 Stellar parameters",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We derived the atmospheric parameters from the co-added FEROS spectrum with ZASPE (⟦brahm17b⟧), obtaining $T_{\\rm eff}=5915\\pm80$ K, $\\log g=4.30\\pm0.03$, [Fe/H]$\\,=+0.21\\pm0.05$ and $v\\sin i_\\star=5.1\\pm0.6$ km s$^{-1}$. Using these values as priors, together with the Gaia DR3 parallax (⟦gaia23⟧) and broadband photometry from APASS, 2MASS and WISE, we fitted the spectral energy distribution and MIST isochrones (⟦choi16⟧). The results are listed in Table 1. The star is a slightly metal-rich G0 dwarf, close to the end of its main-sequence lifetime but not yet on the subgiant branch: the isochrone fit places it at a central hydrogen fraction of 0.07, with an age of $5.8^{+1.6}_{-1.4}$ Gyr. The Gaia DR3 renormalised unit weight error is 1.06, and SOAR speckle imaging obtained through the TESS follow-up programme (see Ziegler et al. 2026 for the survey) detected no companion brighter than $\\Delta I=4.6$ mag beyond 0.1 arcsec. The projected rotation velocity implies a rotation period of $12\\pm2$ d if the stellar spin is aligned with the orbit, which means that the star rotates much more slowly than the orbit and the tide raised by the planet is not synchronised."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Stellar parameters of TOI-8317."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Value | Source\n$V$ (mag) | $9.31\\pm0.03$ | APASS\nParallax (mas) | $9.823\\pm0.019$ | Gaia DR3\nDistance (pc) | $101.8\\pm0.2$ | this work\n$T_{\\rm eff}$ (K) | $5915\\pm80$ | ZASPE\n$\\log g$ (cgs) | $4.30\\pm0.03$ | ZASPE\n[Fe/H] | $+0.21\\pm0.05$ | ZASPE\n$v\\sin i_\\star$ (km s$^{-1}$) | $5.1\\pm0.6$ | ZASPE\n$M_\\star$ ($M_\\odot$) | $1.07\\pm0.05$ | SED + MIST\n$R_\\star$ ($R_\\odot$) | $1.21\\pm0.03$ | SED + MIST\n$L_\\star$ ($L_\\odot$) | $1.61\\pm0.09$ | SED + MIST\nAge (Gyr) | $5.8^{+1.6}_{-1.4}$ | MIST"
+    }
+   ]
+  },
+  {
+   "title": "4 Analysis",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "4.1 Global fit",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We fitted the TESS, CHEOPS and ground-based photometry jointly with the FEROS velocities using juliet (⟦espinoza19⟧), which combines batman (⟦kreidberg15⟧) for the transit model with dynesty (⟦speagle20⟧) for nested sampling. Limb darkening followed a quadratic law with the $q_1,q_2$ parametrisation (⟦kipping13⟧) and a separate pair of coefficients per band; for TESS and CHEOPS we placed Gaussian priors of width 0.1 centred on the values of Claret (2017). The stellar density was given a Gaussian prior from Table 1. In this stage we used a linear ephemeris; the orbital eccentricity was left free with uniform priors on $\\sqrt{e}\\cos\\omega$ and $\\sqrt{e}\\sin\\omega$. Each instrument had its own jitter term."
+    },
+    {
+     "kind": "p",
+     "text": "The fit yields $R_p/R_\\star=0.0985\\pm0.0011$, $a/R_\\star=3.705\\pm0.052$, an impact parameter $b=0.25\\pm0.06$ (inclination $86.1\\pm0.9$ deg) and a transit duration of 2.38 h. The velocities give a semi-amplitude $K=839\\pm11$ m s$^{-1}$, hence $M_p=4.42\\pm0.13\\,M_{\\rm J}$ and $R_p=1.16\\pm0.03\\,R_{\\rm J}$. The eccentricity is consistent with zero ($e<0.018$ at 95 per cent confidence), as expected from the short circularisation time. Adding a linear trend to the velocity model gives $\\dot\\gamma=-9\\pm14$ m s$^{-1}$ yr$^{-1}$, and we did not include it in the final fit. The FEROS jitter is $12\\pm3$ m s$^{-1}$. With $T_{\\rm eq}\\approx2170$ K for zero albedo and full redistribution, TOI-8317 b is a highly irradiated planet; its radius is unremarkable for its mass and irradiation. The planetary parameters are collected in Table 2."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: Planetary parameters of TOI-8317 b from the global fit (linear ephemeris)."
+    },
+    {
+     "kind": "table",
+     "text": "Parameter | Value\n$R_p/R_\\star$ | $0.0985\\pm0.0011$\n$a/R_\\star$ | $3.705\\pm0.052$\n$b$ | $0.25\\pm0.06$\n$i$ (deg) | $86.1\\pm0.9$\n$T_{14}$ (h) | $2.383\\pm0.011$\n$K$ (m s$^{-1}$) | $839\\pm11$\n$e$ | $<0.018$ (95%)\n$M_p$ ($M_{\\rm J}$) | $4.42\\pm0.13$\n$R_p$ ($R_{\\rm J}$) | $1.16\\pm0.03$\n$\\rho_p$ (g cm$^{-3}$) | $3.51\\pm0.30$\n$a$ (au) | $0.02085\\pm0.00033$\n$T_{\\rm eq}$ (K) | $2173\\pm34$"
+    }
+   ]
+  },
+  {
+   "title": "4.2 Transit times",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "To measure the mid-times we fixed the shape parameters ($R_p/R_\\star$, $a/R_\\star$, $b$ and the limb-darkening coefficients) at the medians of the global fit and refitted each transit, or group of transits, with only the mid-time, the baseline parameters and a jitter term free. The uncertainties were inflated where needed by the $\\beta$ factor that accounts for time-correlated noise in the residuals, which was 1.0–1.4 for the ground-based light curves and close to unity for TESS and CHEOPS. In total we obtained 61 mid-times: 2 from SuperWASP, 24 from TESS, 8 from CHEOPS, 17 from LCOGT, 6 from TRAPPIST-North and 4 from El Sauce. A selection is listed in Table 3, and the full list is available in electronic form. The times span 16.2 yr, or about 5500 orbital cycles."
+    },
+    {
+     "kind": "table",
+     "text": "Table 3: Selected transit mid-times of TOI-8317 b. O–C is relative to the best-fitting linear ephemeris. The full table of 61 times is available at the CDS."
+    },
+    {
+     "kind": "table",
+     "text": "Epoch | BJD$_{\\rm TDB}-2454000$ | $\\sigma$ (s) | Source | O–C (s)\n$-4774$ | 801.09356 | 75 | SuperWASP-N | $-149$\n$-4441$ | 1154.98691 | 82 | SuperWASP-N | $-135$\n$-362$ | 5489.91447 | 35 | TESS | $+10$\n$-350$ | 5502.66783 | 33 | TESS | $+48$\n$-330$ | 5523.92302 | 34 | TESS | $+78$\n$-314$ | 5540.92685 | 33 | TESS | $+74$\n$-68$ | 5802.36195 | 73 | LCOGT | $+117$\n91 | 5971.33683 | 56 | LCOGT | $+17$\n163 | 6047.85350 | 90 | El Sauce | $-50$\n285 | 6177.50852 | 23 | CHEOPS | $-10$\n363 | 6260.40193 | 92 | El Sauce | $-52$\n386 | 6284.84593 | 41 | TESS | $+27$\n537 | 6445.32014 | 83 | El Sauce | $+38$\n714 | 6633.42544 | 81 | TRAPPIST-N | $+31$\n736 | 6656.80458 | 58 | LCOGT | $-72$"
+    }
+   ]
+  },
+  {
+   "title": "4.3 Timing models",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We compared three models for the mid-times $t(E)$ as a function of epoch $E$. The first is a linear ephemeris, $t(E)=T_0+PE$. The second allows a constant change of the period,"
+    },
+    {
+     "kind": "equation",
+     "text": "$$t(E)=T_0+PE+\\frac{1}{2}\\frac{dP}{dE}E^{2},\\qquad(1)$$"
+    },
+    {
+     "kind": "p",
+     "text": "with $\\dot P=(1/P)\\,dP/dE$ (⟦patra17⟧). The third describes apsidal precession of a slightly eccentric orbit, with the eccentricity, the argument of pericentre at $E=0$ and the precession rate $d\\omega/dE$ as additional free parameters, following Giménez & Bastero (1995) and Ragozzine & Wolf (2009). We fitted each model by minimising $\\chi^2$, sampled the posteriors with emcee (⟦fm13⟧), and compared them with the Bayesian Information Criterion (⟦schwarz78⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "The linear ephemeris gives $\\chi^2=77.4$ for 59 degrees of freedom and leaves a clear curvature in the residuals (Table 3): the two SuperWASP points arrive about 2.5 min early, the TESS times of 2021 about 1 min late, and the most recent times again early. The constant-period-derivative model gives $\\chi^2=59.1$ for 58 degrees of freedom, with $T_0=2459874.62718\\pm0.00008$ BJD$_{\\rm TDB}$, $P=1.06274182\\pm0.00000017$ d and $dP/dE=(-3.94\\pm0.98)\\times10^{-10}$ d per orbit, i.e."
+    },
+    {
+     "kind": "equation",
+     "text": "$$\\dot{P}=-11.7\\pm2.9\\ {\\rm ms\\,yr^{-1}}.\\qquad(2)$$"
+    },
+    {
+     "kind": "p",
+     "text": "Its BIC is lower than that of the linear model by $\\Delta{\\rm BIC}=14.2$, which is usually regarded as very strong evidence. The precession model reaches $\\chi^2=65.9$ with two more parameters than the decay model, so its BIC is higher than the decay model's by 15.0 and essentially the same as the linear model's; it also needs an eccentricity of $0.03$, which is in tension with the velocities. We therefore adopt the decay model. The posterior of $\\dot P$ is close to Gaussian, and 99.997 per cent of the samples have $\\dot P<0$."
+    },
+    {
+     "kind": "table",
+     "text": "Table 4: Comparison of timing models for the 61 transit times. $k$ is the number of free parameters."
+    },
+    {
+     "kind": "table",
+     "text": "Model | $k$ | $\\chi^2$ | BIC | $\\Delta$BIC\nLinear ephemeris | 2 | 77.4 | 85.6 | 14.2\nConstant $dP/dE$ (decay) | 3 | 59.1 | 71.4 | 0\nApsidal precession | 5 | 65.9 | 86.5 | 15.0"
+    },
+    {
+     "kind": "p",
+     "text": "We tested the robustness of the result in several ways. Fitting the TESS transits individually instead of in groups changes $\\dot P$ by less than 0.3 ms yr$^{-1}$. Removing all data from any single ground-based facility changes it by at most 1.1 ms yr$^{-1}$. Removing the CHEOPS times increases the uncertainty to 3.4 ms yr$^{-1}$ without moving the central value appreciably. The SuperWASP points matter most: without them the decay model is still preferred, but only by $\\Delta{\\rm BIC}=6.0$, and the uncertainty on $\\dot P$ grows to 5.8 ms yr$^{-1}$. We inflated the SuperWASP uncertainties by a factor of two as a further test and obtained $\\dot P=-11.2\\pm3.4$ ms yr$^{-1}$ (not shown)."
+    }
+   ]
+  },
+  {
+   "title": "5 Discussion",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "5.1 Tidal quality factor and remaining lifetime",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "If the period change is due to tides raised on the star, and if the dissipation can be described by a constant phase lag, the period derivative is related to the modified tidal quality factor by (⟦goldreich66⟧; ⟦patra17⟧)"
+    },
+    {
+     "kind": "equation",
+     "text": "$$\\dot{P}=-\\frac{27\\pi}{2Q'_\\star}\\left(\\frac{M_p}{M_\\star}\\right)\\left(\\frac{R_\\star}{a}\\right)^{5}.\\qquad(3)$$"
+    },
+    {
+     "kind": "p",
+     "text": "With the parameters of Sect. 4.1 we obtain $Q'_\\star=(6.5^{+2.2}_{-1.3})\\times10^{5}$, where the uncertainty is dominated by that of $\\dot P$; the contribution from $a/R_\\star$, which enters to the fifth power, is about 7 per cent. Tides raised on the planet do not contribute to the decay of a circular orbit once the planet's spin is synchronised. In the same framework, $a$ evolves as $a^{-11/2}$, and the time left before the planet reaches the star is $\\tau=(3/13)\\,P/|\\dot P|$, or 1.8 Myr. The planet would reach the Roche limit, at about 1.3 stellar radii for its density, slightly before that."
+    },
+    {
+     "kind": "p",
+     "text": "A remaining lifetime of under 2 Myr in a system that is several Gyr old is not in itself a problem, since the decay accelerates strongly as the orbit shrinks: in the constant-$Q'_\\star$ model the planet would have spent most of the last billion years at periods of 1.3–2 d. The probability of catching a planet in its last few Myr is small, but with several hundred known hot Jupiters a handful of such cases are expected (⟦collier18⟧; ⟦adams24⟧)."
+    }
+   ]
+  },
+  {
+   "title": "5.2 Comparison with tidal theory",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For a G dwarf with $M_\\star\\approx1.1\\,M_\\odot$ and a tidal period of half a day, equilibrium tides in the convective envelope with frequency-reduced turbulent viscosity give $Q'_\\star\\gtrsim10^{8}$ (⟦ogilvie14⟧; ⟦barker20⟧), nearly three orders of magnitude above our value. Inertial waves in the convective envelope are not excited because the tidal frequency is more than twice the stellar spin frequency. The most plausible way to reach $Q'_\\star\\sim10^{6}$ is the dissipation of internal gravity waves in the radiative core. When the planet is massive enough for these waves to break near the centre, the energy is absorbed in a single pass and $Q'_\\star$ falls to $10^{5}$–$10^{6}$ at periods of about one day (⟦barker10⟧; ⟦barker20⟧). Barker (2020) showed that this critical mass decreases as stars evolve and their cores become more centrally condensed; for a $1.1\\,M_\\odot$ star near the end of the main sequence it falls below a Jupiter mass. TOI-8317 b, at 4.4 $M_{\\rm J}$ around a star with a central hydrogen fraction of 0.07, should therefore be in the wave-breaking regime, and the predicted $Q'_\\star$ for its forcing period is $(3$–$9)\\times10^{5}$, in agreement with our measurement. Weakly non-linear damping of the waves (⟦essick16⟧; ⟦weinberg17⟧) would give a somewhat larger $Q'_\\star$ but probably within a factor of a few."
+    },
+    {
+     "kind": "p",
+     "text": "Tidal resonance locking (⟦ma21⟧) can also produce rapid migration, but it requires stellar evolution to drive a mode frequency through the tidal frequency at a rate comparable to the orbital evolution and generally predicts slower decay at these periods for main-sequence hosts. Magnetic fields in the radiative zone may modify the wave propagation and the critical mass (⟦chu26⟧), although the effect for slowly rotating G dwarfs is probably modest. Our value is also within the range inferred statistically from the spin-up of hot-Jupiter hosts (⟦penev18⟧), which suggested that $Q'_\\star$ drops steeply for tidal periods below about 0.5 d."
+    }
+   ]
+  },
+  {
+   "title": "5.3 Comparison with other systems",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "TOI-8317 b would be only the second hot Jupiter with a measured decay rate. Its $\\dot P$ is about 40 per cent of that of WASP-12 b (⟦wong22⟧) and its $Q'_\\star$ about three times larger. The two hosts differ: WASP-12 is a hotter, more massive star whose evolutionary state remains uncertain (⟦bailey19⟧; ⟦golonka26⟧), whereas TOI-8317 is securely on the main sequence according to all the isochrone grids we tried. If the dissipation in both systems is due to wave breaking, the difference in $Q'_\\star$ is roughly what the scaling with tidal period and stellar structure would suggest."
+    },
+    {
+     "kind": "p",
+     "text": "For other hot Jupiters around solar-type stars the timing data give only lower limits, typically $Q'_\\star\\gtrsim10^{6}$–$10^{7}$ (⟦ivshina22⟧; ⟦kokori23⟧; ⟦adams24⟧). Most of those planets are less massive than TOI-8317 b or orbit at larger $a/R_\\star$, and the wave-breaking criterion is not met for many of them, so the limits are not in conflict with our result. Systems with a similar combination of large mass ratio and small $a/R_\\star$ around a G dwarf are rare in current samples (⟦lillobox26⟧). The closest analogue in terms of mass ratio is WASP-18 b, ten Jupiter masses on a 0.94-d orbit (⟦hellier09⟧), for which no decay has been detected (⟦shporer19⟧; ⟦ivshina22⟧). Its host, however, is a younger F6 star with a shallower convective envelope and a less centrally condensed core, for which wave breaking is not expected; the contrast between the two systems is therefore consistent with the picture of Sect. 5.2 rather than in tension with it."
+    }
+   ]
+  },
+  {
+   "title": "5.4 Caveats",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our detection rests on a timing baseline whose early end is defined by two seasonal SuperWASP points, as for other systems where archival photometry was used (⟦harre24⟧). We have tried to make these points robust by fitting the shape from the space-based data and by correcting the dilution, but systematic errors at the level of a minute cannot be excluded entirely. Apsidal precession is disfavoured by the BIC and by the velocities. We found no evidence in the velocity residuals for additional planets, and no periodic TTV signal: a Lomb-Scargle periodogram of the residuals of the decay model has no peak with a false-alarm probability below 10 per cent. Selection effects that favour the detection of large timing deviations (⟦dangiolillo26⟧) are not important here, because TOI-8317 b was not selected for its timing behaviour."
+    },
+    {
+     "kind": "p",
+     "text": "Continued timing will test the result. By the end of 2027 the decay model predicts transits about two minutes earlier than the linear ephemeris; this difference is within reach of CHEOPS and of 1-m class telescopes. TESS will reobserve the field in future sectors near the ecliptic, which will add precise times at little cost."
+    },
+    {
+     "kind": "p",
+     "text": "Two further checks are possible with existing facilities. Occultation timing constrains the eccentricity and the precession scenario independently of the transits; the secondary eclipse of a 2170 K planet should be detectable with CHEOPS, and a measured offset of the eclipse from phase 0.5 would bound $e\\cos\\omega$ directly. TOI-8317 b is also bright enough for a measurement of the Rossiter–McLaughlin effect, which would show whether the orbit is aligned with the stellar equator; for a planet whose orbit has shrunk by tides over the last Gyr, alignment would be the natural expectation, although tidal realignment in a star of this mass is slow."
+    }
+   ]
+  },
+  {
+   "title": "6 Conclusions",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We have assembled 61 transit times of the hot Jupiter TOI-8317 b over 16.2 years. They are better described by a decaying orbit than by a constant period ($\\Delta{\\rm BIC}=14.2$), with $\\dot P=-11.7\\pm2.9$ ms yr$^{-1}$. Interpreted as tidal decay, this implies $Q'_\\star=(6.5^{+2.2}_{-1.3})\\times10^{5}$ for the G0 host and a remaining lifetime of 1.8 Myr. The value agrees with predictions for the breaking of tidally excited gravity waves in the cores of solar-type stars near the end of the main sequence. TOI-8317 b is a good target for continued monitoring, and a confirmation would make it the first direct calibration of tidal dissipation in a main-sequence G dwarf."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank the CHEOPS Guest Observers programme team for making their data public, and the LCOGT, TRAPPIST and El Sauce staff for their support. T.F. acknowledges support from ANID Beca de Doctorado Nacional 21231874. C.R. and I.A. acknowledge support from ANID FONDECYT Regular grant 1240917. This paper includes data collected by the TESS mission, which are publicly available from MAST; funding for TESS is provided by the NASA Science Mission Directorate. Based on observations collected at the European Southern Observatory under ESO programmes 110.24QF and 112.25ML. This work made use of data from the European Space Agency mission Gaia, processed by the Gaia DPAC, and of the SuperWASP public archive. TRAPPIST is funded by the Belgian F.R.S.-FNRS. We used Astropy, NumPy and AstroImageJ."
+    }
+   ]
+  },
+  {
+   "title": "Data availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The transit times, the FEROS velocities and the reduced ground-based light curves are available at the CDS and on Zenodo (doi:10.5281/zenodo.16289341). The TESS and CHEOPS data are available from MAST and the CHEOPS archive."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "adams24",
+   "tag": "Adams et al. 2024",
+   "text": "Adams, E. R., Jackson, B., Sickafoose, A. A., et al. 2024, PSJ, 5, 163."
+  },
+  {
+   "key": "bailey19",
+   "tag": "Bailey & Goodman 2019",
+   "text": "Bailey, A., & Goodman, J. 2019, MNRAS, 482, 1872."
+  },
+  {
+   "key": "barker10",
+   "tag": "Barker & Ogilvie 2010",
+   "text": "Barker, A. J., & Ogilvie, G. I. 2010, MNRAS, 404, 1849."
+  },
+  {
+   "key": "barker20",
+   "tag": "Barker 2020",
+   "text": "Barker, A. J. 2020, MNRAS, 498, 2270."
+  },
+  {
+   "key": "benz21",
+   "tag": "Benz et al. 2021",
+   "text": "Benz, W., Broeg, C., Fortier, A., et al. 2021, Experimental Astronomy, 51, 109."
+  },
+  {
+   "key": "bouma19",
+   "tag": "Bouma et al. 2019",
+   "text": "Bouma, L. G., Winn, J. N., Baxter, C., et al. 2019, AJ, 157, 217."
+  },
+  {
+   "key": "brahm17a",
+   "tag": "Brahm et al. 2017a",
+   "text": "Brahm, R., Jordán, A., & Espinoza, N. 2017a, PASP, 129, 034002."
+  },
+  {
+   "key": "brahm17b",
+   "tag": "Brahm et al. 2017b",
+   "text": "Brahm, R., Jordán, A., Hartman, J., & Bakos, G. 2017b, MNRAS, 467, 971."
+  },
+  {
+   "key": "brown13",
+   "tag": "Brown et al. 2013",
+   "text": "Brown, T. M., Baliber, N., Bianco, F. B., et al. 2013, PASP, 125, 1031."
+  },
+  {
+   "key": "choi16",
+   "tag": "Choi et al. 2016",
+   "text": "Choi, J., Dotter, A., Conroy, C., et al. 2016, ApJ, 823, 102."
+  },
+  {
+   "key": "chu26",
+   "tag": "Chu et al. 2026",
+   "text": "Chu, S., Guo, Z., Astoul, A., & Barker, A. J. 2026, Tidal dissipation in magnetised, rotating stars and planets: linear calculations exploring various magnetic field configurations, arXiv e-prints."
+  },
+  {
+   "key": "claret17",
+   "tag": "Claret 2017",
+   "text": "Claret, A. 2017, A&A, 600, A30."
+  },
+  {
+   "key": "collier18",
+   "tag": "Collier Cameron & Jardine 2018",
+   "text": "Collier Cameron, A., & Jardine, M. 2018, MNRAS, 476, 2542."
+  },
+  {
+   "key": "dangiolillo26",
+   "tag": "D'Angiolillo et al. 2026",
+   "text": "D'Angiolillo, S., Fabrycky, D., & MacDonald, M. G. 2026, Accounting for Transit Timing Detectability: Biases in Planetary Radius and Orbital Period, arXiv e-prints."
+  },
+  {
+   "key": "eastman10",
+   "tag": "Eastman et al. 2010",
+   "text": "Eastman, J., Siverd, R., & Gaudi, B. S. 2010, PASP, 122, 935."
+  },
+  {
+   "key": "espinoza19",
+   "tag": "Espinoza et al. 2019",
+   "text": "Espinoza, N., Kossakowski, D., & Brahm, R. 2019, MNRAS, 490, 2262."
+  },
+  {
+   "key": "essick16",
+   "tag": "Essick & Weinberg 2016",
+   "text": "Essick, R., & Weinberg, N. N. 2016, ApJ, 816, 18."
+  },
+  {
+   "key": "fm13",
+   "tag": "Foreman-Mackey et al. 2013",
+   "text": "Foreman-Mackey, D., Hogg, D. W., Lang, D., & Goodman, J. 2013, PASP, 125, 306."
+  },
+  {
+   "key": "gaia23",
+   "tag": "Gaia Collaboration 2023",
+   "text": "Gaia Collaboration, Vallenari, A., Brown, A. G. A., et al. 2023, A&A, 674, A1."
+  },
+  {
+   "key": "gimenez95",
+   "tag": "Giménez & Bastero 1995",
+   "text": "Giménez, A., & Bastero, M. 1995, Ap&SS, 226, 99."
+  },
+  {
+   "key": "goldreich66",
+   "tag": "Goldreich & Soter 1966",
+   "text": "Goldreich, P., & Soter, S. 1966, Icarus, 5, 375."
+  },
+  {
+   "key": "golonka26",
+   "tag": "Golonka & Maciejewski 2026",
+   "text": "Golonka, J., & Maciejewski, G. 2026, A&A, 709, A60."
+  },
+  {
+   "key": "hagey25",
+   "tag": "Hagey et al. 2025",
+   "text": "Hagey, S. R., Edwards, B., Tsiaras, A., et al. 2025, AJ, 170, 197."
+  },
+  {
+   "key": "hamer19",
+   "tag": "Hamer & Schlaufman 2019",
+   "text": "Hamer, J. H., & Schlaufman, K. C. 2019, AJ, 158, 190."
+  },
+  {
+   "key": "harre24",
+   "tag": "Harre et al. 2024",
+   "text": "Harre, J.-V., Smith, A. M. S., Barros, S. C. C., et al. 2024, A&A, 692, A254."
+  },
+  {
+   "key": "hellier09",
+   "tag": "Hellier et al. 2009",
+   "text": "Hellier, C., Anderson, D. R., Collier Cameron, A., et al. 2009, Nature, 460, 1098."
+  },
+  {
+   "key": "he26",
+   "tag": "He et al. 2026",
+   "text": "He, Y., Bitsch, B., Houge, A., Williams, J., & Ogihara, M. 2026, The majority of hot Jupiters formed beyond the water ice line, arXiv e-prints."
+  },
+  {
+   "key": "hu26",
+   "tag": "Hu et al. 2026",
+   "text": "Hu, Q., Zhu, W., Huang, Y., & Zhang, B. 2026, Are Hot Jupiters Tidally Disrupted During Stellar Main Sequence?, arXiv e-prints."
+  },
+  {
+   "key": "huang20",
+   "tag": "Huang et al. 2020",
+   "text": "Huang, C. X., Vanderburg, A., Pál, A., et al. 2020, RNAAS, 4, 204."
+  },
+  {
+   "key": "ivshina22",
+   "tag": "Ivshina & Winn 2022",
+   "text": "Ivshina, E. S., & Winn, J. N. 2022, ApJS, 259, 62."
+  },
+  {
+   "key": "jackson09",
+   "tag": "Jackson et al. 2009",
+   "text": "Jackson, B., Barnes, R., & Greenberg, R. 2009, ApJ, 698, 1357."
+  },
+  {
+   "key": "jehin11",
+   "tag": "Jehin et al. 2011",
+   "text": "Jehin, E., Gillon, M., Queloz, D., et al. 2011, The Messenger, 145, 2."
+  },
+  {
+   "key": "jenkins16",
+   "tag": "Jenkins et al. 2016",
+   "text": "Jenkins, J. M., Twicken, J. D., McCauliff, S., et al. 2016, in Proc. SPIE, Vol. 9913, Software and Cyberinfrastructure for Astronomy IV, 99133E."
+  },
+  {
+   "key": "kaufer99",
+   "tag": "Kaufer et al. 1999",
+   "text": "Kaufer, A., Stahl, O., Tubbesing, S., et al. 1999, The Messenger, 95, 8."
+  },
+  {
+   "key": "kipping13",
+   "tag": "Kipping 2013",
+   "text": "Kipping, D. M. 2013, MNRAS, 435, 2152."
+  },
+  {
+   "key": "kokori23",
+   "tag": "Kokori et al. 2023",
+   "text": "Kokori, A., Tsiaras, A., Edwards, B., et al. 2023, ApJS, 265, 4."
+  },
+  {
+   "key": "kreidberg15",
+   "tag": "Kreidberg 2015",
+   "text": "Kreidberg, L. 2015, PASP, 127, 1161."
+  },
+  {
+   "key": "levrard09",
+   "tag": "Levrard et al. 2009",
+   "text": "Levrard, B., Winisdoerffer, C., & Chabrier, G. 2009, ApJ, 692, L9."
+  },
+  {
+   "key": "lillobox26",
+   "tag": "Lillo-Box et al. 2026",
+   "text": "Lillo-Box, J., Cifuentes, C., Balsalobre-Ruza, O., et al. 2026, CAFE follow-up of TESS hot Jupiter candidates left behind: I. Five newly confirmed planets and a false positive, arXiv e-prints."
+  },
+  {
+   "key": "ma21",
+   "tag": "Ma & Fuller 2021",
+   "text": "Ma, L., & Fuller, J. 2021, ApJ, 918, 16."
+  },
+  {
+   "key": "maciejewski16",
+   "tag": "Maciejewski et al. 2016",
+   "text": "Maciejewski, G., Dimitrov, D., Fernández, M., et al. 2016, A&A, 588, L6."
+  },
+  {
+   "key": "ogilvie14",
+   "tag": "Ogilvie 2014",
+   "text": "Ogilvie, G. I. 2014, ARA&A, 52, 171."
+  },
+  {
+   "key": "patra17",
+   "tag": "Patra et al. 2017",
+   "text": "Patra, K. C., Winn, J. N., Holman, M. J., et al. 2017, AJ, 154, 4."
+  },
+  {
+   "key": "penev18",
+   "tag": "Penev et al. 2018",
+   "text": "Penev, K., Bouma, L. G., Winn, J. N., & Hartman, J. D. 2018, AJ, 155, 165."
+  },
+  {
+   "key": "pollacco06",
+   "tag": "Pollacco et al. 2006",
+   "text": "Pollacco, D. L., Skillen, I., Collier Cameron, A., et al. 2006, PASP, 118, 1407."
+  },
+  {
+   "key": "ragozzine09",
+   "tag": "Ragozzine & Wolf 2009",
+   "text": "Ragozzine, D., & Wolf, A. S. 2009, ApJ, 698, 1778."
+  },
+  {
+   "key": "rasio96",
+   "tag": "Rasio et al. 1996",
+   "text": "Rasio, F. A., Tout, C. A., Lubow, S. H., & Livio, M. 1996, ApJ, 470, 1187."
+  },
+  {
+   "key": "ricker15",
+   "tag": "Ricker et al. 2015",
+   "text": "Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2015, Journal of Astronomical Telescopes, Instruments, and Systems, 1, 014003."
+  },
+  {
+   "key": "schwarz78",
+   "tag": "Schwarz 1978",
+   "text": "Schwarz, G. 1978, Annals of Statistics, 6, 461."
+  },
+  {
+   "key": "shporer19",
+   "tag": "Shporer et al. 2019",
+   "text": "Shporer, A., Wong, I., Huang, C. X., et al. 2019, AJ, 157, 178."
+  },
+  {
+   "key": "speagle20",
+   "tag": "Speagle 2020",
+   "text": "Speagle, J. S. 2020, MNRAS, 493, 3132."
+  },
+  {
+   "key": "tejada21",
+   "tag": "Tejada Arevalo et al. 2021",
+   "text": "Tejada Arevalo, R. A., Winn, J. N., & Anderson, K. R. 2021, ApJ, 919, 138."
+  },
+  {
+   "key": "vissapragada22",
+   "tag": "Vissapragada et al. 2022",
+   "text": "Vissapragada, S., Chontos, A., Greklek-McKeon, M., et al. 2022, ApJ, 941, L31."
+  },
+  {
+   "key": "weinberg17",
+   "tag": "Weinberg et al. 2017",
+   "text": "Weinberg, N. N., Sun, M., Arras, P., & Essick, R. 2017, ApJ, 849, L11."
+  },
+  {
+   "key": "winn25",
+   "tag": "Winn & Stefánsson 2025",
+   "text": "Winn, J. N., & Stefánsson, G. 2025, PSJ, 6, 300."
+  },
+  {
+   "key": "wong21",
+   "tag": "Wong et al. 2021",
+   "text": "Wong, I., Shporer, A., Zhou, G., et al. 2021, AJ, 162, 256."
+  },
+  {
+   "key": "wong22",
+   "tag": "Wong et al. 2022",
+   "text": "Wong, I., Shporer, A., Vissapragada, S., et al. 2022, AJ, 163, 175."
+  },
+  {
+   "key": "yee20",
+   "tag": "Yee et al. 2020",
+   "text": "Yee, S. W., Winn, J. N., Knutson, H. A., et al. 2020, ApJ, 888, L5."
+  },
+  {
+   "key": "zahn77",
+   "tag": "Zahn 1977",
+   "text": "Zahn, J.-P. 1977, A&A, 57, 383."
+  },
+  {
+   "key": "zechmeister09",
+   "tag": "Zechmeister & Kürster 2009",
+   "text": "Zechmeister, M., & Kürster, M. 2009, A&A, 496, 577."
+  },
+  {
+   "key": "ziegler26",
+   "tag": "Ziegler et al. 2026",
+   "text": "Ziegler, C., Tokovinin, A., Briceño, C., et al. 2026, SOAR TESS Survey III: Mapping the Stellar Companion Deficit around TESS Planet Candidates, arXiv e-prints."
+  }
+ ],
+ "bib_style": "authoryear"
+}

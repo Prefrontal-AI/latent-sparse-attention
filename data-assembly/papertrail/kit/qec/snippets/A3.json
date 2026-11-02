@@ -1,0 +1,21 @@
+{
+ "node": "A3",
+ "kind": "patch",
+ "host": "2609.04557",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.SS1.p2.1",
+   "after": 2,
+   "text": "At the opposite, low-latency end, streaming hardware decoders such as Sandpiper [⟦new.A3⟧] grow clusters and commit matchings inside a sliding window of syndrome rounds on an FPGA."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A3",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd,\n“Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs,”\narXiv preprint, 2026."
+  }
+ ]
+}

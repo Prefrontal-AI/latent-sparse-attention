@@ -1,0 +1,14 @@
+{
+ "node": "A4",
+ "kind": "patch",
+ "host": "2609.03235",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "A1.SS6.p1.1",
+   "after": 4,
+   "text": "The flat BABILong curves in Table 4 also indicate that a fixed ratio becomes generous for the longest inputs. At 32k, our 25% budget (8,192 tokens) already stays within about one point of FullKV; if the required budget grows as the 0.43 power of context length, as reported for AlloKV (Section 2), the same accuracy at 1M would need only about 36K tokens, i.e. roughly 3.5% of the context, about seven times less than the 25% we allocate. We nevertheless keep the ratio constant across lengths so that every head-level method is compared at the same memory."
+  }
+ ],
+ "new_bib": []
+}

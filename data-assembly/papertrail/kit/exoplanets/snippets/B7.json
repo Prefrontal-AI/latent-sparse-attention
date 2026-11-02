@@ -1,0 +1,14 @@
+{
+ "node": "B7",
+ "kind": "patch",
+ "host": "2609.16115",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "A1.p7.1",
+   "after": 5,
+   "text": "For comparison, if NGTS-10 A dissipated tides as efficiently as the G dwarf TOI-8317, for which transit timing indicates $Q^{\\prime}_{\\star}=6.5\\times 10^{5}$ [Fuenzalida et al., 2026], the constant-phase-lag relation [Patra et al., 2017] with $M_{\\mathrm{p}}=2.16$ $M_{\\mathrm{Jup}}$, $M_{\\star}=0.70$ $M_{\\odot}$ [McCormac et al., 2020] and $a/R_{\\star}=4.71$ would give $\\dot{P}\\approx-2.6$ ms yr-1, or $P/|\\dot{P}|\\approx$ 25 Myr, a rate that our measurement cannot yet exclude."
+  }
+ ],
+ "new_bib": []
+}

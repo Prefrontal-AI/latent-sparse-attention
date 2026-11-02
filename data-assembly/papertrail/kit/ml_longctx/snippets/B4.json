@@ -1,0 +1,21 @@
+{
+ "node": "B4",
+ "kind": "patch",
+ "host": "2609.11998",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S6.SS0.SSS0.Px1.p1.1",
+   "after": 2,
+   "text": "Our efficiency numbers also assume a bf16 state. If the bit-growth law of Veldhuis et al. [⟦new.B1⟧], about 0.62 additional bits per state entry for every doubling of the context, carries over to our denoiser, a low-bit Mamba cache calibrated at the 1024-token training length would need about 5.0 more bits per entry to stay equally faithful at 256k tokens (eight doublings), so a quantized cache is constant in $L$ only up to this logarithmic term."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B1",
+   "cites_node": "B1",
+   "tag": "?",
+   "text": "J. Veldhuis, F. Postma, R. Zwart, and M. Dekkers. How many bits does a recurrent state need? Context-length scaling of state precision in Mamba and gated linear attention. arXiv preprint, 2026."
+  }
+ ]
+}

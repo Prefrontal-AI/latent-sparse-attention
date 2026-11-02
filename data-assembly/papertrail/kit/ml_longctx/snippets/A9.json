@@ -1,0 +1,14 @@
+{
+ "node": "A9",
+ "kind": "patch",
+ "host": "2609.27981",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S7.p2.1",
+   "after": 2,
+   "text": "Nor need they transfer across context lengths, because retention is defined relative to the prefill length: if the budget that preserves utility grows with length as reported for SuBA (Mowat et al., 2026), the 0.35 retention certified for Layer-DefensiveKV on RULER-32K would correspond to only about 0.20 at 128K, roughly 27K retained tokens, so a certificate obtained at one length would have to be recalibrated at another."
+  }
+ ],
+ "new_bib": []
+}

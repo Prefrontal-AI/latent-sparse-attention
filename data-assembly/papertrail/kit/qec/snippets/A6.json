@@ -1,0 +1,27 @@
+{
+ "node": "A6",
+ "kind": "patch",
+ "host": "2610.01683",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S2.SS3.p3.1",
+   "after": 3,
+   "text": "Decoders engineered for real-time hardware operation sit below this value: the Kittiwake decoding core, run on a cluster of FPGA cards, crosses at $p_{\\mathrm{thr}}\\approx 0.00598$ under the same uniform circuit-level model [⟦new.A6⟧]. Inserted into Eq. (1) together with the MWPM value $p_{\\mathrm{thr}}^{\\mathrm{SC,cl}}\\approx 0.0075$, this lower threshold multiplies the LER at $d=7$ and equal $p$ by $(0.0075/0.00598)^{4}\\approx 2.47$, an illustration of how a modest loss of threshold is amplified by the code distance."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS5.p8.1",
+   "after": 8,
+   "text": "Dedicated streaming hardware such as the Kittiwake core [⟦new.A6⟧] already completes window-based decoding within a microsecond-scale cycle, which sets the bar for a hardware implementation of the network."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A6",
+   "cites_node": "A2",
+   "tag": "",
+   "text": "H. Pryce, J. Lindley, I. Firth, T. Ashworth, M. Rennie, S. Hartley, and C. Holroyd (2026). Real-time decoding of lattice surgery on a networked FPGA cluster at code distances up to 23. arXiv e-prints."
+  }
+ ]
+}

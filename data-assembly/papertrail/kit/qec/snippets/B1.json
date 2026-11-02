@@ -1,0 +1,620 @@
+{
+ "node": "B1",
+ "kind": "fake_paper",
+ "date": "2026-08-27",
+ "title": "Magic state cultivation in the square-octagon colour code",
+ "authors": [
+  "Oskar Hedlund 1",
+  "Elin Sandberg 1,2",
+  "Jakob Wiklund 2",
+  "Martin Forsgren 1"
+ ],
+ "affiliations": [
+  "1 Department of Physics, Stockholm University, AlbaNova University Center, 106 91 Stockholm, Sweden",
+  "2 Department of Microtechnology and Nanoscience (MC2), Chalmers University of Technology, 412 96 Gothenburg, Sweden"
+ ],
+ "abstract": "Magic state cultivation prepares encoded $T$ states by repeatedly checking a small colour code with transversal Clifford measurements and discarding every attempt in which a detector fires. Existing colour-code cultivation circuits use the hexagonal (6.6.6) lattice. We construct cultivation circuits for the triangular square-octagon (4.8.8) colour code, which coincides with the hexagonal code at distance three (both give the Steane code) but needs only 17 data qubits at distance five, against 19. We give the injection, double-check and growth circuits, a square-grid embedding in which the weight-eight octagon checks are measured in two half-rounds, and a grafted escape into a distance-15 surface code. Under uniform circuit-level depolarizing noise with $p=10^{-3}$, and using the standard Clifford $S$-state proxy, the distance-5 circuit reaches a logical error rate of $(4.3\\pm 0.8)\\times 10^{-10}$ per accepted state with an acceptance probability of $21.4\\%$, on 39 physical qubits. The expected spacetime volume before escape is $3.26\\times 10^{3}$ qubit-rounds per accepted state, $23\\%$ lower than for our reimplementation of the hexagonal circuit, at the price of a modestly higher logical error rate. At $p=5\\times 10^{-4}$ the rate falls to $1.7\\times 10^{-11}$. The square-octagon lattice is therefore a competitive host for cultivation on hardware with square connectivity.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Fault-tolerant quantum computers that use the surface code [⟦fowler12⟧] or the colour code implement Clifford operations cheaply, but need a supply of high-fidelity magic states to complete a universal gate set [⟦bk05⟧, ⟦gc99⟧]. For most of the past two decades the default supply was magic-state distillation, whose footprint has been reduced substantially but remains large [⟦litinski19⟧, ⟦bks21⟧]. Resource estimates for factoring and chemistry therefore spend a large share of their qubits and runtime on magic states [⟦gidney25⟧, ⟦webster26⟧, ⟦cain26⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Magic state cultivation [⟦gsj⟧] changes this balance. A noisy $T$ state is injected into a small colour code, and the logical operator $H_{XY}=(X+Y)/\\sqrt{2}$, of which $|T\\rangle$ is an eigenstate, is measured repeatedly. Because the colour code has a transversal $S$ gate, $H_{XY}$ can be measured transversally by conjugating an $X$-parity measurement with physical $T$ and $T^{\\dagger}$ gates. Every detection event is postselected away, the code is grown once the checks have saturated its distance, and the state finally escapes into a large surface code. At a uniform physical error rate of $10^{-3}$ the protocol was estimated to reach logical error rates near $2\\times 10^{-9}$ with a spacetime cost comparable to a lattice-surgery CNOT [⟦gsj⟧], and the first stages have now been run on superconducting hardware [⟦rosenfeld25⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "A good deal of follow-up work has moved cultivation onto the surface code, which most hardware groups already operate. Proposals use fold-transversal gates [⟦sahay26⟧], lattice surgery [⟦hirano25⟧, ⟦vaknin25⟧], circuits with only two-qubit gates [⟦claes25⟧], the projective plane [⟦chen26⟧], and gauging measurements [⟦hetenyi26⟧]. Others reduce the postselection overhead itself, for instance by multiplexing several early-stage attempts inside one patch [⟦kim26⟧], or study how cultivated states should be scheduled and routed by a compiler [⟦hofmeyr25⟧, ⟦pflieger26⟧]. Colour-code cultivation has received less attention, although colour-code memories and logic now run on the same superconducting processors [⟦lacroix25⟧]. Neutral-atom processors offer an alternative route with transversal gates and reconfigurable connectivity [⟦bluvstein24⟧], while superconducting devices are now operating below the surface-code threshold [⟦gqai25⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "All colour-code cultivation circuits we are aware of use the hexagonal 6.6.6 lattice. The 4.8.8 lattice, made of squares and octagons, supports a family of triangular codes with the same transversal Clifford group [⟦bmd06⟧, ⟦bmd07⟧, ⟦kb15⟧]. It is the more economical of the two families: at distance five the 4.8.8 code has parameters $[[17,1,5]]$ while the hexagonal code is $[[19,1,5]]$, and the advantage grows with distance [⟦bmd07⟧, ⟦landahl11⟧]. At distance three both lattices give the seven-qubit Steane code. A cultivation protocol built on the 4.8.8 family therefore shares its injection and its first double checks with the hexagonal protocol, and differs only once the code is grown to distance five, which is precisely where most of the expected spacetime volume is spent [⟦gsj⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we construct and simulate such a protocol, which we call square-octagon cultivation. Our contributions are: (i) growth and double-check circuits for the $[[17,1,5]]$ code, with a schedule for the weight-eight octagon stabilisers that keeps hook errors aligned with the code's boundaries; (ii) an embedding on a square grid with nearest-neighbour couplers and 39 physical qubits; (iii) Monte Carlo estimates of the logical error rate, acceptance probability and expected spacetime volume between $p=5\\times 10^{-4}$ and $p=2\\times 10^{-3}$, compared with a reimplementation of the hexagonal circuit inside the same simulation pipeline; and (iv) end-to-end estimates including a grafted escape into a distance-15 surface code. Section 2 reviews the codes and the protocol, Sec. 3 describes the circuits, Sec. 4 the simulation methodology, and Sec. 5 the results. We discuss limitations in Sec. 6."
+    }
+   ]
+  },
+  {
+   "title": "2 Background",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We briefly fix notation. Throughout, $p$ denotes the strength of the circuit-level noise model of Sec. 4, and the logical error rate $P_{L}$ is the probability that an accepted shot carries a logical error."
+    }
+   ]
+  },
+  {
+   "title": "2.1 Triangular colour codes on the 4.8.8 lattice",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A two-dimensional colour code is defined on a three-valent, three-colourable lattice with qubits on vertices; every face supports one $X$-type and one $Z$-type stabiliser [⟦bmd06⟧]. Triangular patches with three coloured boundaries encode one logical qubit, and because every face has even weight and the logical operators can be chosen with odd weight, the transversal gate $S^{\\otimes n}$ (with $S^{\\dagger}$ on one sublattice) implements a logical $S$ up to a known Pauli frame [⟦kb15⟧, ⟦landahl11⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "On the 4.8.8 lattice the faces are squares (weight four) and octagons (weight eight). The triangular codes of distance $d=3,5,7$ have $n=7,17,31$ data qubits, compared with $7,19,37$ on the hexagonal lattice [⟦bmd07⟧]. The $[[17,1,5]]$ code has eight faces: five squares and three octagons in our orientation, with the octagons in the interior of the triangle. Weight-eight checks are the main practical cost of the lattice. They need either higher-degree ancillas or a split measurement, and they create longer hook errors [⟦ckyz20⟧, ⟦cr18⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "The logical $T$ state is the $+1$ eigenstate of $H_{XY}=TXT^{\\dagger}$ up to phase. Since $S$ is transversal, so is $H_{XY}$ up to a global phase and a Pauli frame, and a nondestructive $X^{\\otimes n}$ parity measurement sandwiched between $T^{\\dagger\\otimes n}$ and $T^{\\otimes n}$ measures the logical $H_{XY}$ [⟦gsj⟧]."
+    }
+   ]
+  },
+  {
+   "title": "2.2 Cultivation",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Cultivation differs from distillation in that it never consumes more than one noisy input state. Its cost is therefore set almost entirely by the number of attempts and the spacetime volume of each attempt, rather than by a factory layout [⟦litinski19⟧]. It also differs from code switching [⟦dk25⟧, ⟦bks21⟧], because the colour code is never asked to support a transversal $T$ gate: only the $T$-conjugated $X$ parity is measured, and only on a code small enough that postselection is affordable."
+    },
+    {
+     "kind": "p",
+     "text": "We follow the stage structure of Ref. [⟦gsj⟧]. Injection prepares the logical state at fault distance one in the $d=3$ code. Cultivation then performs $H_{XY}$ checks; each check is executed twice in a mirrored \"double check\" so that a single fault in the check circuit is caught by the comparison. After the $d=3$ checks the code is grown to $d=5$ by adding qubits prepared in Bell pairs and running stabiliser rounds, and a $d=5$ double check raises the fault distance further. Any detection event during these stages discards the attempt. Finally, the escape stage grafts the colour code into a much larger surface code, and a complementary-gap threshold [⟦gsj⟧, ⟦gnfb21⟧] decides whether to keep the shot."
+    },
+    {
+     "kind": "p",
+     "text": "Because the cultivation stages are not decoded, the acceptance probability decays exponentially with the number of fault locations. Saving qubits and gates in the $d=5$ stage pays off twice: in the per-attempt volume and in the number of attempts per accepted state. This is the trade-off that motivates the 4.8.8 lattice."
+    },
+    {
+     "kind": "p",
+     "text": "Colour codes can also be decoded efficiently [⟦kd23⟧, ⟦gj23⟧], and code switching provides an alternative route to transversal $T$ [⟦dk25⟧, ⟦bks21⟧]; here we need neither, because the cultivation stages are only postselected and the escape is decoded in the surface code. Related flag techniques for postselected magic-state preparation are reviewed in Refs. [⟦cn20⟧, ⟦cr18⟧, ⟦surti26⟧]."
+    }
+   ]
+  },
+  {
+   "title": "3 Circuits",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "All circuits were written as Stim circuits [⟦stim⟧] and checked for detector determinism and for the absence of undetectable logical faults of weight below the target fault distance using Stim's search for graphlike and hypergraph logical errors on the $S$-proxy versions of the circuits."
+    }
+   ]
+  },
+  {
+   "title": "3.1 Injection and the distance-3 stage",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Because the $d=3$ codes of both lattices coincide, we reuse the unitary injection and the two $d=3$ double checks of Ref. [⟦gsj⟧] without modification, apart from re-routing them onto our qubit layout. This makes the first part of the protocol directly comparable with the hexagonal circuit and gives a useful validation point (Sec. 5.1)."
+    }
+   ]
+  },
+  {
+   "title": "3.2 Growth to the 17-qubit code",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The $[[7,1,3]]$ code sits in one corner of the $[[17,1,5]]$ triangle. Growth adds ten data qubits, prepared as five Bell pairs, so that the new stabilisers of the $d=5$ code have deterministic initial values on the expanded region. Three rounds of stabiliser measurement follow before the distance-5 double check. We measure squares with one ancilla per Pauli type, as in superdense colour-code circuits [⟦gj23⟧, ⟦lacroix25⟧], and split each octagon into two weight-four halves whose ancillas are joined by a final CNOT before readout. The split costs one extra layer per round but keeps every ancilla at degree at most five."
+    },
+    {
+     "kind": "p",
+     "text": "We chose the CNOT order on each octagon half so that the weight-two hook errors produced by a single ancilla fault run parallel to the nearest boundary of the same colour. With this choice the code distance of the measurement circuit is preserved for $X$- and $Z$-type faults alike, which we verified with Stim. The alternative \"zig-zag\" order of Ref. [⟦ckyz20⟧] needs one fewer layer but reduces the circuit distance of the $d=5$ memory to four."
+    },
+    {
+     "kind": "p",
+     "text": "Detectors in the growth stage compare each new stabiliser with the product of the Bell-pair values it contains in its first round, and with its own previous value afterwards. Together with the comparisons across the double checks, the $d=5$ stage defines 214 detectors in the $S$-proxy circuit, all of which are used for postselection. We confirmed with Stim's undetectable-error search that no set of four or fewer faults flips the logical observable without triggering a detector, so the proxy circuit has fault distance five, as intended."
+    }
+   ]
+  },
+  {
+   "title": "3.3 The distance-5 double check",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The $d=5$ $H_{XY}$ check uses the partner-qubit construction of Refs. [⟦gsj⟧, ⟦rosenfeld25⟧]: each of the 17 data qubits is paired with a neighbouring ancilla, the partners are connected by a CNOT tree rooted at a single measurement qubit, and the tree is reversed after the root is measured, so that the partners' final $X$-basis readouts form a second, time-reversed copy of the check and a set of flags. On the 4.8.8 layout the tree has depth five, one less than in our hexagonal layout, because octagon centres provide short paths across the patch. As in Ref. [⟦gsj⟧], one further stabiliser round follows the double check."
+    }
+   ]
+  },
+  {
+   "title": "3.4 Square-grid embedding",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The full $d=5$ cultivation circuit occupies 39 physical qubits: 17 data qubits, 16 measurement qubits for the eight faces (two per face, with the octagon halves sharing the pair), and six additional qubits used only as partners and tree nodes during the double check. All two-qubit gates act between nearest neighbours of a square grid with four couplers per qubit, in the spirit of the time-dynamic surface-code circuits of Ref. [⟦mbg23⟧]; no coupler is used by two gates in the same layer. Our reimplementation of the hexagonal $d=5$ circuit on the same grid uses 44 qubits, in agreement with the count reported in Ref. [⟦gsj⟧]. The layouts are shown in Fig. 2 and the per-stage gate counts in Table 1."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Stage-by-stage resources of the distance-5 cultivation circuits on a square grid. Layers count two-qubit-gate layers; locations count all noisy operations (gates, idles, resets, measurements) in the $S$-proxy circuit. The escape stage is not included."
+    },
+    {
+     "kind": "table",
+     "text": "Stage | Square-octagon: qubits | layers | locations | Hexagonal: qubits | layers | locations\nInjection + $d=3$ double checks | 15 | 18 | 702 | 15 | 18 | 702\nGrowth + 3 rounds | 33 | 15 | 1,214 | 37 | 14 | 1,507\n$d=5$ double check | 39 | 12 | 1,061 | 44 | 14 | 1,333\nFinal round | 33 | 5 | 402 | 37 | 4 | 473\nTotal | 39 | 50 | 3,379 | 44 | 50 | 4,015"
+    },
+    {
+     "kind": "caption",
+     "text": "Figure 2: Square-grid layouts of the distance-5 stage. Data qubits (black) sit on vertices of the 4.8.8 lattice; measurement qubits (white) at face centres, two per face; partner qubits (grey) are used only during the double check. The CNOT tree of the double check is drawn in red."
+    }
+   ]
+  },
+  {
+   "title": "3.5 Escape",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For the escape stage we graft the $[[17,1,5]]$ code into a distance-15 rotated surface code, adapting the grafting construction of Ref. [⟦gsj⟧] to the octagon boundary. Ten rounds of the combined code are measured. Detection events in the residual colour-code region discard the shot; the remaining detector error model is matchable and is decoded with PyMatching [⟦pymatching⟧]. We compute the complementary gap by decoding twice with the logical observable forced to each value and keep shots whose gap exceeds a threshold $G^{*}$."
+    }
+   ]
+  },
+  {
+   "title": "4 Simulation methodology",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Noise model. We use the uniform circuit-level depolarizing model common to cultivation studies [⟦gsj⟧, ⟦sahay26⟧]: every one-qubit gate and every idle location is followed by a one-qubit depolarizing channel of strength $p$, every two-qubit gate by a two-qubit depolarizing channel of strength $p$, every reset prepares the orthogonal state with probability $p$ and every measurement result is flipped with probability $p$. The final logical readout used to score the shot is noiseless."
+    },
+    {
+     "kind": "p",
+     "text": "Clifford proxy. Following Ref. [⟦gsj⟧] and most subsequent work [⟦sahay26⟧, ⟦claes25⟧, ⟦chen26⟧], we estimate logical error rates on the $S$-state version of each circuit, in which the physical $T$ and $T^{\\dagger}$ gates of the checks are replaced by $S$ and $S^{\\dagger}$ and the target is the $|Y\\rangle$ state. The resulting circuits are Clifford and can be sampled with Stim at very high rates. Simulators for the non-Clifford circuits exist [⟦clifft⟧, ⟦soft⟧, ⟦wzz26⟧, ⟦symft⟧], but sampling them at the depth of $10^{-10}$ is currently far more expensive, and for this comparison between two lattices we keep the same convention as the original protocol."
+    },
+    {
+     "kind": "p",
+     "text": "Sampling. Shots were collected with sinter on the Dardel system at PDC (NAISS). Each shot is aborted at the first detection event, which reduces the cost of rejected attempts by roughly an order of magnitude. At $p=10^{-3}$ the $d=5$ estimate uses $3.4\\times 10^{11}$ attempted shots, of which $7.3\\times 10^{10}$ were accepted and 31 carried a logical error; at $p=5\\times 10^{-4}$ we observed 9 errors. Quoted uncertainties are one standard deviation from binomial statistics. One batch of $4\\times 10^{10}$ shots at $p=1.5\\times 10^{-3}$ was lost to a node failure and was rerun with a fresh seed; the lost batch is not included. Rare-event estimates of this kind could be sharpened with importance or subset sampling [⟦bv13⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Spacetime volume. Following Ref. [⟦gsj⟧] we define the expected volume of a stage as the number of active qubits multiplied by the number of layers, weighted by the probability that a shot reaches the stage, and divide the total by the acceptance probability. Because shots stop at the first detection event, this is the expected cost per accepted state when the hardware can abort mid-circuit. Volumes are quoted in qubit-rounds, with one layer counted as one round."
+    }
+   ]
+  },
+  {
+   "title": "5 Results",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We first validate the shared distance-3 stage and then compare the two lattices at distance five."
+    }
+   ]
+  },
+  {
+   "title": "5.1 Distance-3 stage",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For the shared $d=3$ prefix we obtain $P_{L}=(4.6\\pm 0.3)\\times 10^{-7}$ and an acceptance of $70.2\\%$ at $p=10^{-3}$, in agreement with the $S$-proxy values of Ref. [⟦gsj⟧] for the same circuit. This confirms that our re-routing, noise model and postselection rules reproduce the published protocol."
+    }
+   ]
+  },
+  {
+   "title": "5.2 Distance-5 stage",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 and Fig. 3 compare the two $d=5$ circuits across the noise sweep. At $p=10^{-3}$ the square-octagon circuit reaches $P_{L}=(4.3\\pm 0.8)\\times 10^{-10}$ per accepted state with an acceptance probability of $21.4\\%$. The hexagonal circuit, simulated in the same pipeline, reaches $(3.0\\pm 0.5)\\times 10^{-10}$ with $16.9\\%$ acceptance. The lower acceptance of the hexagonal circuit reflects its 636 additional fault locations; its slightly lower error rate reflects the shorter hook errors of weight-six checks."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: Distance-5 cultivation (injection, $d=3$ checks, growth and $d=5$ double check, before escape) under uniform depolarizing noise, $S$-state proxy. $V$ is the expected spacetime volume per accepted state in qubit-rounds."
+    },
+    {
+     "kind": "table",
+     "text": "$p$ | Square-octagon: $P_{L}$ | acceptance | $V$ | Hexagonal: $P_{L}$ | acceptance | $V$\n$5\\times 10^{-4}$ | $(1.7\\pm 0.6)\\times 10^{-11}$ | 46.8% | $2.07\\times 10^{3}$ | $(1.2\\pm 0.5)\\times 10^{-11}$ | 41.5% | $2.45\\times 10^{3}$\n$7\\times 10^{-4}$ | $(9.1\\pm 2.0)\\times 10^{-11}$ | 34.9% | $2.44\\times 10^{3}$ | $(7.0\\pm 1.7)\\times 10^{-11}$ | 29.6% | $2.98\\times 10^{3}$\n$10^{-3}$ | $(4.3\\pm 0.8)\\times 10^{-10}$ | 21.4% | $3.26\\times 10^{3}$ | $(3.0\\pm 0.5)\\times 10^{-10}$ | 16.9% | $4.23\\times 10^{3}$\n$1.5\\times 10^{-3}$ | $(3.1\\pm 0.4)\\times 10^{-9}$ | 9.6% | $5.45\\times 10^{3}$ | $(2.4\\pm 0.3)\\times 10^{-9}$ | 6.8% | $7.68\\times 10^{3}$\n$2\\times 10^{-3}$ | $(1.32\\pm 0.11)\\times 10^{-8}$ | 4.1% | $9.85\\times 10^{3}$ | $(1.07\\pm 0.09)\\times 10^{-8}$ | 2.6% | $1.54\\times 10^{4}$"
+    },
+    {
+     "kind": "p",
+     "text": "The expected spacetime volume before escape at $p=10^{-3}$ is $3.26\\times 10^{3}$ qubit-rounds per accepted state for the square-octagon circuit and $4.23\\times 10^{3}$ for the hexagonal one, a reduction of $23\\%$. The saving grows with $p$, to $36\\%$ at $p=2\\times 10^{-3}$, because the acceptance enters the volume inversely. At $p=5\\times 10^{-4}$, the lowest noise strength we simulated, the logical error rate falls to $1.7\\times 10^{-11}$ with $46.8\\%$ acceptance."
+    },
+    {
+     "kind": "p",
+     "text": "A weighted least-squares fit of $\\log P_{L}$ against $\\log p$ over the five points gives a slope of $4.6\\pm 0.3$ for the square-octagon circuit and $4.7\\pm 0.3$ for the hexagonal circuit. Both are below the value of five expected asymptotically for a fault distance of five, which we attribute to the large number of weight-five and weight-six fault configurations that contribute at these noise strengths (cf. the similar observation in Ref. [⟦gsj⟧])."
+    },
+    {
+     "kind": "caption",
+     "text": "Figure 3: Logical error rate per accepted state (left) and expected spacetime volume per accepted state (right) of the two distance-5 circuits versus $p$. Error bars are one standard deviation; dashed lines are the weighted fits described in the text."
+    }
+   ]
+  },
+  {
+   "title": "5.3 End-to-end performance with escape",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Adding the grafted escape into the distance-15 surface code, with ten rounds and a gap threshold $G^{*}$ chosen so that 83% of shots that reach the escape are kept, the end-to-end logical error rate at $p=10^{-3}$ is $(4.6\\pm 0.9)\\times 10^{-10}$, statistically indistinguishable from the rate at the end of cultivation. In this regime the error budget is dominated by the cultivation stages, and the value of Sec. 5.2 can be used as the per-state error of the delivered $T$ state. The escape raises the expected volume to $1.94\\times 10^{4}$ qubit-rounds per delivered state; it is the same for both lattices to within $4\\%$, since the escape patch dominates and its size is set by $d=15$."
+    },
+    {
+     "kind": "p",
+     "text": "Lower thresholds trade error rate for volume in the familiar way [⟦gsj⟧]. At 95% escape acceptance the end-to-end rate rises to $(9.4\\pm 1.6)\\times 10^{-10}$, while the expected volume falls by $11\\%$."
+    }
+   ]
+  },
+  {
+   "title": "5.4 Sensitivity to the noise model",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Two variations of the noise model were run at $p=10^{-3}$ with $5\\times 10^{10}$ shots each. Doubling the measurement flip probability raises the $d=5$ logical error rate of the square-octagon circuit by a factor of $1.9$ and lowers the acceptance to $15.7\\%$; switching off idle noise lowers the rate by a factor of $1.4$. The relative ordering of the two lattices is unchanged in both cases. We did not study hardware-specific models such as SI1000 [⟦gnfb21⟧] in this work."
+    }
+   ]
+  },
+  {
+   "title": "5.5 Throughput",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "At $p=10^{-3}$ an accepted distance-5 state requires on average $1/0.214\\approx 4.7$ attempts. Dividing the expected volume by the 39 qubits of the layout gives about 84 rounds of hardware time per accepted state before escape, or roughly $84~\\mu$s at a $1~\\mu$s cycle; the hexagonal circuit needs about 96 rounds on 44 qubits. These figures assume that a rejected attempt is aborted within one round of the detection event and restarted immediately, as in the volume accounting of Ref. [⟦gsj⟧]. Since cultivation in a single patch is serial, throughput can be raised only by running several patches or by multiplexing attempts [⟦kim26⟧]."
+    }
+   ]
+  },
+  {
+   "title": "6 Discussion and limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The main result is that moving colour-code cultivation from the hexagonal to the square-octagon lattice reduces the expected cost of the distance-5 stage by about a quarter at $p=10^{-3}$, while the logical error rate per accepted state stays in the low $10^{-10}$ range. For applications that consume cultivated states directly, at a per-state error of a few $10^{-10}$, the 4.8.8 circuit is therefore a competitive option; for applications that need lower error rates, its states would feed a subsequent distillation stage [⟦litinski19⟧, ⟦itogawa25⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Several limitations should be kept in mind. First, our noise model is uniform; real devices have biased measurement errors, leakage and crosstalk that are not captured. Second, the octagon checks are split into halves joined by an extra CNOT; on hardware with tunable couplers this layer may be merged with the next, but on fixed-frequency devices it adds idle exposure that we have only modelled through the uniform idle channel. Third, we assume that the decision to abort an attempt can be taken at the next layer; decoder and control latency would add idle rounds during the escape [⟦hofmeyr25⟧]. Fourth, the volumes are qubit-round counts on a fixed grid and do not include routing to the consumer of the state [⟦fg18⟧, ⟦horsman12⟧]. Finally, the circuits were optimised by hand; automated flag placement [⟦criger26⟧] may find shorter octagon schedules."
+    },
+    {
+     "kind": "p",
+     "text": "A direct comparison with surface-code cultivation schemes [⟦sahay26⟧, ⟦vaknin25⟧, ⟦claes25⟧, ⟦chen26⟧] is harder than the comparison between the two colour-code lattices, because those works use different escape constructions, gap thresholds and, in some cases, different noise conventions. The colour-code route has the advantage of a transversal check and a small code at distance five; the surface-code routes avoid the graft between two code families and keep the whole protocol in the code that the rest of the computer uses. Which of these matters more will depend on the hardware connectivity and on how the escape stage is implemented in practice."
+    },
+    {
+     "kind": "p",
+     "text": "The approach is not specific to distance five. The 4.8.8 family keeps its qubit advantage at larger distance, and the same construction can be extended in the same way, although the postselection overhead of any cultivation scheme grows quickly with the target fault distance [⟦gsj⟧]. Combining the circuits with in-patch multiplexing [⟦kim26⟧] is also straightforward, since the 39-qubit footprint leaves room for several early-stage attempts in a distance-15 patch."
+    }
+   ]
+  },
+  {
+   "title": "7 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We have constructed magic state cultivation circuits for the triangular square-octagon colour code and simulated them with the standard Clifford proxy under uniform circuit-level noise. At $p=10^{-3}$ the distance-5 circuit reaches $4.3\\times 10^{-10}$ per accepted state with $21.4\\%$ acceptance on a 39-qubit square grid, and its expected spacetime volume before escape is $23\\%$ below that of the hexagonal circuit. Square-octagon cultivation is a natural candidate for square-grid processors that already run colour codes, and we hope it will be useful as an input to resource estimates and compilers that budget cultivated states [⟦pflieger26⟧, ⟦su26⟧, ⟦zhang26⟧]."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank colleagues at Stockholm University and Chalmers for discussions on colour-code circuits, and the Stim and PyMatching developers for making their tools openly available. This work was supported by the Knut and Alice Wallenberg Foundation through the Wallenberg Centre for Quantum Technology (WACQT) and by the Swedish Research Council (VR) under grant no. 2024-05317. The computations were enabled by resources provided by the National Academic Infrastructure for Supercomputing in Sweden (NAISS), partially funded by the Swedish Research Council through grant agreement no. 2022-06725."
+    }
+   ]
+  },
+  {
+   "title": "Code and data availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The Stim circuits, layout generators and sampling scripts are available at https://github.com/ohedlund/sqoct-cultivation, and the raw sinter statistics behind Tables 1 and 2 are deposited at Zenodo (doi:10.5281/zenodo.16730482)."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A: Octagon measurement schedule",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each octagon stabiliser $O$ is measured as the product of two weight-four halves $O=O_{a}O_{b}$. The two halves are measured by separate ancillas $q_{a}$ and $q_{b}$ in four CNOT layers each, and a final CNOT from $q_{b}$ to $q_{a}$ in layer five combines the parities before $q_{a}$ is read out; $q_{b}$ is measured in the $X$ basis and acts as a flag. Table 3 lists the data qubits touched in each layer for the octagon adjacent to the growth boundary, in the labelling of Fig. 2. The order within each half is chosen so that the residual error left on the data by a fault on $q_{a}$ after its second CNOT is a weight-two operator supported along the red boundary, which is detected by the neighbouring red squares and cannot combine with a single further fault into a logical operator."
+    },
+    {
+     "kind": "p",
+     "text": "The square stabilisers use the four-layer order of the superdense circuits of Ref. [⟦gj23⟧]. Interleaving the octagon halves with the squares requires one idle layer on the square ancillas per round, which is included in the location counts of Table 1. We also tested a schedule in which the two halves share a single ancilla with degree eight; it removes the combining CNOT but needs couplers that a square grid does not provide, and it increased the logical error rate of the $d=5$ stage by about $30\\%$ in a short test run, so we did not pursue it."
+    },
+    {
+     "kind": "table",
+     "text": "Table 3: CNOT schedule of one octagon. Each entry gives the data qubit coupled to the ancilla in that layer; the final layer combines the two half-parities."
+    },
+    {
+     "kind": "table",
+     "text": "Layer | 1 | 2 | 3 | 4 | 5\nAncilla $q_{a}$ (half $O_{a}$) | $d_{9}$ | $d_{10}$ | $d_{13}$ | $d_{14}$ | target of $q_{b}$\nAncilla $q_{b}$ (half $O_{b}$) | $d_{11}$ | $d_{12}$ | $d_{15}$ | $d_{16}$ | control"
+    }
+   ]
+  },
+  {
+   "title": "Appendix B: Sampling statistics",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 4 lists the raw shot counts behind the square-octagon entries of Table 2. Shots were drawn in batches of $10^{8}$ with independent seeds and merged with sinter. The hexagonal circuit was sampled with comparable numbers of accepted shots; its counts are included in the data release."
+    },
+    {
+     "kind": "table",
+     "text": "Table 4: Attempted shots, accepted shots and logical errors for the distance-5 square-octagon circuit ($S$-state proxy, uniform noise)."
+    },
+    {
+     "kind": "table",
+     "text": "$p$ | attempted | accepted | logical errors\n$5\\times 10^{-4}$ | $1.13\\times 10^{12}$ | $5.29\\times 10^{11}$ | 9\n$7\\times 10^{-4}$ | $6.6\\times 10^{11}$ | $2.31\\times 10^{11}$ | 21\n$10^{-3}$ | $3.4\\times 10^{11}$ | $7.3\\times 10^{10}$ | 31\n$1.5\\times 10^{-3}$ | $2.02\\times 10^{11}$ | $1.94\\times 10^{10}$ | 60\n$2\\times 10^{-3}$ | $2.66\\times 10^{11}$ | $1.09\\times 10^{10}$ | 144"
+    },
+    {
+     "kind": "p",
+     "text": "At the two lowest noise strengths the number of observed errors is small, and the quoted uncertainties are correspondingly large. We considered importance sampling of high-weight fault sets but found that the acceptance at low $p$ is high enough for direct sampling to be the simpler option for a comparison between the two lattices."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "fowler12",
+   "tag": "1",
+   "text": "A. G. Fowler, M. Mariantoni, J. M. Martinis, and A. N. Cleland, Surface codes: towards practical large-scale quantum computation, Phys. Rev. A 86, 032324 (2012)."
+  },
+  {
+   "key": "bk05",
+   "tag": "2",
+   "text": "S. Bravyi and A. Kitaev, Universal quantum computation with ideal Clifford gates and noisy ancillas, Phys. Rev. A 71, 022316 (2005)."
+  },
+  {
+   "key": "gc99",
+   "tag": "3",
+   "text": "D. Gottesman and I. L. Chuang, Demonstrating the viability of universal quantum computation using teleportation and single-qubit operations, Nature 402, 390 (1999)."
+  },
+  {
+   "key": "litinski19",
+   "tag": "4",
+   "text": "D. Litinski, Magic state distillation: not as costly as you think, Quantum 3, 205 (2019)."
+  },
+  {
+   "key": "bks21",
+   "tag": "5",
+   "text": "M. E. Beverland, A. Kubica, and K. M. Svore, Cost of universality: A comparative study of the overhead of state distillation and code switching with color codes, PRX Quantum 2, 020341 (2021)."
+  },
+  {
+   "key": "gidney25",
+   "tag": "6",
+   "text": "C. Gidney, How to factor 2048 bit RSA integers with less than a million noisy qubits, arXiv:2505.15917 (2025)."
+  },
+  {
+   "key": "webster26",
+   "tag": "7",
+   "text": "P. Webster, L. Berent, O. Chandra, E. T. Hockings, N. Baspin, F. Thomsen, S. C. Smith, and L. Z. Cohen, The Pinnacle architecture: reducing the cost of breaking RSA-2048 to 100 000 physical qubits using quantum LDPC codes, arXiv:2602.11457 (2026)."
+  },
+  {
+   "key": "cain26",
+   "tag": "8",
+   "text": "M. Cain, Q. Xu, R. King, L. R. B. Picard, H. Levine, M. Endres, J. Preskill, H.-Y. Huang, and D. Bluvstein, Shor's algorithm is possible with as few as 10,000 reconfigurable atomic qubits, arXiv:2603.28627 (2026)."
+  },
+  {
+   "key": "gsj",
+   "tag": "9",
+   "text": "C. Gidney, N. Shutty, and C. Jones, Magic state cultivation: growing T states as cheap as CNOT gates, arXiv:2409.17595 (2024)."
+  },
+  {
+   "key": "rosenfeld25",
+   "tag": "10",
+   "text": "E. Rosenfeld, C. Gidney, G. Roberts, A. Morvan, N. Lacroix, D. Kafri, J. Marshall, M. Li, V. Sivak, D. Abanin et al., Magic state cultivation on a superconducting quantum processor, arXiv:2512.13908 (2025)."
+  },
+  {
+   "key": "sahay26",
+   "tag": "11",
+   "text": "K. Sahay, P.-K. Tsai, K. Chang, Q. Su, T. B. Smith, S. Singh, and S. Puri, Fold-transversal surface code cultivation, PRX Quantum 7, 033006 (2026)."
+  },
+  {
+   "key": "hirano25",
+   "tag": "12",
+   "text": "Y. Hirano, R. Toshio, T. Itogawa, and K. Fujii, Efficient magic state cultivation with lattice surgery, arXiv:2510.24615 (2025)."
+  },
+  {
+   "key": "vaknin25",
+   "tag": "13",
+   "text": "Y. Vaknin, S. Jacoby, A. Grimsmo, and A. Retzker, Efficient magic state cultivation on the surface code, arXiv:2502.01743 (2025)."
+  },
+  {
+   "key": "claes25",
+   "tag": "14",
+   "text": "J. Claes, Cultivating T states on the surface code with only two-qubit gates, arXiv:2509.05232 (2025)."
+  },
+  {
+   "key": "chen26",
+   "tag": "15",
+   "text": "Z.-H. Chen, M.-C. Chen, C.-Y. Lu, and J.-W. Pan, Efficient magic state cultivation on RP^2, PRX Quantum 7, 010315 (2026)."
+  },
+  {
+   "key": "hetenyi26",
+   "tag": "16",
+   "text": "B. Hetényi, B. J. Brown, and D. J. Williamson, Constant depth magic state cultivation with Clifford measurements by gauging, arXiv:2603.05429 (2026)."
+  },
+  {
+   "key": "kim26",
+   "tag": "17",
+   "text": "D. Kim, J. Seo, A. Patra, and Y. Han, Reducing postselection overhead in magic-state cultivation by in-patch multiplexing, arXiv:2605.03616 (2026)."
+  },
+  {
+   "key": "hofmeyr25",
+   "tag": "18",
+   "text": "S. Hofmeyr, M. Weiden, J. Kalloor, J. Kubiatowicz, and C. Iancu, Scheduling lattice surgery with magic state cultivation, arXiv preprint (2025)."
+  },
+  {
+   "key": "pflieger26",
+   "tag": "19",
+   "text": "J. Pflieger, A. Świerkowska, E. Giortamis, and P. Bhatotia, Harvest: Resource-aware quantum compilation for magic state protocols, arXiv preprint (2026)."
+  },
+  {
+   "key": "lacroix25",
+   "tag": "20",
+   "text": "N. Lacroix, A. Bourassa, F. J. H. Heras, L. M. Zhang, J. Bausch, A. W. Senior, T. Edlich, N. Shutty, V. Sivak, A. Bengtsson et al., Scaling and logic in the colour code on a superconducting quantum processor, Nature 645, 614 (2025)."
+  },
+  {
+   "key": "bluvstein24",
+   "tag": "21",
+   "text": "D. Bluvstein, S. J. Evered, A. A. Geim, S. H. Li, H. Zhou, T. Manovitz, S. Ebadi, M. Cain, M. Kalinowski, D. Hangleiter et al., Logical quantum processor based on reconfigurable atom arrays, Nature 626, 58 (2024)."
+  },
+  {
+   "key": "gqai25",
+   "tag": "22",
+   "text": "Google Quantum AI and Collaborators, Quantum error correction below the surface code threshold, Nature 638, 920 (2025)."
+  },
+  {
+   "key": "bmd06",
+   "tag": "23",
+   "text": "H. Bombin and M. A. Martin-Delgado, Topological quantum distillation, Phys. Rev. Lett. 97, 180501 (2006)."
+  },
+  {
+   "key": "bmd07",
+   "tag": "24",
+   "text": "H. Bombin and M. A. Martin-Delgado, Optimal resources for topological two-dimensional stabilizer codes: Comparative study, Phys. Rev. A 76, 012305 (2007)."
+  },
+  {
+   "key": "kb15",
+   "tag": "25",
+   "text": "A. Kubica and M. E. Beverland, Universal transversal gates with color codes: A simplified approach, Phys. Rev. A 91, 032330 (2015)."
+  },
+  {
+   "key": "landahl11",
+   "tag": "26",
+   "text": "A. J. Landahl, J. T. Anderson, and P. R. Rice, Fault-tolerant quantum computing with color codes, arXiv:1108.5738 (2011)."
+  },
+  {
+   "key": "ckyz20",
+   "tag": "27",
+   "text": "C. Chamberland, A. Kubica, T. J. Yoder, and G. Zhu, Triangular color codes on trivalent graphs with flag qubits, New J. Phys. 22, 023019 (2020)."
+  },
+  {
+   "key": "cr18",
+   "tag": "28",
+   "text": "R. Chao and B. W. Reichardt, Quantum error correction with only two extra qubits, Phys. Rev. Lett. 121, 050502 (2018)."
+  },
+  {
+   "key": "dk25",
+   "tag": "29",
+   "text": "L. Daguerre and I. H. Kim, Code switching revisited: low-overhead magic state preparation using color codes, Phys. Rev. Research 7, 023080 (2025)."
+  },
+  {
+   "key": "gnfb21",
+   "tag": "30",
+   "text": "C. Gidney, M. Newman, A. Fowler, and M. Broughton, A fault-tolerant honeycomb memory, Quantum 5, 605 (2021)."
+  },
+  {
+   "key": "kd23",
+   "tag": "31",
+   "text": "A. Kubica and N. Delfosse, Efficient color code decoders in d >= 2 dimensions from toric code decoders, Quantum 7, 929 (2023)."
+  },
+  {
+   "key": "gj23",
+   "tag": "32",
+   "text": "C. Gidney and C. Jones, New circuits and an open source decoder for the color code, arXiv:2312.08813 (2023)."
+  },
+  {
+   "key": "cn20",
+   "tag": "33",
+   "text": "C. Chamberland and K. Noh, Very low overhead fault-tolerant magic state preparation using redundant ancilla encoding and flag qubits, npj Quantum Inf. 6, 91 (2020)."
+  },
+  {
+   "key": "surti26",
+   "tag": "34",
+   "text": "S. Surti, L. Daguerre, and I. H. Kim, Efficient simulation of logical magic state preparation protocols, PRX Quantum 7, 020329 (2026)."
+  },
+  {
+   "key": "stim",
+   "tag": "35",
+   "text": "C. Gidney, Stim: a fast stabilizer circuit simulator, Quantum 5, 497 (2021)."
+  },
+  {
+   "key": "mbg23",
+   "tag": "36",
+   "text": "M. McEwen, D. Bacon, and C. Gidney, Relaxing hardware requirements for surface code circuits using time-dynamics, Quantum 7, 1172 (2023)."
+  },
+  {
+   "key": "pymatching",
+   "tag": "37",
+   "text": "O. Higgott and C. Gidney, Sparse Blossom: correcting a million errors per core second with minimum-weight matching, Quantum 9, 1600 (2025)."
+  },
+  {
+   "key": "clifft",
+   "tag": "38",
+   "text": "B. A. Chase and F. Labib, Clifft: Fast exact simulation of near-Clifford quantum circuits, arXiv:2604.27058 (2026)."
+  },
+  {
+   "key": "soft",
+   "tag": "39",
+   "text": "R. Li, K. Zheng, Y. Zhang, H. Lou, S. Ying, K. Liu, and X. Sun, SOFT: a high-performance simulator for universal fault-tolerant quantum circuits, arXiv:2512.23037 (2025)."
+  },
+  {
+   "key": "wzz26",
+   "tag": "40",
+   "text": "K. H. Wan, Z. Zhong, and A. Zapirain, Simulating magic state cultivation with few Clifford terms, Quantum 10, 2134 (2026)."
+  },
+  {
+   "key": "symft",
+   "tag": "41",
+   "text": "W. Fang, H. Lou, and R. Li, SymFT: Universal fault-tolerant quantum circuit simulation via symbolic Clifford-Pauli frames and stabilizer coordinates, arXiv:2607.28600 (2026)."
+  },
+  {
+   "key": "bv13",
+   "tag": "42",
+   "text": "S. Bravyi and A. Vargo, Simulation of rare events in quantum error correction, Phys. Rev. A 88, 062308 (2013)."
+  },
+  {
+   "key": "itogawa25",
+   "tag": "43",
+   "text": "T. Itogawa, Y. Takada, Y. Hirano, and K. Fujii, Efficient magic state distillation by zero-level distillation, PRX Quantum 6, 020356 (2025)."
+  },
+  {
+   "key": "fg18",
+   "tag": "44",
+   "text": "A. G. Fowler and C. Gidney, Low overhead quantum computation using lattice surgery, arXiv:1808.06709 (2018)."
+  },
+  {
+   "key": "horsman12",
+   "tag": "45",
+   "text": "C. Horsman, A. G. Fowler, S. Devitt, and R. Van Meter, Surface code quantum computing by lattice surgery, New J. Phys. 14, 123011 (2012)."
+  },
+  {
+   "key": "criger26",
+   "tag": "46",
+   "text": "B. Criger, A. Hankin, J. J. Burau, and A. R. Perry, Automated flag-based fault-tolerant state preparation using integer linear programming, arXiv preprint (2026)."
+  },
+  {
+   "key": "su26",
+   "tag": "47",
+   "text": "B. Su, Y. Feng, L. Zhou, and M. Ying, Resource estimation for fault-tolerant quantum programs, arXiv preprint (2026)."
+  },
+  {
+   "key": "zhang26",
+   "tag": "48",
+   "text": "J. Y. Zhang, CircLS: Compiling lattice surgery to physical circuits with dynamic allocation, arXiv preprint (2026)."
+  }
+ ],
+ "bib_style": "numeric"
+}

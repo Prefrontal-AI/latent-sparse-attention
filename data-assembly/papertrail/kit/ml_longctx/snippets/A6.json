@@ -1,0 +1,21 @@
+{
+ "node": "A6",
+ "kind": "patch",
+ "host": "2609.30738",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS1.p2.1",
+   "after": 1,
+   "text": "We keep $B$ fixed in entries rather than proportional to the prompt length $n$: for attention-ranked eviction the budget that matches the full cache has been measured to grow only as $n^{0.43}$ (AlloKV [⟦new.A1⟧]), so a proportional budget would mainly inflate the cache of the longest prompts."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "15",
+   "text": "Ilona Sadowska, Fraser Mowat, Tomasz Wierzbicki, and Kirsty Ballantyne, “How much cache does a longer prompt need? Allometric budgets for KV-cache eviction,”. arXiv preprint, 2026."
+  }
+ ]
+}

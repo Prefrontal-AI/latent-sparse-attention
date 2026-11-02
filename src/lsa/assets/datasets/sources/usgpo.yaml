@@ -10,3 +10,11 @@ about: US Government Publishing Office documents from Common Pile
 dataset: common-pile/usgpo_filtered
 revision: b150cc22211de4d57f1b7f570097a00e65042424
 licence: per-document
+
+# Collected as one row of the hub dataset a document, kept at 64k tokens and over
+# Collection stops at the first batch that takes the kept tokens past 3B
+collector: text
+min_tokens: 65536
+max_tokens: 3000000000
+count_tokenizer: HuggingFaceTB/SmolLM3-3B-Base
+count_tokenizer_revision: d78a42f79198603e614095753484a04c10c2b940

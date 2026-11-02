@@ -1,0 +1,27 @@
+{
+ "node": "A3",
+ "kind": "patch",
+ "host": "2609.01577",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS1.p1.1",
+   "after": 2,
+   "text": "Where the mean molecular weight of a planet has been measured independently, the reference can also be rescaled directly: at fixed gravity and temperature the modulation scales as $1/\\mu$ and the noise as $N^{-1/2}$, so the required number of transits grows as $(\\mu/2.3)^{2}$. For TOI-8264 b, a temperate sub-Neptune in our sample, adopting the mean molecular weight retrieved from its JWST NIRISS/SOSS and NIRSpec/G395H spectrum (Vachon et al., 2026) multiplies the published MCS requirement of seven Tier-2 transits by 2.42, to 17 transits."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS2.p1.1",
+   "after": 3,
+   "text": "TOI-8264 b, whose JWST transmission spectrum indicates an atmospheric metallicity of about $62\\times$ solar (Vachon et al., 2026), lies close to this regime."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "Vachon et al. (2026)",
+   "text": "A. Vachon, R. Gingras, N. Pouliot, M. Lapointe, F. Thériault, and O. Paquette (2026). A moderately metal-enriched envelope on the temperate sub-Neptune TOI-8264 b from JWST NIRISS/SOSS and NIRSpec/G395H transmission spectroscopy. arXiv e-prints."
+  }
+ ]
+}

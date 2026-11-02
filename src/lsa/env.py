@@ -51,6 +51,16 @@ OFFLINE_HF: tuple[str, ...] = (
     "export TOKENIZERS_PARALLELISM=false",
 )
 
+# A collection streams a dataset from the hub, so it is the one job that is not offline
+# => the same root and cache as the offline lines, and the hub left on
+ONLINE_HF: tuple[str, ...] = (
+    ROOT_LINE,
+    *((f'export HF_HOME="${{HF_HOME:-{declared_hf_home()}}}"',) if declared_hf_home() else ()),
+    "export HF_HUB_OFFLINE=0",
+    "export TRANSFORMERS_VERBOSITY=error",
+    "export TOKENIZERS_PARALLELISM=true",
+)
+
 # A teacher extraction - a span of GLM-5.3-Flash fills most of an H200, and a 1M document's late chunks ask
 # the allocator for 8 GiB score tiles that a fragmented heap cannot place
 TEACHER: tuple[str, ...] = (*OFFLINE_HF, "export PYTORCH_ALLOC_CONF=expandable_segments:True")

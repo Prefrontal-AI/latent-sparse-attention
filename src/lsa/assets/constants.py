@@ -51,6 +51,22 @@ class Licence:
     LICENCE_COLUMN: str = "licence"
 
 
+class Collector:
+    """How a source card with a hub origin is collected into shards, as its `collector` says.
+
+    A source is told apart by what one of its documents is made of rather than by where it came from, because
+    Common Pile's six and the software-engineering traces are all hub datasets.
+    """
+
+    # One row of the hub dataset is one document
+    TEXT: str = "text"
+    # The files of one repository, joined in the order of their paths
+    REPOSITORIES: str = "repositories"
+    # One agent trajectory rendered as text, kept where its repository's licence is permissive
+    TRACES: str = "traces"
+    ALL: tuple[str, ...] = (TEXT, REPOSITORIES, TRACES)
+
+
 class Preparer:
     """Which generator writes a benchmark's files, as its card's `preparer` says.
 

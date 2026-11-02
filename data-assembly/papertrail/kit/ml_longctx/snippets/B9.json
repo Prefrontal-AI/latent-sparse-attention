@@ -1,0 +1,21 @@
+{
+ "node": "B9",
+ "kind": "patch",
+ "host": "2609.38166",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p3.1",
+   "after": 2,
+   "text": "The damage depends on how long the model runs: even for a constant-size Mamba cache, Singh (2026) estimates that low-precision storage would need about five more bits per state entry at 256K tokens than at its training length."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.singh",
+   "cites_node": "B4",
+   "tag": "Singh (2026)",
+   "text": "V. Singh (2026). Fixed state, long reach: what a constant-size cache buys block diffusion at scale. arXiv preprint arXiv:2609.11998."
+  }
+ ]
+}

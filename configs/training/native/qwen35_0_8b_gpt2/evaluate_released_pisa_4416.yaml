@@ -1,0 +1,13 @@
+# The paper's PISA 128k decay keeping 72 blocks of 64 keys, scored from its released checkpoint.
+# `evaluate` takes the checkpoint from here, so `--checkpoint` is not needed.
+defaults:
+  - decay_fineweb128k_pisa
+  - _self_
+
+run:
+  name: released-decay128k-pisa-4416
+  evaluation:
+    checkpoint: ${root:training/native/released/decay128k-pisa-4416/checkpoint/step-5866}
+
+attention:
+  level_block_count: 72

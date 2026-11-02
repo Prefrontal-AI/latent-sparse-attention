@@ -1,0 +1,27 @@
+{
+ "node": "B5",
+ "kind": "patch",
+ "host": "2609.11925",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p1.1",
+   "after": 5,
+   "text": "For comparison, the period decrease recently claimed for TOI-8317 b [⟦new.B5o⟧] would correspond to a tidal migration timescale of about 7.8 Myr (L. Ma et al. [⟦new.B5m⟧])."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B5o",
+   "cites_node": "B1",
+   "tag": "",
+   "text": "Fuenzalida, T., Riquelme, C., Arancibia, I., et al. 2026, Sixteen years of transit timing of the massive hot Jupiter TOI-8317 b: evidence for tidal orbital decay around a main-sequence G dwarf, AJ, submitted."
+  },
+  {
+   "key": "new.B5m",
+   "cites_node": "B4",
+   "tag": "",
+   "text": "Ma, L., Su, Y., Yee, S. W., et al. 2026, Constraining Tidal Migration with the Hot Jupiter Population, arXiv e-prints."
+  }
+ ]
+}

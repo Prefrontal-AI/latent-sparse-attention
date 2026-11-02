@@ -479,15 +479,21 @@ class EvaluationConfig:
     # Held-out sequences a distance is probed on, rounded up to whole batches over the ranks
     retrieval_sequences: int = Retrieval.SEQUENCES
     retrieval_distractors: int = Retrieval.DISTRACTORS
+    # A torchtitan step folder (`.../checkpoint/step-N`) `lsa native evaluate` scores when the command line names
+    # none, or None for a config that trains. A preset of a released checkpoint sets it, so the config alone
+    # says which weights an evaluation is of
+    checkpoint: str | None = None
 
     def __post_init__(self) -> None:
         """Reject a set or a cadence this evaluation cannot honour.
 
         Raises:
             ValueError: `every` is negative, `sequences`, `probes` or `retrieval_sequences` is not positive,
-                `retrieval_distractors` is negative, or the edges or retrieval distances are not positive
-                and increasing.
+                `retrieval_distractors` is negative, the edges or retrieval distances are not positive
+                and increasing, or `checkpoint` is not an absolute path.
         """
+        if self.checkpoint is not None and not self.checkpoint.startswith("/"):
+            raise ValueError(f"run.evaluation.checkpoint must be an absolute path - got {self.checkpoint!r}")
         if self.every < 0:
             raise ValueError(f"every must not be negative - got {self.every}")
         config_loader.require_positive(self, "run.evaluation", "sequences", "probes", "retrieval_sequences")
@@ -678,6 +684,26 @@ class NativeConfig:
     def out(self) -> Path:
         """Return the directory this run writes into."""
         return Path(self.run.output) / self.run.name
+
+    def scored_checkpoint(self, given: str | None = None) -> str:
+        """Return the step folder an evaluation of this run scores.
+
+        Args:
+            given: The folder the command line named, which wins, or None.
+
+        Returns:
+            `given`, else the `run.evaluation.checkpoint` the config names.
+
+        Raises:
+            ValueError: Neither names one.
+        """
+        checkpoint = given or self.run.evaluation.checkpoint
+        if not checkpoint:
+            raise ValueError(
+                f"{self.run.name} names no checkpoint to score - pass --checkpoint <step folder>, "
+                "or use a config that sets run.evaluation.checkpoint"
+            )
+        return checkpoint
 
 
 def load(path: str | Path, overrides: list[str] | None = None) -> list[NativeConfig]:

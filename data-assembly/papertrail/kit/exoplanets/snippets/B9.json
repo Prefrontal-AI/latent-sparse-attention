@@ -1,0 +1,21 @@
+{
+ "node": "B9",
+ "kind": "patch",
+ "host": "2610.02434",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S4.SS4.SSS2.p1.1",
+   "after": 3,
+   "text": "For KELT-29 b, for instance, the light-time drift caused by a distant brown-dwarf companion was found to account for about two-thirds of an apparent orbital decay (Mølgaard et al. 2026)."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B9",
+   "cites_node": "B2",
+   "tag": "Mølgaard et al. (2026)",
+   "text": "Mølgaard, I., Thygesen, K., Lauridsen, J., et al. 2026, AJ, submitted."
+  }
+ ]
+}

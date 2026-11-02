@@ -1,0 +1,21 @@
+{
+ "node": "A7",
+ "kind": "patch",
+ "host": "2610.02734",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p2.1",
+   "after": 6,
+   "text": "Streaming FPGA realizations go further and commit corrections round by round within the syndrome cycle; the Sandpiper decoder [⟦new.A7⟧], for example, does so while keeping a circuit-level threshold of about $0.67\\%$."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A7",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd (2026). Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs. arXiv e-prints."
+  }
+ ]
+}

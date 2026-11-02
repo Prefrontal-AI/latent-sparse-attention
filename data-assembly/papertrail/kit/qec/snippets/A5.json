@@ -1,0 +1,27 @@
+{
+ "node": "A5",
+ "kind": "patch",
+ "host": "2609.15612",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.p1.1",
+   "after": 2,
+   "text": "A smaller penalty of the same kind is reported for the FPGA decoder Sandpiper [⟦new.A5⟧], which grows weighted clusters in a sliding window, matches the defects of each neutral cluster exactly and commits one round per cycle; its circuit-level threshold of $0.672\\%$ lies slightly below that of sliding-window matching on the same circuits."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S6.p2.1",
+   "after": 9,
+   "text": "Streaming FPGA designs that already commit corrections round by round, such as Sandpiper [⟦new.A5⟧], offer a natural platform for such a test."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A5",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd (2026). Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs. arXiv."
+  }
+ ]
+}

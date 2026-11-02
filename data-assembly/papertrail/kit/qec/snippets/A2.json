@@ -1,0 +1,534 @@
+{
+ "node": "A2",
+ "kind": "fake_paper",
+ "date": "2026-09-17",
+ "title": "Real-time decoding of lattice surgery on a networked FPGA cluster at code distances up to 23",
+ "authors": [
+  "Hannah Pryce 1",
+  "Joseph Lindley 2",
+  "Imogen Firth 1",
+  "Thomas Ashworth 1",
+  "Matthew Rennie 2",
+  "Simon Hartley 2",
+  "Catherine Holroyd 1"
+ ],
+ "affiliations": [
+  "1 School of Electronic and Electrical Engineering, University of Leeds, Leeds LS2 9JT, United Kingdom",
+  "2 Department of Computer Science, University of Manchester, Manchester M13 9PL, United Kingdom"
+ ],
+ "abstract": "Fault-tolerant computation with the surface code needs decoders that follow lattice-surgery operations across many patches in real time, at code distances where a single programmable device no longer suffices. We describe a decoding system built from six AMD Alveo V80 cards connected by 200 GbE links, in which each card runs Kittiwake decoding cores and neighbouring cards exchange the boundary state of decoding windows that straddle them. Kittiwake executes the streaming cluster-matching rule of the Sandpiper decoder bit-exactly on the larger Versal HBM device, which lifts the distance limit of the earlier single-card design from 11 to 23. At a physical error rate of $0.1\\%$ a distance-23 patch is decoded with a mean per-round latency of 612 ns, and $ZZ$ merges between patches placed on different cards show the same logical error rate as merges on a single card, at the cost of one link hop in decision latency. Because the system decodes about $10^{10}$ shots per day, we also extend memory threshold sweeps under uniform circuit-level depolarizing noise to distance 23. The pairwise crossing points of Kittiwake drift downward with distance, and a finite-size fit gives an asymptotic threshold of $0.598(7)\\%$, compared with $0.704(5)\\%$ for sliding-window PyMatching on the same samples. We trace the drift to clusters that exceed the capacity of the matching engines near threshold, which become more frequent as the distance grows.",
+ "sections": [
+  {
+   "title": "I Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Processors running the surface code [⟦dennis2002⟧, ⟦fowler2012⟧] have now operated below threshold [⟦google2023⟧, ⟦google2025⟧] and have begun to perform logical operations by lattice surgery [⟦besedin2026⟧, ⟦wang2026⟧, ⟦lin2026⟧]. Every such operation changes the decoding graph for the duration of a merge and couples patches that were decoded independently before [⟦horsman2012⟧, ⟦fowler2019⟧, ⟦litinski2019⟧]. A real-time decoder for a fault-tolerant machine therefore has to do more than keep up with a single memory patch: it must follow merges and splits across many patches, produce merge outcomes fast enough for feed-forward, and do so at code distances of 20 or more, which is where resource estimates for useful algorithms usually land [⟦gidney2021rsa⟧, ⟦battistel2023⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Single-device hardware decoders have reached sub-microsecond latency for memory experiments at moderate distance [⟦barber2025⟧, ⟦liyanage2024⟧, ⟦wu2025micro⟧, ⟦ziad2025⟧, ⟦ashworth2026⟧], neural decoders have reached real-time throughput on accelerators [⟦senior2025⟧], parallel matching has been shown to need only $o(1)$ time per round on average [⟦mikami2026⟧], and several groups have started to connect decoding devices into larger systems. Liyanage et al. demonstrated a network of FPGAs that decodes random lattice-surgery Pauli measurements among distance-5 patches [⟦liyanage2025⟧], spatially parallel decoding has been proposed for multi-patch surgery [⟦lin2025⟧], and CPU-based stacks have shown that conventional processors can keep pace with slower trapped-ion cycles at scale [⟦ye2026⟧, ⟦lao2026⟧]. Streaming decoders that commit one round at a time are a natural fit for such systems because their state at a patch boundary is small and changes slowly [⟦chan2026snowflake⟧, ⟦tahaab2026⟧, ⟦peduzzi2026⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "Decoding a merge is harder than decoding memory for two reasons. The decoding graph changes when the merge begins and ends, so a streaming decoder must switch graph descriptors at known rounds without losing the clusters that span the change [⟦kliuchnikov2026⟧]. And the merge outcome is a parity of many stabilizer measurements along the seam, which is only reliable once the timelike errors near the seam have been resolved; a decoder that waits for complete windows of $2d$ rounds on both sides adds several microseconds of reaction time per merge at large distance [⟦skoric2023⟧, ⟦tan2023⟧, ⟦viszlai2025⟧]. Window-based schemes for multi-patch operations address the first problem by decoding the joint graph in overlapping blocks [⟦bombin2023⟧, ⟦lin2025⟧]; streaming commit addresses the second, provided the decoder state at the seam can be shared quickly between the devices that hold the two patches."
+    },
+    {
+     "kind": "p",
+     "text": "Here we build such a system around Kittiwake, a decoding core for AMD Versal devices that executes the Sandpiper rule [⟦ashworth2026⟧]: weighted cluster growth in a window that advances by one round per cycle, with every neutral cluster resolved by exact matching restricted to the cluster. Six Alveo V80 cards host the cores, and a halo-exchange protocol over 200 GbE links lets a decoding window extend across a card boundary. We report four sets of results: per-round latency and throughput for single patches up to $d=23$ (Sec. IV.1); logical error rates and decision latencies of $ZZ$ merges whose seam lies on one card or across two cards (Sec. IV.2); memory thresholds at distances that were out of reach for a single smaller device (Sec. IV.3); and power and cost figures for the complete system (Sec. IV.4)."
+    }
+   ]
+  },
+  {
+   "title": "II System overview",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "II.1 The Kittiwake decoding core",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Kittiwake implements the decoding rule of Sandpiper, introduced by Ashworth et al. in \"Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs\" [⟦ashworth2026⟧], bit-exactly; we refer to the decoder as Kittiwake throughout this paper. The rule is unchanged: four-bit quantised edge weights for weighted cluster growth [⟦delfosse2021⟧, ⟦huang2020⟧], a window of $H=d$ layers, a budget of 16 growth steps per cycle, matching engines with a capacity of $K=8$ defects, peeling as the fallback for larger clusters, and deterministic tie-breaking. What changes is the implementation. The processing-element (PE) array is re-timed for the Versal fabric and closes at 300 MHz, the matching pool is doubled to 32 engines, and the window buffer, including each PE's distance record and cluster label, is held in the device's on-chip UltraRAM rather than in LUT-based distributed memory. That distributed memory was most of the logic of a Sandpiper PE, so a Kittiwake PE needs about an eighth of the LUTs, and a single card holds a $d=23$ window with room to spare; UltraRAM rather than logic sets how many cores fit on a card. We verified bit-exact agreement of the committed Pauli frame with the published Sandpiper software model on $5\\times 10^{7}$ replayed shots at each of $d=5$, 11 and 23, at $p=0.1\\%$ and $p=0.6\\%$."
+    }
+   ]
+  },
+  {
+   "title": "II.2 Patch placement",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each card hosts one or more Kittiwake cores, and each core decodes one surface-code patch. At $d=11$ a card holds four cores; at $d=15$ two; at $d=19$ and $d=23$ one. The six cards sit in two servers with three cards each and are connected in a ring by the cards' 200 GbE ports. A placement tool assigns patches to cards so that patches that will be merged are, where possible, on the same card or on ring neighbours; the experiments of Sec. IV.2 deliberately place the merge seam either inside a card or across a link."
+    },
+    {
+     "kind": "p",
+     "text": "The placement problem is a small graph-embedding task: patches are vertices, scheduled merges are edges weighted by how often they occur, and the ring of cards provides slots of fixed capacity. For the schedules considered here a greedy assignment followed by pairwise swaps finds placements in which every merge is either local or spans one link, and we did not need anything more elaborate. Because a halo only ever connects ring neighbours, a merge between patches on cards that are two hops apart would have to be relayed through the intermediate card; the current firmware does not support this and the placement tool rejects such schedules. Larger systems with a switched network instead of a ring would remove the restriction at the cost of a less predictable link latency."
+    }
+   ]
+  },
+  {
+   "title": "II.3 Halo exchange",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "During a merge the detectors along the seam belong to a joint decoding graph [⟦kliuchnikov2026⟧]. When the two patches sit on different cards, each core keeps a halo of the neighbouring patch: two columns of PEs that mirror the seam-adjacent detectors of the other card. In each cycle the cores exchange the cluster labels, parities and growth counters of their seam columns in a single 512-byte frame. Because Sandpiper's growth is local and proceeds in fixed steps, the halo only needs to be refreshed once per growth step that reaches the seam, and a cluster that crosses the seam is resolved by the core that holds its lowest-index defect. The exchange is designed so that the joint decoder is bit-exact with a single core holding both patches, which we confirmed on $10^{7}$ merge shots. A link hop adds 287 ns on average with our lightweight framing on the cards' GTM transceivers."
+    }
+   ]
+  },
+  {
+   "title": "II.4 Syndrome sources and host software",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Detection events are sampled with Stim [⟦gidney2021stim⟧] on the host CPUs (two AMD EPYC 9554 processors per server) and streamed to the cards through NVIDIA ConnectX-6 Dx network adapters at one round per microsecond per patch, mimicking a control system that forwards syndromes to a separate decoding tier [⟦barber2025⟧, ⟦liyanage2025⟧]. Logical observable flips computed by the cards are returned over PCIe and compared with the sampled observables by sinter-compatible collection scripts. When only logical error rates are needed, the cards are run in a free-running mode that consumes rounds as fast as they can be processed; this mode, rather than the real-time mode, produces the throughput of roughly $10^{10}$ shots per day used in Sec. IV.3."
+    }
+   ]
+  },
+  {
+   "title": "II.5 Cycle structure and verification",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A Kittiwake cycle has four stages: ingest of the new detector layer, weighted growth with label propagation, matching of the clusters that became neutral, and commit of the layer leaving the window. Ingest and commit have fixed cost; growth and matching depend on the syndrome. Table 1 breaks the mean latency at $d=23$ and $p=0.1\\%$ into these stages. Label propagation across PE layers of 264 detectors dominates, which is why latency grows roughly linearly with distance; the matching stage includes the time clusters spend in the queue of the shared pool, which is short below threshold because most neutral clusters hold two defects and use the bypass path of the engines."
+    },
+    {
+     "kind": "table",
+     "text": "Table 1: Breakdown of the mean per-round latency of a $d=23$ Kittiwake core at $p=0.1\\%$.\nstage | mean (ns)\ningest of detector layer | 38\ngrowth and label propagation | 371\nmatching (queue and engine) | 121\ncommit and frame update | 82\ntotal | 612"
+    },
+    {
+     "kind": "p",
+     "text": "Verification proceeded in three steps. Each core was first compared with the Sandpiper software model in isolation, as described in Sec. II.1. The halo exchange was then tested by placing the two halves of a single $d=15$ memory patch on two cards, which must reproduce the single-card frame exactly; it did so on all $2\\times 10^{7}$ shots. Finally, we injected link faults by dropping one frame in $10^{5}$ at the transmitter. Dropped frames are detected by a sequence counter and retransmitted within the same cycle in $99.97\\%$ of cases; in the remaining cases the receiving core stalls for one cycle, which shows up as a single-round backlog that is drained within the next ten rounds. No dropped frame changed a committed correction."
+    }
+   ]
+  },
+  {
+   "title": "III Methods",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "III.1 Circuits and noise",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Memory experiments use the rotated surface code with $3d$ rounds of stabilizer measurement and a final $Z$-basis data readout, for odd $d$ from 5 to 23. Merge experiments perform a $ZZ$ lattice-surgery merge between two patches of equal distance, lasting $d$ rounds, preceded and followed by $d$ rounds of memory on each patch [⟦horsman2012⟧, ⟦fowler2019⟧]. All circuits use the uniform circuit-level depolarizing model (SD6): depolarizing noise of strength $p$ after every gate and idle location, and flips with probability $p$ on every reset and measurement [⟦gidney2021honeycomb⟧, ⟦stephens2014⟧]. This is the noise model used for the Sandpiper benchmarks of Ref. [⟦ashworth2026⟧]. Detector error models are decomposed into graphlike edges with Stim, and the time-dependent graph of a merge is loaded into the cores as a sequence of segment descriptors, one per change of boundary conditions."
+    }
+   ]
+  },
+  {
+   "title": "III.2 Reference decoder",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "As in Ref. [⟦ashworth2026⟧], the accuracy reference is PyMatching [⟦higgott2022pm⟧, ⟦higgott2025sb⟧] run as a sliding-window decoder with windows of $2d$ rounds and a commit region of $d$ rounds [⟦skoric2023⟧, ⟦tan2023⟧]. For merges, the reference decodes the full joint graph of both patches. Single-threaded on the host CPUs, the reference needs 11.3 $\\mu$s per round on average at $d=23$ and $p=0.1\\%$; it is used only offline."
+    }
+   ]
+  },
+  {
+   "title": "III.3 Threshold estimation",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For each decoder we estimate the logical error probability per shot on a grid of physical error rates between $0.40\\%$ and $0.85\\%$ in steps of $0.025\\%$, collecting until 5000 logical errors or $2\\times 10^{8}$ shots. For each pair of neighbouring distances we locate the crossing point $p_{c}(d,d+2)$ by local quadratic interpolation and estimate its uncertainty by bootstrap over shots. Crossings of decoders whose effective behaviour changes with system size need not coincide with the asymptotic threshold [⟦wang2003⟧, ⟦chubb2021⟧]. We therefore fit the sequence of crossings to"
+    },
+    {
+     "kind": "equation",
+     "text": "$$p_{c}(d,d+2)=p_{\\mathrm{th}}+a\\,d^{-\\omega},\\qquad(1)$$"
+    },
+    {
+     "kind": "p",
+     "text": "and report $p_{\\mathrm{th}}$ with an uncertainty that includes the spread obtained by dropping the smallest or the largest distance pair from the fit. For a decoder whose crossings do not drift, Eq. (1) returns $a$ compatible with zero and $p_{\\mathrm{th}}$ close to the mean crossing."
+    }
+   ]
+  },
+  {
+   "title": "III.4 Statistical analysis",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Logical error probabilities per shot are converted to per-round rates with $\\varepsilon=\\tfrac{1}{2}[1-(1-2P_{L})^{1/(3d)}]$. Uncertainties on crossing points come from 400 bootstrap resamplings of the shot counts at each grid point, with the interpolation repeated for each resample; the quoted values are standard deviations. Neighbouring crossings share one distance and are therefore correlated, and the fit of Eq. (1) uses the full bootstrap covariance. Fits with the exponent fixed to $\\omega=1$ or $\\omega=2$ change the Kittiwake threshold by less than its uncertainty. All runs use independent Stim seeds, and the Kittiwake and reference decoders are applied to the same samples, so differences between them are not limited by sampling noise to the same degree as the absolute values."
+    }
+   ]
+  },
+  {
+   "title": "IV Results",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "IV.1 Latency and throughput",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 lists the per-round latency of a single Kittiwake core in real-time mode at $p=0.1\\%$, measured, as in Ref. [⟦ashworth2026⟧], from the arrival of the last packet of a round to the end of the commit for that round. The mean latency grows roughly linearly with $d$, from 371 ns at $d=11$ to 612 ns at $d=23$, because label propagation across the PE array dominates the cycle. The 99.9th percentile exceeds one microsecond at $d\\geq 19$, but the cores remain throughput-stable: over $10^{8}$ consecutive rounds at $d=23$ the backlog never exceeded two rounds. At $p=0.2\\%$ the mean latency at $d=23$ rises to 744 ns, and at $p=0.3\\%$ to 903 ns, still below one syndrome cycle on average. Compared with the single-card design of Ref. [⟦ashworth2026⟧], the higher clock frequency of the Versal fabric and the larger matching pool more than compensate for the longer label-propagation paths at equal distance, so that a $d=11$ core is faster on the V80 than on the older device."
+    },
+    {
+     "kind": "table",
+     "text": "Table 2: Kittiwake per-round latency at $p=0.1\\%$ in real-time mode and resource use per core on an Alveo V80 (XCV80). Each latency entry is measured over $10^{7}$ rounds.\n$d$ | mean (ns) | p99.9 (ns) | LUT per core (%) | cores per card\n11 | 371 | 712 | 9.6 | 4\n15 | 458 | 903 | 17.3 | 2\n19 | 534 | 1046 | 30.5 | 1\n23 | 612 | 1188 | 50.6 | 1"
+    },
+    {
+     "kind": "p",
+     "text": "In free-running mode a core processes a new round as soon as the previous commit has finished, so its throughput is the inverse of the mean cycle time plus a fixed handshake. At $p=0.6\\%$, close to threshold, a $d=11$ core sustains $1.4\\times 10^{6}$ rounds per second and a $d=23$ core $8\\times 10^{5}$. With all cores of the system busy this amounts to roughly $10^{10}$ shots per day for the distances of Sec. IV.3, against about $10^{9}$ shots per day for the Sandpiper software model on the 256 host cores. The free-running mode is used only for sampling; all latencies quoted in this paper come from real-time mode."
+    }
+   ]
+  },
+  {
+   "title": "IV.2 Lattice-surgery merges",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 3 compares $ZZ$ merges whose seam lies inside one card with merges whose seam crosses a link. Because the halo exchange is bit-exact, the logical error rates agree within their statistical uncertainties, as they must; the only difference is the decision latency, defined as the time from the arrival of the last merge round to the availability of the decoded merge outcome at the host. Crossing a link adds one hop to the critical path and lengthens the decision latency by about $0.3~\\mu$s at both distances. For comparison, the reference decoder on the joint graph gives logical error rates lower by a factor 1.4 to 1.6 at these settings."
+    },
+    {
+     "kind": "table",
+     "text": "Table 3: $ZZ$ merges between two patches at $p=0.2\\%$ (failure probability of the merge outcome or of either patch over the whole experiment).\n$d$ | seam | failure probability | decision latency ($\\mu$s)\n11 | same card | $2.27(4)\\times 10^{-3}$ | 1.87\n11 | across link | $2.29(4)\\times 10^{-3}$ | 2.16\n15 | same card | $2.84(9)\\times 10^{-4}$ | 2.33\n15 | across link | $2.81(9)\\times 10^{-4}$ | 2.62"
+    },
+    {
+     "kind": "p",
+     "text": "The switch of graph descriptors at the start and end of a merge costs nothing measurable: decision latencies are identical within 20 ns whether the merge follows a long memory period or starts after only $d$ rounds. Most of the decision latency is spent waiting for the window to sweep past the last merge round, since the merge outcome is fixed only once every timelike cluster that touches the seam has been committed. Shrinking the window below $H=d$ would shorten this wait but, as shown for Sandpiper [⟦ashworth2026⟧], at a cost in accuracy, and we keep the original rule. The failure probabilities of Table 3 are dominated by the memory periods before and after the merge; the merge itself contributes about one third at both distances, estimated by repeating the experiments without the merge."
+    }
+   ]
+  },
+  {
+   "title": "IV.3 Memory thresholds at large distance",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The free-running mode makes it possible to collect threshold statistics at distances that are impractical for the software model at this sample size. Table 4 lists the pairwise crossing points of Kittiwake and of the reference for all odd distances from 5 to 23. The reference crossings are flat within their uncertainties, and Eq. (1) returns $a$ compatible with zero and $p_{\\mathrm{th}}=0.704(5)\\%$, close to their mean. The Kittiwake crossings, by contrast, drift steadily downward, from $0.683\\%$ for the $d=5/7$ pair to $0.605\\%$ for the $d=21/23$ pair. The fit of Eq. (1) gives $p_{\\mathrm{th}}=0.598(7)\\%$ and $\\omega=1.1(3)$ for Kittiwake. As a consistency check, we decoded the same samples for $d\\leq 11$ with the Sandpiper software model; the committed frames agree shot by shot with the hardware, so the hardware and software crossings at small distance are identical by construction. Dropping the two largest distance pairs from the fit moves the Kittiwake threshold up by $0.006\\%$, dropping the two smallest moves it down by $0.004\\%$; both shifts are within the quoted uncertainty."
+    },
+    {
+     "kind": "table",
+     "text": "Table 4: Pairwise crossing points $p_{c}(d,d+2)$ in $\\%$ under SD6 noise (memory-$Z$, $3d$ rounds), and the asymptotic threshold from Eq. (1).\npair | Kittiwake | PyMatching (sliding window)\n5/7 | 0.683(9) | 0.717(8)\n7/9 | 0.669(9) | 0.709(8)\n9/11 | 0.662(10) | 0.706(9)\n11/13 | 0.643(10) | 0.708(9)\n13/15 | 0.631(11) | 0.703(10)\n15/17 | 0.624(12) | 0.705(10)\n17/19 | 0.612(13) | 0.702(11)\n19/21 | 0.614(14) | 0.704(12)\n21/23 | 0.605(15) | 0.701(13)\n$p_{\\mathrm{th}}$ from Eq. (1) | 0.598(7) | 0.704(5)"
+    },
+    {
+     "kind": "p",
+     "text": "This asymptotic estimate lies below the threshold that Ashworth et al. obtained for the Sandpiper rule from distances up to 11 [⟦ashworth2026⟧]. The first three crossings of Table 4 are consistent with that earlier analysis; the downward trend only becomes clear once pairs beyond $d=11$ are included. We attribute it to the fixed matching capacity. Near threshold, the typical size of a neutral cluster grows with the distance, and clusters with more than $K=8$ defects are resolved by the peeling fallback, which ignores the relative weights of competing corrections. Table 5 shows that the fraction of clusters sent to the fallback at $p=0.6\\%$ increases from $1.1\\%$ at $d=7$ to $7.4\\%$ at $d=23$. A software experiment confirms the attribution: raising $K$ to 12 in the model (which the hardware cannot afford) flattens the crossings for $d\\leq 15$ to within $0.01\\%$ of one another, although at a much higher cost per engine."
+    },
+    {
+     "kind": "table",
+     "text": "Table 5: Fraction of resolved clusters handled by the peeling fallback ($>8$ defects) at $p=0.6\\%$.\n$d$ | 7 | 11 | 15 | 19 | 23\nfallback (%) | 1.1 | 1.9 | 3.2 | 5.0 | 7.4"
+    },
+    {
+     "kind": "table",
+     "text": "Table 6: Logical error rate per round at $p=0.2\\%$ (memory-$Z$, $3d$ rounds) for Kittiwake and the reference.\n$d$ | Kittiwake | PyMatching (sliding window) | ratio\n11 | $2.3\\times 10^{-5}$ | $1.6\\times 10^{-5}$ | 1.44\n15 | $2.1\\times 10^{-6}$ | $1.3\\times 10^{-6}$ | 1.62\n19 | $1.9\\times 10^{-7}$ | $1.1\\times 10^{-7}$ | 1.73\n23 | $1.7\\times 10^{-8}$ | $9.0\\times 10^{-9}$ | 1.89"
+    },
+    {
+     "kind": "p",
+     "text": "Below threshold the effect is small. At $p=0.1\\%$ the fallback fraction stays below $0.05\\%$ for all distances, and at $p=0.2\\%$ the logical error rate per round of Kittiwake stays within a factor of two of the reference up to $d=23$ (Table 6), with a ratio that grows slowly with distance. The $d=23$ entries rest on 391 and 207 logical errors and carry relative uncertainties of 5 and $7\\%$. The threshold drift therefore matters mainly for operation close to threshold and for resource estimates that extrapolate a threshold value into the regime of large distances."
+    }
+   ]
+  },
+  {
+   "title": "IV.4 Power and cost",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Under full load each V80 card draws 74 W as reported by its board management controller, so the six-card system draws about 0.45 kW for the decoding tier, excluding the host servers. At $d=23$ this corresponds to roughly 74 W per logical qubit, about an order of magnitude more than the most economical clustering ASICs [⟦barber2025⟧] but with the flexibility of a reprogrammable device. The number of patches per card scales inversely with the PE-array size, so the cost per logical qubit is dominated by the distance."
+    },
+    {
+     "kind": "p",
+     "text": "Most of the power is static: an idle card configured with four $d=11$ cores draws 61 W, and decoding at $p=0.1\\%$ adds only a few watts per core because the PE array is mostly inactive below threshold. A purpose-built ASIC would remove most of this overhead. We have not attempted one, but the regular structure of the PE array and the small, stateless matching engines are well suited to standard-cell implementation, and the results of Sec. IV.3 indicate that a larger matching capacity should be part of any such design."
+    }
+   ]
+  },
+  {
+   "title": "V Discussion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Three points deserve emphasis. First, the halo exchange keeps cross-card decoding exact at the price of one link hop per cycle in which a cluster reaches the seam. This is cheaper than overlapping windows that are decoded twice [⟦skoric2023⟧, ⟦bombin2023⟧], and it keeps merges compatible with streaming commit. The cost is visible only in the decision latency of Table 3: for superconducting cycles a merge outcome becomes known two to three rounds after the merge ends, of which the link hop accounts for less than one [⟦viszlai2025⟧, ⟦ikari2026⟧]. Second, the latency figures still exclude the control system and readout, as in all replay-based benchmarks [⟦wayo2026⟧, ⟦manor2026⟧]. Third, threshold estimates for decoders with fixed hardware capacities should be checked at the distances at which they will be used. The drift of Table 4 would have been invisible at $d\\leq 11$, and similar capacity effects may affect other decoders that resolve clusters with bounded resources [⟦chan2026snowflake⟧, ⟦ziad2025⟧]."
+    },
+    {
+     "kind": "p",
+     "text": "The threshold result also has a practical side. Resource estimates commonly convert a decoder's threshold into a required code distance through a sub-threshold scaling law. For a decoder whose crossings drift, the value measured at small distance overstates the margin available at the distances such estimates target, and the required distance comes out too small. For Kittiwake the shift is moderate in absolute terms, but it compounds through the exponent of the scaling law. We therefore recommend quoting the asymptotic estimate of Table 4 together with the range of distances on which it rests."
+    },
+    {
+     "kind": "p",
+     "text": "It is instructive to compare the system with the network-integrated decoder of Liyanage et al. [⟦liyanage2025⟧], which distributes union-find decoding of distance-5 patches over a network of smaller FPGAs and handles arbitrary Pauli measurements between them. That design favours generality of the logical operation and many small patches; ours favours large distances and exact equivalence between single-card and cross-card decoding for a restricted set of merges. The two approaches are complementary, and a combination in which patch-level cores such as Kittiwake are coordinated by a more general merge scheduler appears feasible. A second point of comparison is the CPU stack of Ye et al. [⟦ye2026⟧], which decodes hundreds of logical qubits on one processor for millisecond trapped-ion cycles; for microsecond cycles the gap between such stacks and dedicated logic remains about two orders of magnitude in latency."
+    },
+    {
+     "kind": "p",
+     "text": "The system has limitations beyond those of its components. We tested merges only between two patches and only in the $ZZ$ basis; multi-patch measurements with three or more patches, twists and patch deformation are not supported yet. The noise model is uniform and graphlike after decomposition, so correlated and leakage-type errors are absent [⟦google2025⟧]. Finally, the placement tool assumes that the merge schedule is known in advance; adaptive schedules generated at run time, as in compilers that emit lattice-surgery instructions on the fly [⟦lee2026⟧, ⟦patil2026⟧], would need the placement to be updated while patches are live."
+    }
+   ]
+  },
+  {
+   "title": "VI Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A ring of six Alveo V80 cards running Kittiwake cores decodes surface-code memory up to $d=23$ and two-patch lattice-surgery merges in real time, with cross-card merges that are bit-exact with single-card ones. The extra decoding capacity also exposes a slow downward drift of the crossing points of the underlying Sandpiper rule, which places its asymptotic circuit-level threshold at $0.598(7)\\%$. Larger matching engines or a hierarchical fallback [⟦delfosse2020hier⟧] are the obvious ways to close this gap, and we are pursuing both."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank the AMD University Program for access to the Alveo V80 cards and the Research IT team at the University of Manchester for hosting the servers. H.P. and T.A. acknowledge support from the EPSRC under grant EP/Y03561X/1; J.L., M.R. and S.H. acknowledge support from UKRI through the Quantum Computing and Simulation Hub (EP/Z53318X/1). C.H. is supported by a UKRI Future Leaders Fellowship (MR/Y017842/1)."
+    }
+   ]
+  },
+  {
+   "title": "Data and code availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The Kittiwake RTL, the halo-exchange firmware, the placement tool and all sampling statistics underlying Tables 1–6 are available at https://github.com/leeds-qec/kittiwake, with a snapshot archived at Zenodo (doi:10.5281/zenodo.17104452)."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "dennis2002",
+   "tag": "1",
+   "text": "E. Dennis, A. Kitaev, A. Landahl, and J. Preskill, Topological quantum memory, J. Math. Phys. 43, 4452 (2002)."
+  },
+  {
+   "key": "fowler2012",
+   "tag": "2",
+   "text": "A. G. Fowler, M. Mariantoni, J. M. Martinis, and A. N. Cleland, Surface codes: Towards practical large-scale quantum computation, Phys. Rev. A 86, 032324 (2012)."
+  },
+  {
+   "key": "google2023",
+   "tag": "3",
+   "text": "Google Quantum AI, Suppressing quantum errors by scaling a surface code logical qubit, Nature 614, 676 (2023)."
+  },
+  {
+   "key": "google2025",
+   "tag": "4",
+   "text": "Google Quantum AI and Collaborators, Quantum error correction below the surface code threshold, Nature 638, 920 (2025)."
+  },
+  {
+   "key": "besedin2026",
+   "tag": "5",
+   "text": "I. Besedin, M. Kerschbaum, J. Knoll, I. Hesner, L. Bödeker, L. Colmenarez, et al., Lattice surgery realized on two distance-three repetition codes with superconducting qubits, Nat. Phys. (2026)."
+  },
+  {
+   "key": "wang2026",
+   "tag": "6",
+   "text": "Y. Wang, F. Shen, H. Xie, A. Zhang, Y. Gao, C. Zhang, et al., A superconducting surface-code processor with lattice-surgery logical operations, arXiv:2606.06598 (2026)."
+  },
+  {
+   "key": "lin2026",
+   "tag": "7",
+   "text": "W. Lin, S. Guo, Y. Ma, Z. Yi, K. Zhang, J. Bei, et al., Surface code logical operations on a superconducting quantum processor, arXiv:2607.01473 (2026)."
+  },
+  {
+   "key": "horsman2012",
+   "tag": "8",
+   "text": "D. Horsman, A. G. Fowler, S. Devitt, and R. Van Meter, Surface code quantum computing by lattice surgery, New J. Phys. 14, 123011 (2012)."
+  },
+  {
+   "key": "fowler2019",
+   "tag": "9",
+   "text": "A. G. Fowler and C. Gidney, Low overhead quantum computation using lattice surgery, arXiv:1808.06709 (2019)."
+  },
+  {
+   "key": "litinski2019",
+   "tag": "10",
+   "text": "D. Litinski, A game of surface codes: Large-scale quantum computing with lattice surgery, Quantum 3, 128 (2019)."
+  },
+  {
+   "key": "gidney2021rsa",
+   "tag": "11",
+   "text": "C. Gidney and M. Ekerå, How to factor 2048 bit RSA integers in 8 hours using 20 million noisy qubits, Quantum 5, 433 (2021)."
+  },
+  {
+   "key": "battistel2023",
+   "tag": "12",
+   "text": "F. Battistel, C. Chamberland, K. Johar, R. W. J. Overwater, F. Sebastiano, L. Skoric, Y. Ueno, and M. Usman, Real-time decoding for fault-tolerant quantum computing: progress, challenges and outlook, Nano Futures 7, 032003 (2023)."
+  },
+  {
+   "key": "barber2025",
+   "tag": "13",
+   "text": "B. Barber, K. M. Barnes, T. Bialas, O. Buğdaycı, E. T. Campbell, N. I. Gillespie, et al., A real-time, scalable, fast and resource-efficient decoder for a quantum computer, Nat. Electron. 8, 84 (2025)."
+  },
+  {
+   "key": "liyanage2024",
+   "tag": "14",
+   "text": "N. Liyanage, Y. Wu, S. Tagare, and L. Zhong, FPGA-based distributed union-find decoder for surface codes, IEEE Trans. Quantum Eng. 5, 1 (2024)."
+  },
+  {
+   "key": "wu2025micro",
+   "tag": "15",
+   "text": "Y. Wu, N. Liyanage, and L. Zhong, Micro Blossom: Accelerated minimum-weight perfect matching decoding for quantum error correction, in Proceedings of the 30th ACM International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS '25) (2025)."
+  },
+  {
+   "key": "ziad2025",
+   "tag": "16",
+   "text": "A. B. Ziad, A. Zalawadiya, C. Topal, J. Camps, G. P. Gehér, M. P. Stafford, and M. L. Turner, Local clustering decoder as a fast and adaptive hardware decoder for the surface code, Nat. Commun. 16, 11048 (2025)."
+  },
+  {
+   "key": "ashworth2026",
+   "tag": "17",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd, Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs, arXiv e-prints (2026)."
+  },
+  {
+   "key": "senior2025",
+   "tag": "18",
+   "text": "A. W. Senior, T. Edlich, F. J. H. Heras, L. M. Zhang, O. Higgott, J. S. Spencer, et al., A scalable and real-time neural decoder for topological quantum codes, arXiv:2512.07737 (2025)."
+  },
+  {
+   "key": "mikami2026",
+   "tag": "19",
+   "text": "R. Mikami and H. Yamasaki, Sparse-blossom decoding in o(1) time, arXiv e-prints (2026)."
+  },
+  {
+   "key": "liyanage2025",
+   "tag": "20",
+   "text": "N. Liyanage, Y. Wu, E. Houghton, and L. Zhong, Network-integrated decoding system for real-time quantum error correction with lattice surgery, in 2025 IEEE International Conference on Quantum Computing and Engineering (QCE), Vol. 1 (2025) pp. 1148–1159."
+  },
+  {
+   "key": "lin2025",
+   "tag": "21",
+   "text": "S. F. Lin, E. C. Peterson, K. Sankar, and P. Sivarajah, Spatially parallel decoding for multi-qubit lattice surgery, Quantum Sci. Technol. 10, 035007 (2025)."
+  },
+  {
+   "key": "ye2026",
+   "tag": "22",
+   "text": "M. Ye, A. Maksymov, and N. Delfosse, Real-time decoder for a MegaQuOp quantum computer using a single CPU, arXiv e-prints (2026)."
+  },
+  {
+   "key": "lao2026",
+   "tag": "23",
+   "text": "L. Lao, Q. Wang, Y. Liu, Y. Liu, H. Wang, Y. Chen, et al., Real-time decoding of quantum error correction codes using high-performance computing, arXiv e-prints (2026)."
+  },
+  {
+   "key": "chan2026snowflake",
+   "tag": "24",
+   "text": "T. Chan, Snowflake: a distributed streaming decoder, Quantum 10, 2033 (2026)."
+  },
+  {
+   "key": "tahaab2026",
+   "tag": "25",
+   "text": "M. Tahaab, T. Chan, J. Kirkman, and S. C. Benjamin, Stream decoding with confidence scores at room and cryogenic temperatures, arXiv e-prints (2026)."
+  },
+  {
+   "key": "peduzzi2026",
+   "tag": "26",
+   "text": "T. Peduzzi, L. Bödeker, M. Müller, and L. Colmenarez, Reducing decoding latency in quantum error correction by early starting clustering, arXiv e-prints (2026)."
+  },
+  {
+   "key": "kliuchnikov2026",
+   "tag": "27",
+   "text": "V. Kliuchnikov, J. Lietz, and F. Pastawski, Composing detector error models, arXiv e-prints (2026)."
+  },
+  {
+   "key": "skoric2023",
+   "tag": "28",
+   "text": "L. Skoric, D. E. Browne, K. M. Barnes, N. I. Gillespie, and E. T. Campbell, Parallel window decoding enables scalable fault tolerant quantum computation, Nat. Commun. 14, 7040 (2023)."
+  },
+  {
+   "key": "tan2023",
+   "tag": "29",
+   "text": "X. Tan, F. Zhang, R. Chao, Y. Shi, and J. Chen, Scalable surface-code decoders with parallelization in time, PRX Quantum 4, 040344 (2023)."
+  },
+  {
+   "key": "viszlai2025",
+   "tag": "30",
+   "text": "J. Viszlai, J. D. Chadwick, S. Joshi, G. S. Ravi, Y. Li, and F. T. Chong, SWIPER: Minimizing fault-tolerant quantum program latency via speculative window decoding, in Proceedings of the 52nd Annual International Symposium on Computer Architecture (ISCA '25) (2025) pp. 1386–1401."
+  },
+  {
+   "key": "bombin2023",
+   "tag": "31",
+   "text": "H. Bombín, C. Dawson, Y.-H. Liu, N. Nickerson, F. Pastawski, and S. Roberts, Modular decoding: parallelizable real-time decoding for quantum computers, arXiv:2303.04846 (2023)."
+  },
+  {
+   "key": "delfosse2021",
+   "tag": "32",
+   "text": "N. Delfosse and N. H. Nickerson, Almost-linear time decoding algorithm for topological codes, Quantum 5, 595 (2021)."
+  },
+  {
+   "key": "huang2020",
+   "tag": "33",
+   "text": "S. Huang, M. Newman, and K. R. Brown, Fault-tolerant weighted union-find decoding on the toric code, Phys. Rev. A 102, 012419 (2020)."
+  },
+  {
+   "key": "gidney2021stim",
+   "tag": "34",
+   "text": "C. Gidney, Stim: a fast stabilizer circuit simulator, Quantum 5, 497 (2021)."
+  },
+  {
+   "key": "gidney2021honeycomb",
+   "tag": "35",
+   "text": "C. Gidney, M. Newman, A. Fowler, and M. Broughton, A fault-tolerant honeycomb memory, Quantum 5, 605 (2021)."
+  },
+  {
+   "key": "stephens2014",
+   "tag": "36",
+   "text": "A. M. Stephens, Fault-tolerant thresholds for quantum error correction with the surface code, Phys. Rev. A 89, 022321 (2014)."
+  },
+  {
+   "key": "higgott2022pm",
+   "tag": "37",
+   "text": "O. Higgott, PyMatching: A Python package for decoding quantum codes with minimum-weight perfect matching, ACM Trans. Quantum Comput. 3, 1 (2022)."
+  },
+  {
+   "key": "higgott2025sb",
+   "tag": "38",
+   "text": "O. Higgott and C. Gidney, Sparse Blossom: correcting a million errors per core second with minimum-weight matching, Quantum 9, 1600 (2025)."
+  },
+  {
+   "key": "wang2003",
+   "tag": "39",
+   "text": "C. Wang, J. Harrington, and J. Preskill, Confinement-Higgs transition in a disordered gauge theory and the accuracy threshold for quantum memory, Ann. Phys. 303, 31 (2003)."
+  },
+  {
+   "key": "chubb2021",
+   "tag": "40",
+   "text": "C. T. Chubb and S. T. Flammia, Statistical mechanical models for quantum codes with correlated noise, Ann. Inst. Henri Poincaré D 8, 269 (2021)."
+  },
+  {
+   "key": "ikari2026",
+   "tag": "41",
+   "text": "S. Ikari, Y. Hirai, Y. Suzuki, H. Nakamura, and Y. Ueno, Do not let CNOTs overwhelm the decoder: Scheduling transversal gates for fast FTQC, arXiv e-prints (2026)."
+  },
+  {
+   "key": "wayo2026",
+   "tag": "42",
+   "text": "D. D. K. Wayo, C. Onah, R. A. Dias, L. Goliatt, and S. Groppe, Hardware-in-the-loop syndrome-to-decoder validation for repetition, surface, CSS-LDPC, and digitized-GKP codes, arXiv e-prints (2026)."
+  },
+  {
+   "key": "manor2026",
+   "tag": "43",
+   "text": "S. J. Manor, L. S. Erhili, and Y. Jebbouri, A sim-to-real study of surface-code decoder benchmarking, arXiv e-prints (2026)."
+  },
+  {
+   "key": "lee2026",
+   "tag": "44",
+   "text": "J. K. L. Lee, M. Malekmohammadi, H.-S. Zheng, S. Shu, C. Doumbia, K. Szenes, et al., Python in the front, party in the Backline: compiling quantum workloads across CPUs, GPUs, and FPGAs, arXiv e-prints (2026)."
+  },
+  {
+   "key": "patil2026",
+   "tag": "45",
+   "text": "S. Patil, S. X. Chen, A. J. Bay-Smidt, S. A. Schäffer, P. Krogstrup, S. Paesani, and G. C. Solomon, A platform-aware compilation framework for fault-tolerant quantum computation, arXiv e-prints (2026)."
+  },
+  {
+   "key": "delfosse2020hier",
+   "tag": "46",
+   "text": "N. Delfosse, Hierarchical decoding to reduce hardware requirements for quantum computing, arXiv:2001.11427 (2020)."
+  }
+ ],
+ "bib_style": "numeric"
+}

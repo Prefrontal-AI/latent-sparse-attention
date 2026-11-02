@@ -1,0 +1,21 @@
+{
+ "node": "B10",
+ "kind": "patch",
+ "host": "2610.06828",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "p21.1",
+   "after": 4,
+   "text": "Hartweg and Orioli [⟦bib.bib80⟧], for instance, find that their rotated-surface-code Rot5 circuit reaches a $\\ket{\\bar{T}}$ error rate roughly $3.5\\times$ below that of the exactly simulated CC17 color-code circuit [⟦new.B2⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B2",
+   "cites_node": "B2",
+   "tag": "",
+   "text": "E. Whitfield, C. Ashby, S. Hargreaves, R. Lyons, and A. Pellow (2026). Exact non-Clifford simulation of colour-code magic state cultivation under hardware-motivated noise. arXiv."
+  }
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "node": "A5",
+ "kind": "patch",
+ "host": "2609.14704",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p2.1",
+   "after": 2,
+   "text": "Intermediate cases are emerging as well, such as the moderately metal-enriched envelope ($Z\\approx62\\times$ solar) reported for the temperate sub-Neptune TOI-8264 b [⟦new.A1⟧]."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A1",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "A. Vachon, R. Gingras, N. Pouliot, M. Lapointe, F. Thériault, and O. Paquette (2026). A moderately metal-enriched envelope on the temperate sub-Neptune TOI-8264 b from JWST NIRISS/SOSS and NIRSpec/G395H transmission spectroscopy. arXiv e-prints."
+  }
+ ]
+}

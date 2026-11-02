@@ -1,0 +1,27 @@
+{
+ "node": "A7",
+ "kind": "patch",
+ "host": "2609.34635",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS7.p1.1",
+   "after": 3,
+   "text": "A third case has appeared while this work was in preparation: NGTS-47 b, a temperate sub-Neptune orbiting a K5 V star, for which a retrieval that fits unocculted spots and faculae jointly with the atmosphere gives $Z\\approx 234\\,Z_{\\odot}$ (Garside et al., 2026). The elemental calculation of Appendix B converts this metallicity to $\\mu=6.3$–$7.9$ amu between the oxidised and reducing speciation cases, which places the planet in the lower part of the hybrid range, within reach of magma-ocean equilibration."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS7.p5.1",
+   "after": 3,
+   "text": "For the K-dwarf sub-Neptune NGTS-47 b, two NIRISS visits that agreed with each other still concealed a stellar contribution to the water bands which, once fitted, roughly quadrupled the inferred metallicity (Garside et al., 2026)."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A2",
+   "cites_node": "A2",
+   "tag": "Garside et al. (2026)",
+   "text": "Garside, E., Brierley, T., Pemberton, L., et al. 2026, arXiv e-prints"
+  }
+ ]
+}

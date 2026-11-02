@@ -1,0 +1,26 @@
+{
+ "node": "A4",
+ "kind": "patch",
+ "host": "2609.08908",
+ "ops": [
+  {
+   "op": "insert_paragraph",
+   "after_block": "A5.SS1.p1.4",
+   "text": "The threshold scale near $1\\%$ in Eq. (9) presumes a decoder with matching-level accuracy. If the superconducting Baseline is instead decoded by a streaming FPGA decoder that keeps pace with the $1\\,\\mu$s code cycle, such as Sandpiper [⟦new.A4⟧], whose circuit-level threshold is $0.672\\%$, Eq. (9) becomes $p_{L}(p,d)=0.1(p/0.00672)^{(d+1)/2}$. Keeping the expected number of logical failures, $n_{Q}n_{C}\\,d\\,p_{L}$, below 0.01 as in Eq. (11) for the Fermi-Hubbard benchmark in the Baseline architecture, with $n_{Q}=800$ tiles and $n_{C}=805{,}804$ logical cycles, then requires $d=27$ at $p=10^{-3}$ instead of the $d=23$ listed in Table 7, while at $p=10^{-4}$ the minimum distance stays at $d=11$. The choice of decoder therefore enters the physical-qubit count and the runtime of the distance-scaling architectures through the effective threshold in much the same way as the physical error rate itself."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S6.SS2.p1.1",
+   "after": 9,
+   "text": "Dedicated hardware decoders such as Sandpiper [⟦new.A4⟧] can shorten $\\tau_{r}$ substantially, although their lower threshold raises the code distance, as estimated in Appendix E.1."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A4",
+   "cites_node": "A1",
+   "tag": "",
+   "text": "T. Ashworth, H. Pryce, K. Doyle, A. Rao, and C. Holroyd (2026). Sandpiper: sliding-window cluster matching for real-time surface-code decoding on FPGAs. arXiv e-prints."
+  }
+ ]
+}

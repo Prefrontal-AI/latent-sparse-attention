@@ -1,0 +1,617 @@
+{
+ "node": "B1",
+ "kind": "fake_paper",
+ "date": "2026-08-25",
+ "title": "How Many Bits Does a Recurrent State Need? Context-Length Scaling of State Precision in Mamba and Gated Linear Attention",
+ "authors": [
+  "Joris Veldhuis",
+  "Femke Postma",
+  "Ruben Zwart",
+  "Marloes Dekkers"
+ ],
+ "affiliations": [
+  "Informatics Institute, University of Amsterdam, Amsterdam, The Netherlands"
+ ],
+ "abstract": "Recurrent language models such as Mamba and gated linear attention replace the growing key-value cache with a fixed-size state, but that state is read and rewritten at every decoding step, so its storage precision sets both memory traffic and the error that is fed back into the next update. We ask how many bits per state entry are needed to keep a model's predictions intact, and how that number depends on the length of the context. On five released checkpoints (Mamba-2 1.3B and 2.7B, Falcon-Mamba-7B, GLA-1.3B and RWKV-6 1.6B) we store the state as per-row symmetric integers, requantized after every token, and measure on 64 PG-19 books the smallest width b*(T) at which the excess negative log-likelihood over an FP32 state stays within 0.01 nats at context length T. Between 2K and 32K tokens b*(T) grows linearly in log T for every model. A pooled fit gives b*(T) = 6.86 + 0.62 log2(T/2048) bits, a relation we call the bit-growth law: each doubling of the context costs about 0.62 additional bits per state entry (95% CI 0.55-0.69), with per-model slopes between 0.56 and 0.70. The slope falls between the 0.5 bits per doubling of an unbiased random walk and the 1 bit of coherent drift, and most of the accumulated error sits in slowly decaying heads. A fixed-width state cache therefore has a context length beyond which it stops being lossless, and we give a simple way to estimate it.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Linear-time sequence models have become a serious alternative to softmax attention for language modelling. Selective state-space models such as Mamba (⟦gu2023⟧) and Mamba-2 (⟦dao2024⟧), gated linear attention (⟦yang2024gla⟧) and the RWKV family (⟦peng2024⟧) all summarize the past in a recurrent state whose size does not depend on how many tokens have been read. Pure recurrent models now reach 7B parameters (⟦zuo2024⟧), and hybrids that keep a few attention layers ship in production systems (⟦blakeman2025⟧; ⟦kimi2025⟧; ⟦nemo3⟧). The appeal is a constant-memory decoder: the cost of generating token t does not grow with t."
+    },
+    {
+     "kind": "p",
+     "text": "Constant size is not the same as constant cost. During decoding the state of every recurrent layer is loaded from memory, updated, and written back once per token, and with large batches this traffic dominates decoding time (⟦zou2026⟧; ⟦lin2026delta⟧). Most serving stacks keep the state in FP32 or BF16; storing it in eight bits or fewer would halve or quarter the traffic. The difficulty is that a state, unlike a weight or a KV-cache entry, is quantized again at every step and the rounding error of step t becomes part of the input to step t+1. Errors written into channels that decay slowly are carried forward for thousands of tokens. Quantization of weights and activations of state-space models is well studied (⟦chiang2025b⟧; ⟦xu2025⟧), and Quamba2 and Q-Mamba also compress the cached state (⟦chiang2025a⟧; ⟦tianqi2025⟧), but these works evaluate at short contexts, typically a few hundred to two thousand tokens."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we measure how the precision a recurrent state needs depends on context length. We take five released checkpoints with matrix- or vector-valued states, store their state as per-row symmetric integers requantized after every token, and find for each context length T the smallest bit width b*(T) at which the model's next-token predictions on long books are within 0.01 nats of those of the same model with an FP32 state. Our main findings are:"
+    },
+    {
+     "kind": "p",
+     "text": "(i) b*(T) increases steadily with T for all five models; between 2,048 and 32,768 tokens the increase is between 2.2 and 2.8 bits. (ii) The increase is close to linear in log T. A pooled fit gives b*(T) = 6.86 + 0.62 log2(T/2048) (Section 4.2); per-model slopes range from 0.56 bits per doubling (GLA-1.3B) to 0.70 (Falcon-Mamba-7B). (iii) The slope sits between the two idealized limits of error accumulation, 0.5 bits per doubling for an unbiased random walk and 1 bit for coherent drift, and most of the accumulated error lives in the slowest-decaying heads. (iv) Loosening the tolerance to 0.02 nats lowers the intercept by about half a bit but leaves the slope nearly unchanged (0.58)."
+    },
+    {
+     "kind": "p",
+     "text": "The practical reading is simple. A state format chosen at a short evaluation length silently becomes lossy at longer contexts, and a deployment that wants to stay lossless out to length T needs roughly 0.6 more bits per state entry for every doubling of T beyond its calibration length. We release the measurement harness so that other architectures and formats can be placed on the same axes."
+    }
+   ]
+  },
+  {
+   "title": "2 Background and Related Work",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "2.1 Recurrent states in linear-time language models",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A broad family of sequence mixers can be written as a recurrence S_t = A_t S_{t-1} + B_t with a readout o_t = S_t^T q_t (⟦katharopoulos2020⟧; ⟦schlag2021⟧; ⟦yang2024gla⟧). In Mamba-2, A_t = exp(Δ_t a) I is a scalar decay per head and the state of one head is a d_state × d_head matrix (⟦dao2024⟧); in GLA the decay is a data-dependent vector over key channels (⟦yang2024gla⟧); RWKV-6 uses a similar channel-wise, data-dependent decay (⟦peng2024⟧). Delta-rule models add an erasure term along the current key (⟦yang2024delta⟧; ⟦yang2025gdn⟧), and recent variants separate the erase direction from the write direction (⟦gupta2026⟧). Earlier linear-time models with fixed decays include S4, RetNet and Griffin (⟦gu2022⟧; ⟦sun2023⟧; ⟦de2024⟧), and their training recipes are still being refined (⟦battalov2026⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "How much a fixed-size state can remember is a separate question from how precisely it must be stored. Recall in recurrent models is limited by state size (⟦arora2024⟧; ⟦jelassi2024⟧), and large-scale comparisons find pure recurrent models lagging attention on retrieval-heavy tasks (⟦waleffe2024⟧). Recent work studies how memory is organized inside the state, e.g. by routing content to anchors or sliding memories (⟦zhang2026march⟧; ⟦liu2026maglev⟧; ⟦afzal2026⟧), by compressing it dynamically (⟦pari2026⟧), or by decoding attention over stored states (⟦qian2026⟧). Instabilities in very long contexts have also been traced to anomalous state entries in delta-rule models (⟦lin2026sane⟧), architectural choices that look minor can change long-context behaviour (⟦bertsch2026⟧), and attention, state-space and hybrid models do not always treat a shared prefix identically (⟦kim2026⟧). We hold the architecture and the state size fixed and vary only the precision with which the state is stored."
+    }
+   ]
+  },
+  {
+   "title": "2.2 Quantizing states and caches",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Post-training quantization of transformers mostly targets weights and activations (⟦frantar2023⟧; ⟦xiao2023⟧; ⟦ashkboos2024⟧). For attention, the analogous problem to ours is KV-cache quantization (⟦liu2024kivi⟧; ⟦hooper2024⟧), recently revisited through transform coding (⟦laus2026⟧; ⟦zhang2026spectra⟧) and training-time cache geometry (⟦sun2026reg⟧). A KV entry is written once and read many times, so its rounding error does not compound. For state-space models, Quamba and MambaQuant quantize weights and activations (⟦chiang2025b⟧; ⟦xu2025⟧), while Quamba2 and Q-Mamba store the SSM state in eight bits (⟦chiang2025a⟧; ⟦tianqi2025⟧). Nemotron 3 keeps Mamba states in FP16 with stochastic rounding (⟦nemo3⟧). Precision effects that only appear late in a long computation have been reported for cached prefixes as well (⟦lorup2026⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "Rounding inside a feedback loop is a classical topic in numerical analysis (⟦higham2002⟧) and signal processing (⟦widrow2008⟧). Round-to-nearest can stagnate when updates are smaller than half a quantization step, whereas stochastic rounding is unbiased and its error grows like the square root of the number of operations (⟦gupta2015⟧; ⟦croci2022⟧). Low-precision formats for deep learning such as FP8 (⟦micikevicius2022⟧) and adaptive stochastic quantizers (⟦benbasat2026⟧) or progressive multi-precision codes (⟦luo2026⟧) change the constants but not the feedback structure, which is what drives the context-length dependence studied here."
+    }
+   ]
+  },
+  {
+   "title": "3 Experimental Setup",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "3.1 Models and data",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We use five released checkpoints with Hugging Face weights: Mamba-2 1.3B and Mamba-2 2.7B (⟦dao2024⟧), Falcon-Mamba-7B (⟦zuo2024⟧), GLA-1.3B trained on 100B tokens (⟦yang2024gla⟧), and RWKV-6 (Finch) 1.6B (⟦peng2024⟧). The two Mamba-2 models have a scalar decay per head, Falcon-Mamba-7B (a Mamba-1 architecture) a decay per channel and state dimension, and GLA-1.3B and RWKV-6 a data-dependent decay per key channel. None of the models has an erase term. Table 1 lists the state geometry. Weights and all other activations stay in BF16; only the recurrent state is quantized. We also quantized the short convolution state of the Mamba models in a pilot run and found no measurable effect at eight bits, so it is kept in BF16 throughout."
+    },
+    {
+     "kind": "p",
+     "text": "Evaluation text is the PG-19 test set (⟦rae2020⟧). We keep the 64 books that are at least 40K tokens long under every model's tokenizer and use their first 32,768 tokens. Several of the models were trained on 2K or 8K contexts, so their absolute perplexity degrades past the training length; this does not affect our measurement, because the reference is always the same model with an FP32 state on the same tokens."
+    },
+    {
+     "kind": "table",
+     "text": "Model | params | mixer | decay | state per layer | layers\nMamba-2 1.3B | 1.3B | SSD | per head | 64 × 128 × 64 | 48\nMamba-2 2.7B | 2.7B | SSD | per head | 80 × 128 × 64 | 64\nFalcon-Mamba-7B | 7.3B | Mamba-1 | per channel × state | 8192 × 16 | 64\nGLA-1.3B | 1.3B | GLA | per key channel | 4 × 256 × 512 | 24\nRWKV-6 1.6B | 1.6B | RWKV-6 | per key channel | 32 × 64 × 64 | 24"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: Checkpoints and recurrent-state geometry (heads × key dim × value dim for matrix states; channels × state size for Falcon-Mamba-7B)."
+    }
+   ]
+  },
+  {
+   "title": "3.2 State format and requantization",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We store the state of every recurrent layer as signed b-bit integers with one FP16 absmax scale per row (one key channel of one head, or one channel for Falcon-Mamba-7B), using round-to-nearest. Given the dequantized state Ŝ_{t-1}, the model computes S_t = A_t Ŝ_{t-1} + B_t in FP32, produces its output from S_t, and stores Ŝ_t = Q_b(S_t). The state is therefore requantized after every token, as in token-by-token decoding; we run this recurrence in teacher-forced mode over the book so that both models see identical inputs. To obtain fractional widths we mix rows of width ⌊b⌋ and ⌈b⌉ in a fixed random pattern; b ranges from 4 to 14 in steps of 0.5. The FP16 scale adds 16/d bits per entry, which we do not include in b."
+    }
+   ]
+  },
+  {
+   "title": "3.3 Measuring the required precision",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For each model, width b and context length T ∈ {2,048, 4,096, 8,192, 16,384, 32,768} we compute the excess negative log-likelihood ΔNLL_b(T), the mean over books of the per-token NLL difference between the quantized and the FP32-state model on the tokens in positions (T/2, T]. Using a window rather than a single position keeps the estimate stable while still being dominated by late tokens. The required precision b*(T) is the smallest width with ΔNLL_b(T) ≤ 0.01 nats, found by linear interpolation of log ΔNLL between the two bracketing widths. In all cases ΔNLL decreases monotonically with b over the bracketing interval. Confidence intervals are from 1,000 bootstrap resamples of books (⟦efron1993⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "A tolerance of 0.01 nats is small: it corresponds to a perplexity increase of about 1% and is below the run-to-run spread we see from changing the attention kernel in hybrid models. We report a looser tolerance as a sensitivity check in Section 4.4."
+    }
+   ]
+  },
+  {
+   "title": "3.4 Implementation",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The Mamba models use the mamba_ssm reference kernels and GLA-1.3B and RWKV-6 use the recurrent kernels of flash-linear-attention (⟦yang2024fla⟧), all called from PyTorch (⟦paszke2019⟧) with checkpoints loaded through Hugging Face transformers (⟦wolf2020⟧). Because the chunked training kernels never materialize per-token states, we wrote a step kernel that performs the update, the readout and the requantization in one pass and checked it against the FP32 reference to within 10^-6 relative error at every position. All runs used NVIDIA H100 nodes of the Snellius supercomputer; the full sweep took about 2,300 GPU-hours. One sweep of RWKV-6 at b = 4.5 diverged because an FP16 scale overflowed and was rerun with scales clamped to the FP16 range; no other run needed special handling."
+    }
+   ]
+  },
+  {
+   "title": "4 Results",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "4.1 Required precision grows with context length",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 2 reports b*(T) for every model and context length. At 2,048 tokens the five models need between 6.5 and 7.4 bits per state entry, which is in line with the observation that eight-bit state caches are nearly lossless at short lengths (⟦chiang2025a⟧; ⟦tianqi2025⟧). The requirement then rises at every step: by 32,768 tokens it is 8.7 bits for GLA-1.3B and 10.2 bits for Falcon-Mamba-7B. An INT8 state meets the tolerance for all five models only at 2,048 tokens, and for none of them from 16,384 tokens on."
+    },
+    {
+     "kind": "table",
+     "text": "Model | 2K | 4K | 8K | 16K | 32K\nMamba-2 1.3B | 6.6 | 7.2 | 7.8 | 8.3 | 8.9\nMamba-2 2.7B | 6.8 | 7.5 | 8.1 | 8.8 | 9.3\nFalcon-Mamba-7B | 7.4 | 8.1 | 8.6 | 9.5 | 10.2\nGLA-1.3B | 6.5 | 6.9 | 7.5 | 8.1 | 8.7\nRWKV-6 1.6B | 7.1 | 7.7 | 8.4 | 9.0 | 9.7"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Required state precision b*(T) (bits per entry, per-row INT with round-to-nearest, requantized every token) at which the excess NLL over an FP32 state stays within 0.01 nats. Bootstrap standard errors are 0.05-0.12 bits."
+    },
+    {
+     "kind": "p",
+     "text": "The increase is not driven by a few books. For Mamba-2 2.7B at 16K tokens, 59 of the 64 books individually exceed the 0.01-nat tolerance at eight bits, and the five that do not are the books with the lowest FP32-state NLL. Nor is it a consequence of the models running past their training length: GLA-1.3B and Mamba-2 1.3B, trained at 2K, and Falcon-Mamba-7B, trained at longer contexts, show the same pattern."
+    }
+   ]
+  },
+  {
+   "title": "4.2 The bit-growth law",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Plotted against log2 T, each row of Table 2 is close to a straight line. We therefore fit"
+    },
+    {
+     "kind": "equation",
+     "text": "b*(T) = b_{2K} + κ log2(T / 2048),   (1)"
+    },
+    {
+     "kind": "p",
+     "text": "where b_{2K} is the required precision at 2,048 tokens and κ is the number of additional bits per state entry needed for each doubling of the context. We refer to Eq. (1) as the bit-growth law. Table 3 gives least-squares fits per model. The pooled fit, with a common slope and per-model intercepts, gives κ = 0.62 bits per doubling (95% CI 0.55-0.69, bootstrap over models and books); the mean intercept is b_{2K} = 6.86 bits. The residuals of the pooled fit have a root mean square of 0.09 bits, comparable to the measurement error of b*(T) itself."
+    },
+    {
+     "kind": "table",
+     "text": "Model | κ (bits/doubling) | b_2K (bits) | rms residual\nMamba-2 1.3B | 0.57 | 6.62 | 0.02\nMamba-2 2.7B | 0.63 | 6.84 | 0.05\nFalcon-Mamba-7B | 0.70 | 7.36 | 0.08\nGLA-1.3B | 0.56 | 6.42 | 0.06\nRWKV-6 1.6B | 0.65 | 7.08 | 0.02\npooled | 0.62 | 6.86 | 0.09"
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: Per-model and pooled fits of the bit-growth law, Eq. (1), to the rows of Table 2."
+    },
+    {
+     "kind": "p",
+     "text": "Falcon-Mamba-7B has the steepest slope and the highest intercept. Its state is the largest in our set and its decays are the slowest (Section 4.3), so this ordering is expected. GLA-1.3B has the shallowest slope. The two Mamba-2 sizes differ by 0.06 bits per doubling, which is within the bootstrap uncertainty of a single model's slope (about ±0.05). With five models we cannot say whether the slope depends systematically on model size."
+    },
+    {
+     "kind": "p",
+     "text": "Eq. (1) can be inverted. A state stored in b bits stays within tolerance up to a context of roughly T_max(b) = 2048 · 2^{(b - b_{2K})/κ} tokens. With the pooled parameters, an INT8 state is lossless in our sense to about 7K tokens and a ten-bit state to about 69K tokens; each extra bit buys a factor of about 2^{1/0.62} ≈ 3.1 in context length. These numbers are for round-to-nearest per-row integers and our tolerance; other formats shift the intercept and possibly the slope."
+    }
+   ]
+  },
+  {
+   "title": "4.3 Where the error accumulates",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "To see which parts of the state are responsible, we record the squared difference between the quantized and the FP32 state per head (Mamba-2) or per key channel (GLA, RWKV-6) at eight bits. We sort units by their effective time constant τ = 1/(1 - ā), where ā is the decay averaged over the book. In Mamba-2 2.7B the quarter of heads with the longest τ hold 71% of the accumulated error energy at 32K tokens, and the share grows with T (54% at 2K). In GLA-1.3B the same quarter of channels holds 63%. Across all units, the log of the accumulated error correlates with log τ (Spearman 0.74 for Mamba-2 2.7B, 0.66 for GLA-1.3B)."
+    },
+    {
+     "kind": "p",
+     "text": "Short-lived units stop accumulating once T exceeds a few multiples of τ: their error reaches a steady state in which new rounding errors are balanced by decay. Long-lived units have not reached that steady state at 32K tokens, so their error keeps growing with T. The slope of the bit-growth law therefore reflects the distribution of time constants in a model: the larger the fraction of units with τ beyond the evaluated context, the steeper the slope."
+    }
+   ]
+  },
+  {
+   "title": "4.4 Sensitivity",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Tolerance. At a tolerance of 0.02 nats every b*(T) drops, by 0.2-0.8 bits (0.54 on average). The pooled slope becomes 0.58 bits per doubling (95% CI 0.52-0.64) and the mean intercept 6.40 bits, so the law keeps its form and changes mainly in its offset."
+    },
+    {
+     "kind": "p",
+     "text": "Rounding. Replacing round-to-nearest with stochastic rounding at eight bits reduces ΔNLL at 16K by 28% for Mamba-2 1.3B and 35% for Mamba-2 2.7B, which moves b*(16K) down by 0.2-0.3 bits. We did not run the full sweep with stochastic rounding, so we do not fit a slope for it."
+    },
+    {
+     "kind": "p",
+     "text": "Write-back interval. Requantizing once every 64 tokens instead of every token, as a chunked prefill would, lowers b*(32K) by 1.1 bits for Mamba-2 2.7B and 1.6 bits for GLA-1.3B. The law describes token-by-token decoding; for chunked processing the effective number of requantizations is smaller, and so is the required precision."
+    },
+    {
+     "kind": "p",
+     "text": "Granularity. Per-tensor scales instead of per-row scales raise b*(T) by 1.5-2.4 bits at every length but change the slope by at most 0.04 bits per doubling in the two models we tested (Mamba-2 1.3B, GLA-1.3B)."
+    }
+   ]
+  },
+  {
+   "title": "4.5 Which layers matter",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We also quantized the state of one contiguous quarter of the layers at a time, keeping the rest in FP32, for Mamba-2 2.7B and GLA-1.3B at eight bits. In both models the last quarter of the network contributes least to the excess NLL (11% and 14% of the full-quantization value at 16K tokens), and the second quarter contributes most (38% and 33%). The contributions add up to slightly more than the full-quantization value (108% and 104%), so interactions between layers are weak. The ordering matches that of the time constants: in both models the middle layers contain the largest share of slowly decaying units."
+    },
+    {
+     "kind": "p",
+     "text": "This suggests that a layer-wise precision assignment could recover part of the gap at long contexts, but the gain is bounded: even with the last quarter kept at eight bits and the rest in FP32, Mamba-2 2.7B exceeds the 0.01-nat tolerance at 32K tokens. We do not pursue mixed-precision allocation further here."
+    }
+   ]
+  },
+  {
+   "title": "5 A Simple Model of Error Accumulation",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Consider one state entry with constant decay a < 1, updated as s_t = a ŝ_{t-1} + u_t and quantized with step Δ proportional to 2^{-b}. If the rounding errors are independent with variance Δ²/12, the accumulated error after T steps has variance (Δ²/12)(1 - a^{2T})/(1 - a²). For T ≪ τ this grows linearly in T, and keeping the error at a fixed level requires Δ ∝ T^{-1/2}, that is 0.5 additional bits per doubling. For T ≫ τ the variance saturates and the required precision stops growing. If instead the errors are correlated, as with round-to-nearest when the updates u_t are small compared with Δ, the error behaves like a drift that grows linearly in T and costs one bit per doubling (⟦higham2002⟧; ⟦croci2022⟧)."
+    },
+    {
+     "kind": "p",
+     "text": "The measured slopes, 0.56-0.70, sit between these limits. Two effects push them in opposite directions. Correlated rounding in long-lived units raises the slope above 0.5, and units whose τ is already shorter than T contribute a saturated error that does not grow, which lowers it. The model also explains why the slope is insensitive to the tolerance (Section 4.4): a looser tolerance changes the allowed error level, which shifts the intercept, not the rate at which the error grows."
+    }
+   ]
+  },
+  {
+   "title": "6 Discussion and Limitations",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our results suggest that a recurrent-state format should be validated at the context length where it will be deployed, not at the short lengths where most quantization benchmarks are run. For a serving system that chooses a format once, Eq. (1) gives a first estimate of the length at which that format stops being lossless. Mixed-precision schemes that spend more bits on slowly decaying units are a natural consequence of Section 4.3."
+    },
+    {
+     "kind": "p",
+     "text": "The study has several limitations. All measurements are teacher-forced; in free-running generation the quantized model can drift onto a different continuation, which our metric does not capture. We study five pure recurrent models of up to 7B parameters with scalar or channel-wise decay; hybrids, larger models and models with an erase term are not included. Our criterion is the excess NLL over a window of book text, which measures the model's predictions as a whole rather than any specific capability. The contexts are limited to 32K tokens by the cost of the per-token sweep, and only one integer format with round-to-nearest is swept in full. Extending the measurements to other state formats and architectures is left for future work."
+    }
+   ]
+  },
+  {
+   "title": "7 Conclusion",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Storing the recurrent state of a linear-time language model in low precision is not free of context-length effects. On five released checkpoints the precision needed to keep predictions within 0.01 nats of an FP32 state grows by about 0.62 bits per entry for every doubling of the context, from 6.86 bits at 2,048 tokens. This bit-growth law makes it possible to budget state precision for a target context length."
+    }
+   ]
+  },
+  {
+   "title": "Appendix A Measurement Details",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Interpolation. For each model and length we evaluate widths on the half-bit grid until ΔNLL crosses the tolerance and then interpolate log ΔNLL linearly in b between the two bracketing widths. Interpolating ΔNLL itself instead of its logarithm changes b*(T) by at most 0.04 bits. Because ΔNLL falls roughly by a factor of four per added bit near the crossing, the half-bit grid is fine enough that the interpolation error is well below the bootstrap error."
+    },
+    {
+     "kind": "p",
+     "text": "Windows. The window (T/2, T] contains T/2 tokens per book. Using the last 1,024 tokens before T instead raises the per-book noise by a factor of about three but changes the pooled slope by less than 0.02 bits per doubling. Using the whole prefix (0, T] lowers every b*(T) because early positions have accumulated little error, and flattens the slope; we regard the late window as the more relevant quantity for long-context use."
+    },
+    {
+     "kind": "p",
+     "text": "Bootstrap. We resample books with replacement, recompute ΔNLL for every width and length, re-interpolate b*(T) and refit Eq. (1). For the pooled slope we additionally resample models, which widens the interval from ±0.03 to ±0.07 bits per doubling; we report the wider interval because the variation between models is larger than the measurement noise within a model."
+    }
+   ]
+  },
+  {
+   "title": "Appendix B Per-book Variability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Books differ in how much the quantized state hurts them. For Mamba-2 2.7B at 16K tokens and eight bits, the per-book ΔNLL ranges from 0.004 to 0.061 nats, with a median of 0.017. The books with the largest excess are long dialogues and texts with many recurring proper names, where the model relies on information written into the state thousands of tokens earlier. Books with the smallest excess are essays and texts with short, self-contained paragraphs. The per-book required precision b*(T) has a standard deviation of 0.4-0.6 bits around the mean at every length, and the per-book slopes have a median of 0.61 bits per doubling with an interquartile range of 0.52-0.71."
+    },
+    {
+     "kind": "p",
+     "text": "We found no relation between a book's FP32-state NLL and its slope (Spearman 0.08), so the slope is not an artefact of how predictable a text is."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We thank the SURF cooperative for compute time on the Snellius supercomputer (grant EINF-11873) and Bram Koster for help with the PG-19 preprocessing. This work was supported by the Dutch Research Council (NWO) under project OCENW.M.23.417."
+    }
+   ]
+  },
+  {
+   "title": "Code and Data Availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The step kernels, evaluation harness and all per-book ΔNLL measurements are available at https://github.com/jveldhuis/ssm-state-precision. All checkpoints and the PG-19 test set are publicly available."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "afzal2026",
+   "tag": "Afzal, 2026",
+   "text": "A. Afzal (2026). Raven: high-recall sequence modeling with sparse memory routing. arXiv preprint."
+  },
+  {
+   "key": "arora2024",
+   "tag": "Arora et al., 2024",
+   "text": "S. Arora, S. Eyuboglu, M. Zhang, A. Timalsina, S. Alberti, J. Zou, A. Rudra, and C. Ré (2024). Simple linear attention language models balance the recall-throughput tradeoff. In International Conference on Machine Learning."
+  },
+  {
+   "key": "ashkboos2024",
+   "tag": "Ashkboos et al., 2024",
+   "text": "S. Ashkboos, A. Mohtashami, M. L. Croci, B. Li, P. Cameron, M. Jaggi, D. Alistarh, T. Hoefler, and J. Hensman (2024). QuaRot: outlier-free 4-bit inference in rotated LLMs. Advances in Neural Information Processing Systems 37."
+  },
+  {
+   "key": "battalov2026",
+   "tag": "Battalov et al., 2026",
+   "text": "A. Battalov, K. Kramin, A. Markotenko, and S. Sinitsina (2026). Muon meets Mamba: spectral optimization for state space models. arXiv preprint."
+  },
+  {
+   "key": "benbasat2026",
+   "tag": "Ben Basat et al., 2026",
+   "text": "R. Ben Basat, Y. Ben-Itzhak, M. Mitzenmacher, and S. Vargaftik (2026). Entropy-constrained adaptive stochastic quantization. arXiv preprint."
+  },
+  {
+   "key": "bertsch2026",
+   "tag": "Bertsch et al., 2026",
+   "text": "A. Bertsch, L. Soldaini, M. R. Gormley, G. Neubig, H. Hajishirzi, K. Lo, and D. Groeneveld (2026). Cracks in the foundation: seemingly minor architectural choices impact long context extension. arXiv preprint."
+  },
+  {
+   "key": "blakeman2025",
+   "tag": "Blakeman et al., 2025",
+   "text": "A. Blakeman, A. Basant, A. Khattar, et al. (2025). Nemotron-H: a family of accurate and efficient hybrid Mamba-Transformer models. arXiv preprint arXiv:2504.03624."
+  },
+  {
+   "key": "nemo3",
+   "tag": "Chandiramani et al., 2026",
+   "text": "A. Chandiramani, A. Blakeman, A. Olaoye, et al. (2026). Nemotron 3 Super: open, efficient mixture-of-experts hybrid Mamba-Transformer model for agentic reasoning. arXiv preprint arXiv:2604.12374."
+  },
+  {
+   "key": "chiang2025a",
+   "tag": "Chiang et al., 2025a",
+   "text": "H. Chiang, C. Chang, N. Frumkin, K. Wu, M. S. Abdelfattah, and D. Marculescu (2025a). Quamba2: a robust and scalable post-training quantization framework for selective state space models. In International Conference on Machine Learning."
+  },
+  {
+   "key": "chiang2025b",
+   "tag": "Chiang et al., 2025b",
+   "text": "H. Chiang, C. Chang, N. Frumkin, K. Wu, and D. Marculescu (2025b). Quamba: a post-training quantization recipe for selective state space models. In International Conference on Learning Representations."
+  },
+  {
+   "key": "croci2022",
+   "tag": "Croci et al., 2022",
+   "text": "M. Croci, M. Fasi, N. J. Higham, T. Mary, and M. Mikaitis (2022). Stochastic rounding: implementation, error analysis and applications. Royal Society Open Science 9 (3), 211631."
+  },
+  {
+   "key": "dao2024",
+   "tag": "Dao and Gu, 2024",
+   "text": "T. Dao and A. Gu (2024). Transformers are SSMs: generalized models and efficient algorithms through structured state space duality. In International Conference on Machine Learning."
+  },
+  {
+   "key": "de2024",
+   "tag": "De et al., 2024",
+   "text": "S. De, S. L. Smith, A. Fernando, et al. (2024). Griffin: mixing gated linear recurrences with local attention for efficient language models. arXiv preprint arXiv:2402.19427."
+  },
+  {
+   "key": "efron1993",
+   "tag": "Efron and Tibshirani, 1993",
+   "text": "B. Efron and R. J. Tibshirani (1993). An Introduction to the Bootstrap. Chapman & Hall, New York."
+  },
+  {
+   "key": "frantar2023",
+   "tag": "Frantar et al., 2023",
+   "text": "E. Frantar, S. Ashkboos, T. Hoefler, and D. Alistarh (2023). GPTQ: accurate post-training quantization for generative pre-trained transformers. In International Conference on Learning Representations."
+  },
+  {
+   "key": "gu2023",
+   "tag": "Gu and Dao, 2023",
+   "text": "A. Gu and T. Dao (2023). Mamba: linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752."
+  },
+  {
+   "key": "gu2022",
+   "tag": "Gu et al., 2022",
+   "text": "A. Gu, K. Goel, and C. Ré (2022). Efficiently modeling long sequences with structured state spaces. In International Conference on Learning Representations."
+  },
+  {
+   "key": "gupta2015",
+   "tag": "Gupta et al., 2015",
+   "text": "S. Gupta, A. Agrawal, K. Gopalakrishnan, and P. Narayanan (2015). Deep learning with limited numerical precision. In International Conference on Machine Learning, pp. 1737-1746."
+  },
+  {
+   "key": "gupta2026",
+   "tag": "Gupta et al., 2026",
+   "text": "D. Gupta, A. Das, and D. Gupta (2026). The query knows what to forget: a second erase direction for linear attention. arXiv preprint."
+  },
+  {
+   "key": "higham2002",
+   "tag": "Higham, 2002",
+   "text": "N. J. Higham (2002). Accuracy and Stability of Numerical Algorithms. 2nd edition, SIAM, Philadelphia."
+  },
+  {
+   "key": "hooper2024",
+   "tag": "Hooper et al., 2024",
+   "text": "C. Hooper, S. Kim, H. Mohammadzadeh, M. W. Mahoney, Y. S. Shao, K. Keutzer, and A. Gholami (2024). KVQuant: towards 10 million context length LLM inference with KV cache quantization. Advances in Neural Information Processing Systems 37."
+  },
+  {
+   "key": "jelassi2024",
+   "tag": "Jelassi et al., 2024",
+   "text": "S. Jelassi, D. Brandfonbrener, S. M. Kakade, and E. Malach (2024). Repeat after me: transformers are better than state space models at copying. In International Conference on Machine Learning."
+  },
+  {
+   "key": "katharopoulos2020",
+   "tag": "Katharopoulos et al., 2020",
+   "text": "A. Katharopoulos, A. Vyas, N. Pappas, and F. Fleuret (2020). Transformers are RNNs: fast autoregressive transformers with linear attention. In International Conference on Machine Learning, pp. 5156-5165."
+  },
+  {
+   "key": "kim2026",
+   "tag": "Kim et al., 2026",
+   "text": "T. Kim, Y. Hong, M. Kim, S. Choi, and M. Kim (2026). The mask is not the model: auditing prefix invariance in attention, state-space, and hybrid sequence models. arXiv preprint."
+  },
+  {
+   "key": "kimi2025",
+   "tag": "Kimi Team, 2025",
+   "text": "Kimi Team, Y. Zhang, Z. Lin, et al. (2025). Kimi Linear: an expressive, efficient attention architecture. arXiv preprint arXiv:2510.26692."
+  },
+  {
+   "key": "laus2026",
+   "tag": "Laus et al., 2026",
+   "text": "H. Laus, C. M. Verdun, H. Wang, F. du Pin Calmon, and F. Krahmer (2026). KV cache compression through the lens of transform coding. arXiv preprint arXiv:2608.14191."
+  },
+  {
+   "key": "lin2026delta",
+   "tag": "Lin et al., 2026a",
+   "text": "J. Lin, J. Sun, and G. Sun (2026a). DeltaLog: deferred materialization of recurrent states for linear attention decoding. arXiv preprint arXiv:2608.15533."
+  },
+  {
+   "key": "lin2026sane",
+   "tag": "Lin et al., 2026b",
+   "text": "Q. Lin, B. Xu, X. Liu, Z. Hao, and R. Cai (2026b). SANE: state anomaly neutralization for stable extreme-context delta-rule models. arXiv preprint."
+  },
+  {
+   "key": "liu2024kivi",
+   "tag": "Liu et al., 2024",
+   "text": "Z. Liu, J. Yuan, H. Jin, S. Zhong, Z. Xu, V. Braverman, B. Chen, and X. Hu (2024). KIVI: a tuning-free asymmetric 2bit quantization for KV cache. In International Conference on Machine Learning."
+  },
+  {
+   "key": "liu2026maglev",
+   "tag": "Liu and Liu, 2026",
+   "text": "B. Liu and Q. Liu (2026). Maglev: sliding recurrent memory. arXiv preprint."
+  },
+  {
+   "key": "lorup2026",
+   "tag": "Lorup, 2026",
+   "text": "A. B. Lorup (2026). Stage-replay divergence follows the KV cache: fixed-prefix precision controls and bidirectional cache transplantation. arXiv preprint."
+  },
+  {
+   "key": "luo2026",
+   "tag": "Luo et al., 2026",
+   "text": "Y. Luo, B. Dong, W. Cheng, and H. Shen (2026). Recurrent residual quantization: a progressive multi-precision representation for LLMs. arXiv preprint."
+  },
+  {
+   "key": "micikevicius2022",
+   "tag": "Micikevicius et al., 2022",
+   "text": "P. Micikevicius, D. Stosic, N. Burgess, et al. (2022). FP8 formats for deep learning. arXiv preprint arXiv:2209.05433."
+  },
+  {
+   "key": "pari2026",
+   "tag": "Pari et al., 2026",
+   "text": "J. Pari, R. Bahlous-Boldi, and P. Agrawal (2026). Dynamic compression in recurrent networks. arXiv preprint."
+  },
+  {
+   "key": "paszke2019",
+   "tag": "Paszke et al., 2019",
+   "text": "A. Paszke, S. Gross, F. Massa, et al. (2019). PyTorch: an imperative style, high-performance deep learning library. Advances in Neural Information Processing Systems 32."
+  },
+  {
+   "key": "peng2024",
+   "tag": "Peng et al., 2024",
+   "text": "B. Peng, D. Goldstein, Q. Anthony, et al. (2024). Eagle and Finch: RWKV with matrix-valued states and dynamic recurrence. arXiv preprint arXiv:2404.05892."
+  },
+  {
+   "key": "qian2026",
+   "tag": "Qian et al., 2026",
+   "text": "Y. Qian, S. Chen, P. Wang, J. Liu, S. Cai, and C. Xu (2026). DART: decoded attention over recurrent states for efficient long-context sequence modeling. arXiv preprint."
+  },
+  {
+   "key": "rae2020",
+   "tag": "Rae et al., 2020",
+   "text": "J. W. Rae, A. Potapenko, S. M. Jayakumar, C. Hillier, and T. P. Lillicrap (2020). Compressive transformers for long-range sequence modelling. In International Conference on Learning Representations."
+  },
+  {
+   "key": "schlag2021",
+   "tag": "Schlag et al., 2021",
+   "text": "I. Schlag, K. Irie, and J. Schmidhuber (2021). Linear transformers are secretly fast weight programmers. In International Conference on Machine Learning, pp. 9355-9366."
+  },
+  {
+   "key": "sun2023",
+   "tag": "Sun et al., 2023",
+   "text": "Y. Sun, L. Dong, S. Huang, S. Ma, Y. Xia, J. Xue, J. Wang, and F. Wei (2023). Retentive network: a successor to transformer for large language models. arXiv preprint arXiv:2307.08621."
+  },
+  {
+   "key": "sun2026reg",
+   "tag": "Sun et al., 2026",
+   "text": "L. Sun, P. Harn, Z. Zhang, P. He, and X. Qin (2026). Regularize or localize: when training-time KV-cache geometry pays under quantization. arXiv preprint."
+  },
+  {
+   "key": "tianqi2025",
+   "tag": "Tianqi et al., 2025",
+   "text": "C. Tianqi, Y. Chen, P. Wang, W. Xu, Z. Zhu, and J. Cheng (2025). Q-Mamba: towards more efficient Mamba models via post-training quantization. In Findings of the Association for Computational Linguistics: ACL 2025, pp. 10594-10610."
+  },
+  {
+   "key": "waleffe2024",
+   "tag": "Waleffe et al., 2024",
+   "text": "R. Waleffe, W. Byeon, D. Riach, et al. (2024). An empirical study of Mamba-based language models. arXiv preprint arXiv:2406.07887."
+  },
+  {
+   "key": "widrow2008",
+   "tag": "Widrow and Kollár, 2008",
+   "text": "B. Widrow and I. Kollár (2008). Quantization Noise: Roundoff Error in Digital Computation, Signal Processing, Control, and Communications. Cambridge University Press."
+  },
+  {
+   "key": "wolf2020",
+   "tag": "Wolf et al., 2020",
+   "text": "T. Wolf, L. Debut, V. Sanh, et al. (2020). Transformers: state-of-the-art natural language processing. In Proceedings of EMNLP 2020: System Demonstrations, pp. 38-45."
+  },
+  {
+   "key": "xiao2023",
+   "tag": "Xiao et al., 2023",
+   "text": "G. Xiao, J. Lin, M. Seznec, H. Wu, J. Demouth, and S. Han (2023). SmoothQuant: accurate and efficient post-training quantization for large language models. In International Conference on Machine Learning."
+  },
+  {
+   "key": "xu2025",
+   "tag": "Xu et al., 2025",
+   "text": "Z. Xu, Y. Yue, X. Hu, et al. (2025). MambaQuant: quantizing the Mamba family with variance aligned rotation methods. In International Conference on Learning Representations."
+  },
+  {
+   "key": "yang2024gla",
+   "tag": "Yang et al., 2024a",
+   "text": "S. Yang, B. Wang, Y. Shen, R. Panda, and Y. Kim (2024a). Gated linear attention transformers with hardware-efficient training. In International Conference on Machine Learning."
+  },
+  {
+   "key": "yang2024delta",
+   "tag": "Yang et al., 2024b",
+   "text": "S. Yang, B. Wang, Y. Zhang, Y. Shen, and Y. Kim (2024b). Parallelizing linear transformers with the delta rule over sequence length. Advances in Neural Information Processing Systems 37."
+  },
+  {
+   "key": "yang2025gdn",
+   "tag": "Yang et al., 2025",
+   "text": "S. Yang, J. Kautz, and A. Hatamizadeh (2025). Gated delta networks: improving Mamba2 with delta rule. In International Conference on Learning Representations."
+  },
+  {
+   "key": "yang2024fla",
+   "tag": "Yang and Zhang, 2024",
+   "text": "S. Yang and Y. Zhang (2024). FLA: a Triton-based library for hardware-efficient implementations of linear attention mechanism. https://github.com/fla-org/flash-linear-attention."
+  },
+  {
+   "key": "zhang2026march",
+   "tag": "Zhang et al., 2026a",
+   "text": "M. Zhang, K. Yang, S. Yu, E. Hua, N. Ding, X. Hu, et al. (2026a). MARCH: scaling recurrent memory with content-routed state anchors. arXiv preprint."
+  },
+  {
+   "key": "zhang2026spectra",
+   "tag": "Zhang et al., 2026b",
+   "text": "J. Zhang, L. Wu, K. Wan, H. Chen, and L. Hong (2026b). SPECTRA: pushing the KV cache beyond the 2-bit cliff via spectral transform coding. arXiv preprint."
+  },
+  {
+   "key": "zou2026",
+   "tag": "Zou and Zhong, 2026",
+   "text": "L. Zou and L. Zhong (2026). KVBuffer: IO-aware serving for linear attention. arXiv preprint arXiv:2605.19049."
+  },
+  {
+   "key": "zuo2024",
+   "tag": "Zuo et al., 2024",
+   "text": "J. Zuo, M. Velikanov, D. E. Rhaiem, I. Chahed, Y. Belkada, G. Kunsch, and H. Hacid (2024). Falcon Mamba: the first competitive attention-free 7B language model. arXiv preprint arXiv:2410.05355."
+  }
+ ],
+ "bib_style": "authoryear"
+}

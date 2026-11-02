@@ -268,7 +268,7 @@ def submit(
     experiments: list["NativeConfig"],
     parameters: Mapping[str, Any] = PARAMETERS,
     folder: str | Path | None = None,
-    checkpoint: str | None = None,
+    checkpoints: list[str] | None = None,
 ) -> list[Any]:
     """Submit one job per run, print each one's id, and return them without waiting.
 
@@ -276,7 +276,7 @@ def submit(
         experiments: The experiments, as `config.load` returns them.
         parameters: What each job asks for, as submitit parameters. Its GPUs per node are also its tasks per node.
         folder: Where submitit writes each job's output, or None for the shared log root.
-        checkpoint: A step folder to score instead of training, or None to train.
+        checkpoints: The step folder each run scores instead of training, in the order of the runs, or None to train.
 
     Returns:
         One submitit job per run, in the order they were given.
@@ -291,10 +291,10 @@ def submit(
     for experiment in experiments:
         experiment.run.output = str(Path(experiment.run.output).resolve())
 
-    if checkpoint is None:
+    if checkpoints is None:
         jobs: list[Any] = executor.map_array(run_task, experiments)
     else:
-        jobs = executor.map_array(evaluate_task, experiments, [checkpoint] * len(experiments))
+        jobs = executor.map_array(evaluate_task, experiments, checkpoints)
     for job, experiment in zip(jobs, experiments, strict=True):
         print(f"submitted {job.job_id}  {experiment.run.name}", flush=True)
     return jobs
@@ -342,7 +342,9 @@ def main(command: str) -> None:
             help="the set to score - `benchmark` takes the options of `--suite benchmark --help`",
         )
         parser.add_argument(
-            "--checkpoint", required=True, help="a torchtitan step folder, .../checkpoint/step-N"
+            "--checkpoint",
+            default=None,
+            help="a torchtitan step folder, .../checkpoint/step-N - the config's run.evaluation.checkpoint by default",
         )
     slurm.add_flags(parser)
     parser.add_argument("--nodes", type=int, default=Job.NODES, help="nodes per job")
@@ -354,6 +356,9 @@ def main(command: str) -> None:
     from lsa.training.native.config import load
 
     experiments = load(args.config, args.overrides)
+    checkpoints = (
+        [experiment.scored_checkpoint(args.checkpoint) for experiment in experiments] if evaluating else None
+    )
     parameters = {**PARAMETERS, **slurm.overrides(args), "nodes": args.nodes}
     for experiment in experiments:
         experiment.check_ranks(parameters["gpus_per_node"] * parameters["nodes"])
@@ -361,4 +366,4 @@ def main(command: str) -> None:
     if args.dry_run:
         return
 
-    submit(experiments, parameters, args.folder, args.checkpoint if evaluating else None)
+    submit(experiments, parameters, args.folder, checkpoints)

@@ -21,6 +21,10 @@ DASH = re.compile(f"[{chr(0x2014)}{chr(0x2013)}]")
 # A model's own output, quoted verbatim as a fixture - editing it would test something the model never wrote
 DASH_ALLOWED = {"tests/unit/evaluation/accuracy/test_letters.py"}
 
+# A benchmark's own text and the titles of real papers, hashed by the card that pins them - editing a dash would
+# change the benchmark, so the kit is kept as it was written
+DASH_ALLOWED_PREFIXES = ("data-assembly/papertrail/kit/",)
+
 
 def git(*arguments: str) -> str:
     """Run git in the repository and return its stdout.
@@ -92,7 +96,7 @@ def stray_dashes() -> list[str]:
     """Return every tracked line carrying an em or en dash, which AGENTS.md forbids."""
     offenders = []
     for name in tracked_files():
-        if name in DASH_ALLOWED:
+        if name in DASH_ALLOWED or name.startswith(DASH_ALLOWED_PREFIXES):
             continue
         try:
             body = (REPO / name).read_text()

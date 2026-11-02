@@ -1,4 +1,4 @@
-# PaperTrail - fictional result trails hidden in real 2026 arXiv papers, Sukrit's long-context benchmark.
+# PaperTrail - fictional result trails hidden in real 2026 arXiv papers, Sukrit Sumant's long-context benchmark.
 #
 # Each sample is one domain's pile of real arXiv papers with two fictional trails inside: a value introduced by a
 # fabricated paper, cited and used by real papers we insert a few sentences into, revised and renamed by a second
@@ -10,8 +10,9 @@
 # release. Beside the lengths each sample has four controls - the question alone, the unpatched host papers, the
 # synthetic text alone and the background alone - which every question passes on three seeds.
 #
-# The source is the dataset repository at the revision below - the paper ids at their pinned versions, the benchmark's
-# own text and a checksum of every paper and context, from Sukrit's rebuild kit at 55ca88cf with a 512k length added.
+# The source is the kit in this repository, data-assembly/papertrail/kit - the paper ids at their pinned versions, the
+# benchmark's own text and a checksum of every paper and context, Sukrit Sumant's rebuild kit at 55ca88cf with a 512k
+# length added. `revision` is the kit's digest, which data-assembly/papertrail/README.md says how to recompute.
 # The preparer fetches the papers from arXiv and rebuilds the samples byte for byte, so no arXiv text is redistributed.
 #
 # 512k is the 400k papers plus the papers 700k adds, in background rank order while they fit, so it sits inside 700k
@@ -22,9 +23,9 @@ kind: benchmark
 preparer: papertrail
 path: ${root:data/benchmarks/papertrail}
 about: PaperTrail's three samples - 30 scored and 6 not-in-corpus questions each - at seven lengths from 400k to 10M GLM-5.3-Flash tokens and under its four controls
-generator: Prefrontal-AI/papertrail-dataset
-revision: 7c7338aead971acf317ab716b6fed24f697a53ef
-licence: arXiv papers under their own licences, not redistributed
+generator: data-assembly/papertrail/kit
+revision: dc2e5c3110137da92c13606913e25a1b5aacf75857ca1847732d598f9b2416b8
+licence: the kit CC-BY-4.0 (Sukrit Sumant), the arXiv papers under their own licences and not redistributed
 tokenizer: glm53_flash
 file: "{task}_{condition}.jsonl"
 

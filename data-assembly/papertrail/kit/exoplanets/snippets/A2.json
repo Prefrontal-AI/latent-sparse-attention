@@ -1,0 +1,575 @@
+{
+ "node": "A2",
+ "kind": "fake_paper",
+ "date": "2026-09-10",
+ "title": "Unocculted spots and faculae bias the metallicities of small planets around K dwarfs: injection-recovery tests and monitoring-informed retrievals",
+ "authors": [
+  "Eleanor Garside 1,2",
+  "Thomas Brierley 1",
+  "Lucy Pemberton 3",
+  "Owen Corcoran 1,2",
+  "Matthew Dyson 3"
+ ],
+ "affiliations": [
+  "1 Department of Physics, University of Warwick, Gibbet Hill Road, Coventry CV4 7AL, UK",
+  "2 Centre for Exoplanets and Habitability, University of Warwick, Coventry CV4 7AL, UK",
+  "3 Department of Physics and Astronomy, University of Exeter, Stocker Road, Exeter EX4 4QL, UK"
+ ],
+ "abstract": "Unocculted spots and faculae alter the transmission spectra of planets around active stars, but their effect on the atmospheric metallicities inferred for small planets around K dwarfs has received less attention than for M-dwarf systems. We quantify it with an injection-recovery study of simulated JWST NIRISS/SOSS and NIRSpec/G395H spectra of sub-Neptunes around hosts with effective temperatures of 4000-5200 K, spot covering fractions up to 15 per cent and facular covering fractions up to 30 per cent. When the star is ignored, retrievals underestimate the metallicity: cool spots carry water absorption that deepens the 1.4 $\\mu$m band, which the retrieval attributes to a larger planetary scale height. The bias reaches a factor of five for spot coverage of 10 per cent on K5-K7 hosts and is partly offset by faculae. Free spot and facula parameters remove only part of it, because the covering fraction and temperature contrast are degenerate at JWST wavelengths, whereas priors on the covering fractions derived from contemporaneous ground-based photometry reduce the residual bias to below 0.1 dex. We apply this approach to the archival JWST spectrum of the temperate sub-Neptune NGTS-47 b (TOI-8264 b), using NGTS photometry obtained at the three JWST epochs. A model with unocculted spots and faculae is strongly preferred ($\\Delta\\ln\\mathcal{Z}=6.9$), with a spot covering fraction of $0.067^{+0.019}_{-0.017}$, and the atmospheric metallicity increases to $234^{+105}_{-83}$ times solar, with a mean molecular weight of $6.71^{+1.32}_{-0.98}$ amu. Contemporaneous monitoring should be planned for JWST and Ariel observations of small planets around active K dwarfs.",
+ "sections": [
+  {
+   "title": "1 Introduction",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The mean molecular weight of a sub-Neptune atmosphere is one of the few observables that can separate the competing interpretations of this population: rocky cores with retained hydrogen envelopes, planets whose envelopes have been enriched by interaction with a magma ocean, and bodies that formed with large volatile inventories (Luque & Pallé, 2022; Misener et al., 2026; Young, 2026). JWST transmission spectra now constrain it for a growing sample (Madhusudhan et al., 2023; Benneke et al., 2024; Piaulet-Ghorayeb et al., 2024; Ahrer et al., 2025), and the classification of individual planets increasingly turns on whether the retrieved value lies above or below a few amu."
+    },
+    {
+     "kind": "p",
+     "text": "Retrieved metallicities are only as reliable as the assumed stellar spectrum. Active regions outside the transit chord make the disc-averaged spectrum unrepresentative of the occulted area, which introduces chromatic offsets in the transit depth (Rackham et al., 2018, 2019). For M dwarfs this transit light source effect has been studied extensively with JWST, from strong contamination in the TRAPPIST-1 system (Lim et al., 2023; Rosenthal et al., 2026) to its absence (Lim et al., 2026), and ⟦iyer20⟧ showed that for sub-Neptunes around M dwarfs it is degenerate with the scale height. Giant planets around active K dwarfs show the same effect (Fournier-Tondreau et al., 2024; Pont et al., 2013), but for small planets around K dwarfs the stellar contribution is usually tested with a single one-heterogeneity model and dropped when Bayesian evidence does not favour it."
+    },
+    {
+     "kind": "p",
+     "text": "Several recent analyses illustrate how much the stellar treatment matters for the derived composition. For giant planets around M dwarfs the contamination can dominate the spectrum (Ko et al., 2026), for the warm super-Earth GJ 486 b water absorption may be planetary or stellar (Moran et al., 2023), and joint fits of stellar and planetary parameters (Pinhas et al., 2018) are now standard for M-dwarf planets. For temperate sub-Neptunes with muted spectra, such as GJ 1214 b, the inferred metallicity depends on assumptions about aerosols (Kempton et al., 2023; Schlawin et al., 2024; Ohno et al., 2025) as much as on the star, and feature-amplitude trends (Brande et al., 2024) are compiled from spectra reduced with different stellar treatments. Empirical limb-darkening and stellar-surface constraints from JWST itself are beginning to accumulate (Sing et al., 2026; Gressier et al., 2026), and high-resolution studies show that spot-only lines can mimic planetary absorption (Dethier et al., 2026)."
+    },
+    {
+     "kind": "p",
+     "text": "This practice is reasonable when the data constrain the stellar parameters, but at JWST wavelengths they often do not. The spectral signature of a cool spot on a K dwarf is broad and weak beyond 1 $\\mu$m, its covering fraction and temperature contrast are degenerate, and faculae act in the opposite direction (Rackham et al., 2023; Norris et al., 2023). A model that adds three or four poorly constrained parameters pays an Occam penalty that a modest improvement in fit cannot overcome, even when the stellar contribution changes the inferred atmosphere. External constraints on the stellar surface can resolve this, and ground-based monitoring has long been used for that purpose for giant planets (Pont et al., 2013)."
+    },
+    {
+     "kind": "p",
+     "text": "In this paper we ask how large the resulting bias in metallicity is for small planets around K dwarfs, which hosts and spot coverages are most affected, and whether priors derived from contemporaneous photometry remove it. Section 2 describes the modelling framework, Section 3 the injection-recovery tests, and Section 4 the photometric monitoring with the Next Generation Transit Survey (NGTS). In Section 5 we apply the method to the archival JWST spectrum of NGTS-47 b, a temperate sub-Neptune around a K5 dwarf, and Section 6 discusses the implications for the composition of small planets and for observing strategy."
+    }
+   ]
+  },
+  {
+   "title": "2 Modelling framework",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "2.1 Stellar contamination",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We describe the visible stellar disc as a photosphere at temperature $T_{\\rm phot}$, spots at $T_{\\rm spot}=T_{\\rm phot}-\\Delta T_{\\rm spot}$ covering a fraction $f_{\\rm spot}$ of the disc, and faculae covering a fraction $f_{\\rm fac}$, and assume that the transit chord crosses only photosphere. The observed transit depth is then the planetary depth multiplied by the contamination factor"
+    },
+    {
+     "kind": "equation",
+     "text": "$$\\epsilon_{\\lambda}=\\left[1-f_{\\rm spot}\\left(1-\\frac{S_{\\lambda,\\rm spot}}{S_{\\lambda,\\rm phot}}\\right)-f_{\\rm fac}\\left(1-\\frac{S_{\\lambda,\\rm fac}}{S_{\\lambda,\\rm phot}}\\right)\\right]^{-1},$$ (1)"
+    },
+    {
+     "kind": "p",
+     "text": "where $S_{\\lambda}$ are the disc-integrated specific intensities of each component (Rackham et al., 2018). Photosphere and spot spectra are PHOENIX models (Husser et al., 2013) at the stellar surface gravity and metallicity. For faculae, one-dimensional models at elevated temperature reproduce neither the spectral shape nor the limb dependence of facular contrasts (Witzke et al., 2021; Norris et al., 2023), so we use the facular-to-quiet intensity ratios of ⟦norris23⟧ for 300 G MuRAM simulations of K stars, interpolated in effective temperature. The facular contrast is therefore fixed by the simulations, and only the facular covering fraction is a free parameter."
+    }
+   ]
+  },
+  {
+   "title": "2.2 Simulated spectra",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Planetary spectra are computed with petitRADTRANS (Mollière et al., 2019) for a sub-Neptune of 2.6 $R_{\\oplus}$ and 7 $M_{\\oplus}$ at 450 K, in chemical equilibrium with solar C/O and metallicities of 10, 30, 100, 300 and 1000 times solar, with a grey cloud deck at 10 mbar. We combine them with Eq. (1) on a grid of host temperatures of 4000, 4300, 4600, 4900 and 5200 K, spot covering fractions of 0, 0.02, 0.05, 0.10 and 0.15, spot contrasts of 400 and 700 K, and facular covering fractions of 0, 0.1, 0.2 and 0.3. Noise for two NIRISS/SOSS transits and one NIRSpec/G395H transit is computed with PandExo (Batalha et al., 2017) for a $J=8.5$ host, scaled by the stellar radius appropriate to each temperature, and binned to $R=100$. Each spectrum is perturbed with a single Gaussian noise draw, and the full grid, 2000 configurations, is retrieved once per configuration; a subset of 200 is repeated with five noise draws to estimate the scatter of the recovered values, which is 0.07 dex in $\\log Z$."
+    }
+   ]
+  },
+  {
+   "title": "2.3 Retrieval set-ups",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Each simulated spectrum is retrieved with POSEIDON (MacDonald, 2023) in three configurations, using an equilibrium-chemistry atmosphere with free metallicity, isothermal temperature, cloud-top pressure and reference radius. (i) Atmosphere only. (ii) Atmosphere with free stellar parameters: $T_{\\rm phot}$ with a Gaussian prior of width 70 K, $\\Delta T_{\\rm spot}$ uniform between 0 and 1500 K, and $f_{\\rm spot}$ and $f_{\\rm fac}$ uniform between 0 and 0.4. (iii) As (ii), but with Gaussian priors on $f_{\\rm spot}$ and $f_{\\rm fac}$ derived from simulated photometric monitoring as described in Section 4.2. Sampling uses PyMultiNest (Feroz et al., 2009; Buchner et al., 2014) with 800 live points. We report the bias as the difference between the median retrieved and the injected $\\log_{10}(Z/Z_{\\odot})$."
+    },
+    {
+     "kind": "p",
+     "text": "Throughout, abundances are expressed relative to the solar values of Asplund et al. (2009), and the quoted metallicities refer to the scaling of all elements heavier than helium at fixed C/O. Rotational modulation in the simulated light curves of Section 4.2 uses a Matérn-3/2 Gaussian process (Foreman-Mackey et al., 2017), and evolutionary context for the hosts follows Nicholls et al. (2026). Target selection for the simulated planet follows the transmission spectroscopy metric of Kempton et al. (2018)."
+    }
+   ]
+  },
+  {
+   "title": "3 Injection-recovery results",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "3.1 Atmosphere-only fits underestimate the metallicity",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 1 lists the bias of atmosphere-only retrievals for an injected metallicity of 100 times solar without faculae. The bias is negative throughout: unocculted spots lead the retrieval to a lower metallicity. Spots on a K dwarf are cool enough to contain water, so the contamination factor rises within the 1.15, 1.4 and 1.9 $\\mu$m bands. The retrieval reproduces the deeper bands with a larger scale height, that is, a lower mean molecular weight, and hence a lower metallicity. The effect grows with spot coverage and towards cooler hosts, where the contrast between spot and photosphere in the water bands is largest, and reaches $-0.7$ dex, a factor of five, for 10 per cent coverage on hosts of 4000-4300 K."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 1: Bias in the retrieved $\\log_{10}(Z/Z_{\\odot})$ for atmosphere-only retrievals of spectra contaminated by unocculted spots ($\\Delta T_{\\rm spot}=700$ K, no faculae, injected $Z=100\\,Z_{\\odot}$). Each entry is a single noise realisation; the typical scatter between realisations is 0.07 dex."
+    },
+    {
+     "kind": "table",
+     "text": "$T_{\\rm eff}$ (K) | $f_{\\rm spot}=0.02$ | 0.05 | 0.10 | 0.15\n4000 | $-0.19$ | $-0.53$ | $-0.71$ | $-1.02$\n4300 | $-0.21$ | $-0.44$ | $-0.69$ | $-0.93$\n4600 | $-0.08$ | $-0.31$ | $-0.58$ | $-0.77$\n4900 | $-0.11$ | $-0.24$ | $-0.40$ | $-0.61$\n5200 | $-0.02$ | $-0.17$ | $-0.29$ | $-0.44$"
+    },
+    {
+     "kind": "p",
+     "text": "The bias depends only weakly on the injected metallicity between 30 and 300 times solar. At 10 times solar the planetary features are large compared with the contamination and the bias falls to about half the tabulated values; at 1000 times solar the features are small and the retrieval often reverts to the lower bound of the cloud-top prior, which mutes the metallicity response. The bias is also smaller, by about a third, for a spot contrast of 400 K."
+    }
+   ]
+  },
+  {
+   "title": "3.2 The role of faculae",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Faculae act in the opposite direction. They brighten the disc outside the chord, mostly shortward of 1 $\\mu$m, and lower the contamination factor at the blue end of the SOSS range. In the infrared their contrast is small, so they offset the spot bias only partly: for $T_{\\rm eff}=4600$ K and $f_{\\rm spot}=0.10$, adding faculae with $f_{\\rm fac}=0.2$ changes the bias from $-0.58$ to $-0.43$ dex, and $f_{\\rm fac}=0.3$ to $-0.36$ dex. Faculae alone produce a small positive bias, at most $+0.12$ dex in our grid, together with a short-wavelength slope that a haze can partly absorb."
+    }
+   ]
+  },
+  {
+   "title": "3.3 Free stellar parameters",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "With free stellar parameters (configuration ii), the median bias is reduced by about half, but the posteriors on $f_{\\rm spot}$ and $\\Delta T_{\\rm spot}$ are broad and banana-shaped, and the metallicity posterior widens by 0.2-0.3 dex. For $f_{\\rm spot}\\leq0.05$ the evidence rarely favours the contaminated model: in 71 per cent of such configurations $\\Delta\\ln\\mathcal{Z}<1$, even though the atmosphere-only retrieval is biased by 0.2-0.5 dex. A non-preference for stellar contamination is therefore not evidence that the metallicity is unbiased. This mirrors the conclusion of Iyer & Line (2020) for M dwarfs, and the limited ability of JWST data alone to constrain active regions on K dwarfs noted by Rackham et al. (2023)."
+    }
+   ]
+  },
+  {
+   "title": "3.4 Photometric priors",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Configuration (iii) uses Gaussian priors on $f_{\\rm spot}$ and $f_{\\rm fac}$ of width 0.02 and 0.05, centred on values offset from the truth by a random draw from those widths, mimicking the information provided by multi-epoch photometry (Section 4.2). The residual bias is below 0.1 dex in 94 per cent of configurations, with a median of $-0.03$ dex, and the metallicity posteriors are only 0.05 dex wider than in uncontaminated retrievals. The contaminated model is preferred by $\\Delta\\ln\\mathcal{Z}>3$ in 62 per cent of configurations with $f_{\\rm spot}\\geq0.05$, because the priors remove most of the volume that the free model wastes on unphysical spot solutions. Table 2 summarises the three configurations."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 2: Summary of the injection-recovery tests over the full grid. Bias is retrieved minus injected $\\log_{10}(Z/Z_{\\odot})$; the last column gives the fraction of configurations with $|{\\rm bias}|<0.1$ dex."
+    },
+    {
+     "kind": "table",
+     "text": "Configuration | median bias (dex) | 16th-84th percentile | $|{\\rm bias}|<0.1$\n(i) atmosphere only | $-0.34$ | $-0.71$ to $-0.08$ | 21 per cent\n(ii) free spots and faculae | $-0.16$ | $-0.42$ to $+0.05$ | 47 per cent\n(iii) with photometric priors | $-0.03$ | $-0.09$ to $+0.04$ | 94 per cent"
+    }
+   ]
+  },
+  {
+   "title": "4 Contemporaneous photometric monitoring",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "4.1 NGTS observations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "NGTS consists of twelve 20-cm telescopes at ESO Paranal Observatory with a 520-890 nm bandpass (Wheatley et al., 2018). Besides its survey, it is used to recover long-period TESS candidates from single or duo transits (Gill et al., 2020) and to obtain photometry simultaneous with space-based observations (Bryant et al., 2020). Since 2025 we have used one or two NGTS telescopes to monitor active K-dwarf hosts of small planets scheduled for JWST observations, with nightly blocks of 1-3 h at 10-s cadence during the observing season and continuous coverage on the nights of JWST visits. For each star we derive nightly binned relative fluxes with a precision of 0.4-0.8 mmag, the rotation period, and the flux at each JWST epoch relative to the brightest level observed during the season."
+    }
+   ]
+  },
+  {
+   "title": "4.2 From photometry to covering-fraction priors",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "A single-band light curve constrains the change in spot and facular coverage, not the absolute values, and the dimming at a given epoch depends on both. We combine three pieces of information: the dimming at the epoch relative to the season maximum, the amplitude of rotational modulation, and the empirical relation between facular and spot coverage for K dwarfs at a given activity level, which we take from the solar-scaled relations calibrated by Norris et al. (2023). A forward model of rotating discs populated with spots and faculae, run on a grid of covering fractions and inclinations, provides the joint distribution of the observables, and the posterior on $(f_{\\rm spot},f_{\\rm fac})$ at each epoch is approximated by independent Gaussians. In the injection-recovery tests of Section 3.4, the same procedure applied to simulated light curves gives the prior widths quoted there."
+    }
+   ]
+  },
+  {
+   "title": "5 Application to NGTS-47 b",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "5.1 The system",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "TOI-8264 b (Vachon et al., 2026; hereafter NGTS-47 b, following the NGTS confirmation) is a temperate sub-Neptune on a 31-day orbit around a K5 V star with $T_{\\rm eff}=4428$ K and $\\log R^{\\prime}_{\\rm HK}=-4.61$. The star entered our monitoring programme as a TESS candidate, and NGTS recovered three full transits between 2026 March and May, which together with the radial velocities constitute the NGTS confirmation; following the consortium's practice, the system carries the designation NGTS-47. We adopt the planetary mass, radius and orbital parameters of Vachon et al. (2026)."
+    },
+    {
+     "kind": "p",
+     "text": "⟦vachon26⟧ observed two transits with NIRISS/SOSS and one with NIRSpec/G395H, detected H2O and CH4, and reported an atmospheric metallicity of about 62 times solar from an atmosphere-only fit, with no preference for a model including unocculted spots. The host's activity level, rotation period and spectral type place it in the part of our grid where Table 1 predicts atmosphere-only biases of $-0.3$ to $-0.6$ dex, which motivated the reanalysis."
+    }
+   ]
+  },
+  {
+   "title": "5.2 JWST data",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We retrieved the uncalibrated data of program DD 9874 from MAST and reduced them independently with Eureka! (Bell et al., 2022) for both instruments, applying group-level 1/$f$ corrections and optimal extraction. Light curves were fitted with batman (Kreidberg, 2015) and quadratic limb darkening, using coefficients from ExoTiC-LD (Grant & Wakeford, 2024) with Gaussian priors, and with the orbital parameters fixed to those of Vachon et al. (2026). We binned the spectra to $R=100$ as in that work. Unlike the original analysis, we keep the two SOSS visits separate, so that each can have its own stellar contamination; the G395H visit is fitted with a third set of covering fractions. Our atmosphere-only retrieval of the combined spectrum reproduces the published result, with $\\log_{10}(Z/Z_{\\odot})=1.81^{+0.19}_{-0.24}$."
+    }
+   ]
+  },
+  {
+   "title": "5.3 Monitoring at the JWST epochs",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "NGTS-47 was monitored on 96 nights between 2026 January and June. The light curve shows rotational modulation with a period of $25.8\\pm0.6$ days and a peak-to-peak amplitude of 1.1 per cent in the NGTS band, and slow changes in the mean level over the season. All three JWST visits fall near minima of the rotational modulation. Table 3 lists the dimming relative to the season maximum on each JWST night and the resulting priors."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 3: NGTS photometry on the nights of the JWST transits of NGTS-47 b and the derived Gaussian priors on the spot and facular covering fractions."
+    },
+    {
+     "kind": "table",
+     "text": "Visit | Date | Dimming (per cent) | $f_{\\rm spot}$ prior | $f_{\\rm fac}$ prior\nSOSS 1 | 2026-02-11 | $1.92\\pm0.11$ | $0.071\\pm0.021$ | $0.13\\pm0.05$\nSOSS 2 | 2026-04-15 | $2.27\\pm0.09$ | $0.078\\pm0.020$ | $0.14\\pm0.05$\nG395H | 2026-05-16 | $1.38\\pm0.13$ | $0.058\\pm0.022$ | $0.11\\pm0.05$"
+    },
+    {
+     "kind": "p",
+     "text": "The covering fractions are similar at the three epochs, as expected for visits near rotational minima. This also explains why the two SOSS spectra agree with one another: consistency between visits constrains the change in the stellar contamination, not its level."
+    }
+   ]
+  },
+  {
+   "title": "5.4 Results",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Table 4 compares four retrieval configurations on the NGTS-47 b data. The free stellar model improves the evidence only modestly, as in the original analysis and as Section 3.3 leads us to expect, but it already moves the metallicity up by 0.3-0.4 dex. With the NGTS priors, the spot and facula model is strongly preferred over the atmosphere-only model, by $\\Delta\\ln\\mathcal{Z}=6.9$. Because the three visits have similar priors and posteriors, we quote the spot and facula parameters for the SOSS visits combined: $f_{\\rm spot}=0.067^{+0.019}_{-0.017}$, spots cooler than the photosphere by $590^{+140}_{-170}$ K, and $f_{\\rm fac}=0.12^{+0.05}_{-0.04}$, with the facular contrast fixed by the MuRAM models."
+    },
+    {
+     "kind": "caption",
+     "text": "Table 4: Retrieval results for NGTS-47 b. $\\Delta\\ln\\mathcal{Z}$ is relative to the atmosphere-only model. Stellar parameters are for the combined SOSS visits."
+    },
+    {
+     "kind": "table",
+     "text": "Configuration | $\\Delta\\ln\\mathcal{Z}$ | $f_{\\rm spot}$ | $\\Delta T_{\\rm spot}$ (K) | $f_{\\rm fac}$ | $\\log_{10}(Z/Z_{\\odot})$\nAtmosphere only | 0 | - | - | - | $1.81^{+0.19}_{-0.24}$\nFree spots | $+1.6$ | $0.09^{+0.07}_{-0.05}$ | $480^{+390}_{-250}$ | - | $2.12^{+0.24}_{-0.29}$\nFree spots and faculae | $+2.3$ | $0.08^{+0.06}_{-0.04}$ | $530^{+340}_{-230}$ | $0.10^{+0.09}_{-0.06}$ | $2.24^{+0.22}_{-0.27}$\nSpots and faculae, NGTS priors | $+6.9$ | $0.067^{+0.019}_{-0.017}$ | $590^{+140}_{-170}$ | $0.12^{+0.05}_{-0.04}$ | $2.37^{+0.16}_{-0.19}$"
+    },
+    {
+     "kind": "p",
+     "text": "The adopted retrieval gives $\\log_{10}(Z/Z_{\\odot})=2.37^{+0.16}_{-0.19}$, an atmospheric metallicity of $234^{+105}_{-83}$ times solar, and a free-chemistry retrieval with the same stellar priors gives a mean molecular weight of $6.71^{+1.32}_{-0.98}$ amu. Water remains detected (3.4$\\sigma$), at a higher abundance, while the CH4 detection weakens to 2.6$\\sigma$ because the 2.3 and 3.3 $\\mu$m regions now carry less of the fit. About 40 per cent of the amplitude of the 1.4 $\\mu$m band in the observed spectrum is attributed to the star, which leaves a planetary band with an amplitude of about 2.7 scale heights at the new mean molecular weight. The G395H spectrum, where the contamination is weak, constrains the metallicity similarly in all four configurations; it is the SOSS spectrum that drives the change."
+    }
+   ]
+  },
+  {
+   "title": "5.5 Robustness",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "We tested the result against the choices that could affect it most. Replacing the MuRAM facular contrasts with one-dimensional PHOENIX facular spectra at an elevated temperature changes the metallicity by $+0.05$ dex. Widening the covering-fraction priors by a factor of two gives $\\log_{10}(Z/Z_{\\odot})=2.31^{+0.20}_{-0.24}$ with $\\Delta\\ln\\mathcal{Z}=4.8$. Fitting the visits with common rather than independent stellar parameters changes the result by less than 0.03 dex. Using the published reduction instead of ours shifts the metallicity by $-0.04$ dex. An equilibrium retrieval with free C/O, rather than solar, gives $\\log_{10}(Z/Z_{\\odot})=2.33^{+0.18}_{-0.22}$ and C/O $=0.48^{+0.17}_{-0.15}$. In every case the metallicity is above 100 times solar at 2$\\sigma$."
+    }
+   ]
+  },
+  {
+   "title": "6 Discussion",
+   "level": 1,
+   "blocks": []
+  },
+  {
+   "title": "6.1 Composition of small planets around K dwarfs",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "For NGTS-47 b the change is large enough to alter the interpretation of the planet. A mean molecular weight of 6.7 amu is above the threshold of 3.8 amu used to separate gas dwarfs from planets with heavier envelopes, and places NGTS-47 b alongside TOI-270 d rather than K2-18 b (Madhusudhan et al., 2023; Benneke et al., 2024). Such envelopes can be produced by equilibration of a hydrogen envelope with a magma ocean or by the dissolution of silicates in the envelope (Misener et al., 2026; Marcum et al., 2026; Young, 2026), and need not imply a water-rich interior. More generally, Table 1 implies that metallicities of sub-Neptunes around K dwarfs with $T_{\\rm eff}\\lesssim4600$ K derived without stellar priors should be regarded as lower limits unless the host is known to be quiet, and that population comparisons of mean molecular weight between M and K hosts carry a host-dependent systematic of a few tenths of a dex."
+    }
+   ]
+  },
+  {
+   "title": "6.2 Observing strategy",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The cost of contemporaneous monitoring is small compared with that of the space-based observations it supports: for NGTS-47, two NGTS telescopes for a few hours per night. Ground-based photometry in a red optical band is sufficient to set useful priors on K dwarfs, as Section 3.4 shows, and multi-band photometry or simultaneous ultraviolet spectroscopy would constrain the facular contribution further. Monitoring also matters for missions that combine many transits. Ariel will co-add transits of small planets to reach its Tier-2 precision (Tinetti et al., 2018; Edwards et al., 2019), and co-adding visits with different stellar surfaces averages contamination patterns that a single retrieval cannot then remove. Epoch-resolved priors such as those of Table 3 allow each visit to be corrected before the spectra are combined."
+    }
+   ]
+  },
+  {
+   "title": "6.3 Limitations",
+   "level": 2,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Our framework assumes that the transit chord crosses unspotted photosphere; occulted spots would act in the opposite sense, but none are seen in the NGTS-47 b light curves. The spot spectra are one-dimensional PHOENIX models, which may misrepresent molecular absorption in real spots, and the facular contrasts come from simulations at a single field strength. The translation from single-band photometry to covering fractions relies on an empirical facula-to-spot relation whose scatter is folded into the prior widths but may be larger for individual stars. Finally, the injection-recovery grid uses one planet and one host brightness; fainter hosts would make the stellar parameters even less constrained by the transmission spectrum alone."
+    }
+   ]
+  },
+  {
+   "title": "7 Conclusions",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "Unocculted spots on K dwarfs lead atmosphere-only retrievals of JWST NIRISS/SOSS and NIRSpec/G395H spectra of sub-Neptunes to underestimate the metallicity, by up to a factor of five for 10 per cent spot coverage on the coolest K dwarfs. Free stellar parameters recover only about half of the bias and are often not favoured by the evidence, so the absence of a preference for stellar contamination does not certify the atmospheric result. Priors on the covering fractions from contemporaneous ground-based photometry remove almost all of the bias in our tests. Applied to NGTS-47 b with NGTS monitoring at the JWST epochs, this approach yields a strongly preferred spot and facula model, a spot covering fraction of 0.067, and an atmospheric metallicity of 234 times solar with a mean molecular weight of 6.71 amu, which moves the planet above the gas-dwarf boundary."
+    }
+   ]
+  },
+  {
+   "title": "Acknowledgements",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "This work is based on data obtained with the Next Generation Transit Survey (NGTS) at ESO's Paranal Observatory, operated by a consortium of institutes with support from the UK Science and Technology Facilities Council (STFC) under projects ST/M001962/1, ST/S002642/1 and ST/W003163/1. It uses archival observations made with the NASA/ESA/CSA James Webb Space Telescope, obtained from MAST at the Space Telescope Science Institute, associated with program DD 9874; we thank the program team for making the data public without a proprietary period. E.G. is supported by an STFC studentship, and O.C. by a Leverhulme Trust Early Career Fellowship. Computing was performed on the Avon HPC cluster at the University of Warwick."
+    }
+   ]
+  },
+  {
+   "title": "Data availability",
+   "level": 1,
+   "blocks": [
+    {
+     "kind": "p",
+     "text": "The NGTS light curves of NGTS-47 and the injection-recovery products are available on Zenodo (doi:10.5281/zenodo.17220486). The JWST data are available from MAST. Retrieval configuration files are available at https://github.com/egarside/kdwarf-tlse."
+    }
+   ]
+  }
+ ],
+ "bib": [
+  {
+   "key": "ahrer25",
+   "tag": "Ahrer et al. (2025)",
+   "text": "E.-M. Ahrer, M. Radica, C. Piaulet-Ghorayeb, et al. (2025). Escaping Helium and a Highly Muted Spectrum Suggest a Metal-enriched Atmosphere on Sub-Neptune GJ 3090 b from JWST Transit Spectroscopy. ApJL 985, L10."
+  },
+  {
+   "key": "asplund09",
+   "tag": "Asplund et al. (2009)",
+   "text": "M. Asplund, N. Grevesse, A. J. Sauval, and P. Scott (2009). The Chemical Composition of the Sun. ARA&A 47, 481."
+  },
+  {
+   "key": "batalha17",
+   "tag": "Batalha et al. (2017)",
+   "text": "N. E. Batalha, A. Mandell, K. Pontoppidan, et al. (2017). PandExo: A Community Tool for Transiting Exoplanet Science with JWST & HST. PASP 129, 064501."
+  },
+  {
+   "key": "bell22",
+   "tag": "Bell et al. (2022)",
+   "text": "T. J. Bell, E. Ahrer, J. Brande, A. L. Carter, A. D. Feinstein, et al. (2022). Eureka!: An End-to-End Pipeline for JWST Time-Series Observations. Journal of Open Source Software 7, 4503."
+  },
+  {
+   "key": "benneke24",
+   "tag": "Benneke et al. (2024)",
+   "text": "B. Benneke, M. Roy, L.-P. Coulombe, et al. (2024). JWST Reveals the Atmosphere of a Sub-Neptune with a Miscible-Envelope: TOI-270 d. arXiv e-prints."
+  },
+  {
+   "key": "brande24",
+   "tag": "Brande et al. (2024)",
+   "text": "J. Brande, I. J. M. Crossfield, L. Kreidberg, et al. (2024). Clouds and Clarity: Revisiting Atmospheric Feature Trends in Neptune-size Exoplanets. ApJL 961, L23."
+  },
+  {
+   "key": "bryant20",
+   "tag": "Bryant et al. (2020)",
+   "text": "E. M. Bryant, D. Bayliss, J. McCormac, et al. (2020). Simultaneous TESS and NGTS transit observations of WASP-166 b. MNRAS 499, 3139."
+  },
+  {
+   "key": "buchner14",
+   "tag": "Buchner et al. (2014)",
+   "text": "J. Buchner, A. Georgakakis, K. Nandra, et al. (2014). X-ray spectral modelling of the AGN obscuring region in the CDFS: Bayesian model selection and catalogue. A&A 564, A125."
+  },
+  {
+   "key": "dethier26",
+   "tag": "Dethier et al. (2026)",
+   "text": "W. Dethier, E. Cristo, O. Demangeon, J. P. Lucero, N. C. Santos, and B. Tessore (2026). Effect of stellar spot-only spectral lines in high-resolution transit spectroscopy. arXiv e-prints."
+  },
+  {
+   "key": "edwards19",
+   "tag": "Edwards et al. (2019)",
+   "text": "B. Edwards, L. Mugnai, G. Tinetti, E. Pascale, and S. Sarkar (2019). An Updated Study of Potential Targets for Ariel. AJ 157, 242."
+  },
+  {
+   "key": "feroz09",
+   "tag": "Feroz et al. (2009)",
+   "text": "F. Feroz, M. P. Hobson, and M. Bridges (2009). MULTINEST: an efficient and robust Bayesian inference tool for cosmology and particle physics. MNRAS 398, 1601."
+  },
+  {
+   "key": "fm17",
+   "tag": "Foreman-Mackey et al. (2017)",
+   "text": "D. Foreman-Mackey, E. Agol, S. Ambikasaran, and R. Angus (2017). Fast and Scalable Gaussian Process Modeling with Applications to Astronomical Time Series. AJ 154, 220."
+  },
+  {
+   "key": "fournier24",
+   "tag": "Fournier-Tondreau et al. (2024)",
+   "text": "M. Fournier-Tondreau, R. J. MacDonald, M. Radica, et al. (2024). Near-infrared transmission spectroscopy of HAT-P-18 b with NIRISS: disentangling planetary and stellar features in the era of JWST. MNRAS 528, 3354."
+  },
+  {
+   "key": "gill20",
+   "tag": "Gill et al. (2020)",
+   "text": "S. Gill, P. J. Wheatley, B. F. Cooke, et al. (2020). NGTS and HARPS characterization of a long-period planet initially identified as a TESS single transit. ApJL 898, L11."
+  },
+  {
+   "key": "gressier26",
+   "tag": "Gressier et al. (2026)",
+   "text": "A. Gressier, C. Cadieux, R. Doyon, L.-P. Coulombe, R. Allart, E. Artigau, et al. (2026). No Persistent Helium Absorption in LHS 1140 b: Four JWST/NIRISS SOSS Transits and Multi-epoch Stellar He I Variability. arXiv e-prints."
+  },
+  {
+   "key": "husser13",
+   "tag": "Husser et al. (2013)",
+   "text": "T.-O. Husser, S. Wende-von Berg, S. Dreizler, D. Homeier, A. Reiners, T. Barman, and P. H. Hauschildt (2013). A new extensive library of PHOENIX stellar atmospheres and synthetic spectra. A&A 553, A6."
+  },
+  {
+   "key": "kempton23",
+   "tag": "Kempton et al. (2023)",
+   "text": "E. M.-R. Kempton, M. Zhang, J. L. Bean, et al. (2023). A reflective, metal-rich atmosphere for GJ 1214b from its JWST phase curve. Nature 620, 67."
+  },
+  {
+   "key": "kempton18",
+   "tag": "Kempton et al. (2018)",
+   "text": "E. M.-R. Kempton, J. L. Bean, D. R. Louie, et al. (2018). A Framework for Prioritizing the TESS Planetary Candidates Most Amenable to Atmospheric Characterization. PASP 130, 114401."
+  },
+  {
+   "key": "ko26",
+   "tag": "Ko et al. (2026)",
+   "text": "Z. Ko, N. Espinoza, A. Jordán, D. Bayliss, E. M. Bryant, M. Schlecker, et al. (2026). JWST Transmission Spectroscopy of TOI-3235 b: Challenges in Constraining Giant Planet Atmospheres Around M Dwarfs Amid Stellar Contamination. arXiv e-prints."
+  },
+  {
+   "key": "kreidberg15",
+   "tag": "Kreidberg (2015)",
+   "text": "L. Kreidberg (2015). batman: BAsic Transit Model cAlculatioN in Python. PASP 127, 1161."
+  },
+  {
+   "key": "lim23",
+   "tag": "Lim et al. (2023)",
+   "text": "O. Lim, B. Benneke, R. Doyon, et al. (2023). Atmospheric Reconnaissance of TRAPPIST-1 b with JWST/NIRISS: Evidence for Strong Stellar Contamination in the Transmission Spectra. ApJL 955, L22."
+  },
+  {
+   "key": "lim26",
+   "tag": "Lim et al. (2026)",
+   "text": "O. Lim, R. Doyon, R. J. MacDonald, É. Artigau, M. Radica, M. Plotnykov, et al. (2026). Atmospheric Reconnaissance of TRAPPIST-1 f with JWST NIRISS SOSS: No Evidence for the Transit Light Source Effect. arXiv e-prints."
+  },
+  {
+   "key": "iyer20",
+   "tag": "Iyer & Line (2020)",
+   "text": "A. R. Iyer and M. R. Line (2020). The Influence of Stellar Contamination on the Interpretation of Near-infrared Transmission Spectra of Sub-Neptune Worlds around M-dwarfs. ApJ 889, 78."
+  },
+  {
+   "key": "macdonald23",
+   "tag": "MacDonald (2023)",
+   "text": "R. J. MacDonald (2023). POSEIDON: A Multidimensional Atmospheric Retrieval Code for Exoplanet Spectra. Journal of Open Source Software 8, 4873."
+  },
+  {
+   "key": "madhu23",
+   "tag": "Madhusudhan et al. (2023)",
+   "text": "N. Madhusudhan, S. Sarkar, S. Constantinou, M. Holmberg, A. A. A. Piette, and J. I. Moses (2023). Carbon-bearing Molecules in a Possible Hycean Atmosphere. ApJL 956, L13."
+  },
+  {
+   "key": "marcum26",
+   "tag": "Marcum et al. (2026)",
+   "text": "S. P. Marcum, L. Stixrude, and E. D. Young (2026). An Equation of State for Supercritical Silicate-Hydrogen Mixtures at Sub-Neptune Interior Conditions. arXiv e-prints."
+  },
+  {
+   "key": "misener26",
+   "tag": "Misener et al. (2026)",
+   "text": "W. Misener, P. Gao, N. L. Wallack, M. A. Thompson, and A. Shahar (2026). Magnesium silicate condensation in sub-Neptune envelopes: the fundamental link between chemistry, structure, and observables. arXiv e-prints."
+  },
+  {
+   "key": "molliere19",
+   "tag": "Mollière et al. (2019)",
+   "text": "P. Mollière, J. P. Wardenier, R. van Boekel, Th. Henning, K. Molaverdikhani, and I. A. G. Snellen (2019). petitRADTRANS: a Python radiative transfer package for exoplanet characterization and retrieval. A&A 627, A67."
+  },
+  {
+   "key": "moran23",
+   "tag": "Moran et al. (2023)",
+   "text": "S. E. Moran, K. B. Stevenson, D. K. Sing, et al. (2023). High Tide or Riptide on the Cosmic Shoreline? A Water-rich Atmosphere or Stellar Contamination for the Warm Super-Earth GJ 486b from JWST Observations. ApJL 948, L11."
+  },
+  {
+   "key": "nicholls26",
+   "tag": "Nicholls et al. (2026)",
+   "text": "H. Nicholls, T. Lichtenberg, B. Riegler, R. Calder, and V. Fortuin (2026). Constraining the lives and times of exoplanets through evolutionary Bayesian retrievals. arXiv e-prints."
+  },
+  {
+   "key": "norris23",
+   "tag": "Norris et al. (2023)",
+   "text": "C. M. Norris, Y. C. Unruh, V. Witzke, et al. (2023). Spectral variability of photospheric radiation due to faculae. II. Facular contrasts for cool main-sequence stars. MNRAS 524, 1139."
+  },
+  {
+   "key": "ohno25",
+   "tag": "Ohno et al. (2025)",
+   "text": "K. Ohno, E. Schlawin, T. Bell, et al. (2025). A Possible Metal-Dominated Atmosphere Below the Thick Aerosols of GJ 1214 b Suggested by Its JWST Panchromatic Transmission Spectrum. ApJL 979, L7."
+  },
+  {
+   "key": "luque22",
+   "tag": "Luque & Pallé (2022)",
+   "text": "R. Luque and E. Pallé (2022). Density, not radius, separates rocky and water-rich small planets orbiting M dwarf stars. Science 377, 1211."
+  },
+  {
+   "key": "piaulet24",
+   "tag": "Piaulet-Ghorayeb et al. (2024)",
+   "text": "C. Piaulet-Ghorayeb, B. Benneke, M. Radica, et al. (2024). JWST/NIRISS Reveals the Water-rich \"Steam World\" Atmosphere of GJ 9827 d. ApJL 974, L10."
+  },
+  {
+   "key": "pinhas18",
+   "tag": "Pinhas et al. (2018)",
+   "text": "A. Pinhas, B. V. Rackham, N. Madhusudhan, and D. Apai (2018). Retrieval of planetary and stellar properties in transmission spectroscopy with AURA. MNRAS 480, 5314."
+  },
+  {
+   "key": "pont13",
+   "tag": "Pont et al. (2013)",
+   "text": "F. Pont, D. K. Sing, N. P. Gibson, S. Aigrain, G. Henry, and N. Husnoo (2013). The prevalence of dust on the exoplanet HD 189733b from Hubble and Spitzer observations. MNRAS 432, 2917."
+  },
+  {
+   "key": "rackham18",
+   "tag": "Rackham et al. (2018)",
+   "text": "B. V. Rackham, D. Apai, and M. S. Giampapa (2018). The Transit Light Source Effect: False Spectral Features and Incorrect Densities for M-dwarf Transiting Planets. ApJ 853, 122."
+  },
+  {
+   "key": "rackham19",
+   "tag": "Rackham et al. (2019)",
+   "text": "B. V. Rackham, D. Apai, and M. S. Giampapa (2019). The Transit Light Source Effect. II. The Impact of Stellar Heterogeneity on Transmission Spectra of Planets Orbiting Broadly Sun-like Stars. AJ 157, 96."
+  },
+  {
+   "key": "rackham23",
+   "tag": "Rackham et al. (2023)",
+   "text": "B. V. Rackham, N. Espinoza, S. V. Berdyugina, et al. (2023). The effect of stellar contamination on space-based transmission spectroscopy. RAS Techniques and Instruments 2, 148."
+  },
+  {
+   "key": "rosenthal26",
+   "tag": "Rosenthal et al. (2026)",
+   "text": "H. Rosenthal, L. Kaltenegger, R. J. MacDonald, R. Payne, and E. Mullens (2026). Veiled in Starlight: Impacts of Stellar Contamination on Retrievals of TRAPPIST-1f's Atmospheric Composition. arXiv e-prints."
+  },
+  {
+   "key": "schlawin24",
+   "tag": "Schlawin et al. (2024)",
+   "text": "E. Schlawin, K. Ohno, T. J. Bell, et al. (2024). Possible Carbon Dioxide above the Thick Aerosols of GJ 1214 b. ApJL 974, L33."
+  },
+  {
+   "key": "sing26",
+   "tag": "Sing et al. (2026)",
+   "text": "D. K. Sing, J. D. Lothringer, J. A. Valenti, N. H. Allen, K. A. Bennett, C. Gascón, et al. (2026). A JWST transiting survey of FGK stellar limb darkening: empirical evidence for quadratic laws and atmospheric model comparisons. arXiv e-prints."
+  },
+  {
+   "key": "tinetti18",
+   "tag": "Tinetti et al. (2018)",
+   "text": "G. Tinetti, P. Drossart, P. Eccleston, et al. (2018). A chemical survey of exoplanets with ARIEL. Experimental Astronomy 46, 135."
+  },
+  {
+   "key": "vachon26",
+   "tag": "Vachon et al. (2026)",
+   "text": "A. Vachon, R. Gingras, N. Pouliot, M. Lapointe, F. Thériault, and O. Paquette (2026). A moderately metal-enriched envelope on the temperate sub-Neptune TOI-8264 b from JWST NIRISS/SOSS and NIRSpec/G395H transmission spectroscopy. arXiv e-prints."
+  },
+  {
+   "key": "grant24",
+   "tag": "Grant & Wakeford (2024)",
+   "text": "D. Grant and H. R. Wakeford (2024). ExoTiC-LD: thirty seconds to stellar limb-darkening coefficients. Journal of Open Source Software 9, 6816."
+  },
+  {
+   "key": "wheatley18",
+   "tag": "Wheatley et al. (2018)",
+   "text": "P. J. Wheatley, R. G. West, M. R. Goad, et al. (2018). The Next Generation Transit Survey (NGTS). MNRAS 475, 4476."
+  },
+  {
+   "key": "witzke21",
+   "tag": "Witzke et al. (2021)",
+   "text": "V. Witzke, H. B. Duehnen, A. I. Shapiro, et al. (2021). MPS-ATLAS library of stellar model atmospheres and spectra. A&A 653, A65."
+  },
+  {
+   "key": "young26",
+   "tag": "Young (2026)",
+   "text": "E. D. Young (2026). Hydrogen Engulfment into Sub-Neptune Cores through Magma Ocean Convective Surface Renewal. arXiv e-prints."
+  }
+ ],
+ "bib_style": "authoryear"
+}

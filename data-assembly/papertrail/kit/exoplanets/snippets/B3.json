@@ -1,0 +1,27 @@
+{
+ "node": "B3",
+ "kind": "patch",
+ "host": "2609.10850",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p2.1",
+   "after": 2,
+   "text": "Tentative evidence for a shrinking period has also been reported recently for TOI-8317 b (Fuenzalida et al., 2026)."
+  },
+  {
+   "op": "insert_sentences",
+   "block": "S5.SS3.p3.1",
+   "after": 3,
+   "text": "A smaller rate, $|\\dot{P}|=11.7\\pm 2.9\\,\\mathrm{ms/yr}$, has recently been reported for TOI-8317 b at $P=1.06$ d (Fuenzalida et al., 2026); we do not show it in Figure 5 because it has not yet been confirmed independently, but we return to it below."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.B3",
+   "cites_node": "B1",
+   "tag": "Fuenzalida et al. (2026)",
+   "text": "Fuenzalida T., Riquelme C., Arancibia I., Henríquez V., Toledo B., Contreras J., 2026, AJ, submitted."
+  }
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "node": "A9",
+ "kind": "patch",
+ "host": "2609.35676",
+ "ops": [
+  {
+   "op": "insert_sentences",
+   "block": "S1.p9.1",
+   "after": 3,
+   "text": "For smaller planets, where the atmospheric signal is weaker, injection-recovery tests indicate that neglecting unocculted heterogeneity on K-dwarf hosts can bias the retrieved metallicity substantially, and that priors on the coverage fractions from contemporaneous photometry remove much of this bias (Garside et al., 2026)."
+  }
+ ],
+ "new_bib": [
+  {
+   "key": "new.A2",
+   "cites_node": "A2",
+   "tag": "Garside et al. (2026)",
+   "text": "E. Garside, T. Brierley, L. Pemberton, O. Corcoran, and M. Dyson (2026). Unocculted spots and faculae bias the metallicities of small planets around K dwarfs: injection-recovery tests and monitoring-informed retrievals. arXiv e-prints."
+  }
+ ]
+}
