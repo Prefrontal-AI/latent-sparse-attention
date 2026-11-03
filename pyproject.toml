@@ -109,6 +109,11 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cu129" }
 
+# causal-conv1d builds against torch, and its isolated build would otherwise pull the newest torch from PyPI
+# => build it against the locked cu129 torch, so the CUDA it checks nvcc against is the one the env runs
+[tool.uv.extra-build-dependencies]
+causal-conv1d = [{ requirement = "torch", match-runtime = true }]
+
 [dependency-groups]
 dev = [
     "autotyping>=24.9.0",

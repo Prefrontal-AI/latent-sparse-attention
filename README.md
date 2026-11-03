@@ -52,14 +52,13 @@ uv run lsa --help
 
 For evaluation alone, use `uv sync --locked --extra evaluation`.
 
-The `training` extra builds `causal-conv1d` from source, which needs `nvcc` on `PATH`.
-Without `nvcc`, or when the sync stops with `RuntimeError: The detected CUDA version (12.9) mismatches the version that was used to compile PyTorch (13.2)`, skip it:
+The `training` extra builds `causal-conv1d` from source against the locked torch (CUDA 12.9), which needs a 12.x `nvcc` on `PATH`.
+Without one, skip it:
 
 ```bash
 uv sync --locked --extra evaluation --extra training --no-install-package causal-conv1d
 ```
 
-The mismatch comes from uv's isolated build environment, which installs a newer torch than the locked 2.13.0 and so a newer CUDA than your `nvcc`.
 Only GLM-5.3-Flash's delta-attention layers use the package, and without it `transformers` runs a slower PyTorch kernel for them.
 
 A failed sync does not fail loudly later.
