@@ -432,6 +432,7 @@ def test_the_container_mounts_the_root_the_checkout_and_the_sites_mounts(tmp_pat
     monkeypatch.setenv("USER", "ada")
     monkeypatch.delenv(paths.ROOT_VARIABLE, raising=False)
     monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "no_hub"))
     checkout = str(checkout_root())
     assert mount_list() == [f"{users}:{users}", f"{root}:{root}", f"{checkout}:{checkout}"]
 
@@ -448,5 +449,45 @@ def test_a_site_without_mounts_mounts_only_the_root_and_the_checkout(tmp_path, m
     monkeypatch.setattr(site, "_selected", None)
     monkeypatch.delenv(paths.ROOT_VARIABLE, raising=False)
     monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "no_hub"))
     checkout = str(checkout_root())
     assert mount_list() == [f"{root}:{root}", f"{checkout}:{checkout}"]
+
+
+def test_the_container_mounts_the_sites_hub_cache_at_its_own_path(tmp_path, monkeypatch):
+    from lsa import paths, site
+    from lsa.sglang.launch import checkout_root, mount_list
+
+    root = tmp_path / "root"
+    root.mkdir()
+    hub = tmp_path / "hub_cache"
+    hub.mkdir()
+    (tmp_path / "here.yaml").write_text(f"root: {root}\nhf_home: {hub}\nmounts: []\n")
+    monkeypatch.setattr(site, "SITES", tmp_path)
+    monkeypatch.setattr(site, "DEFAULT_SITE", "here")
+    monkeypatch.setattr(site, "_selected", None)
+    monkeypatch.delenv(paths.ROOT_VARIABLE, raising=False)
+    monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    checkout = str(checkout_root())
+    assert mount_list() == [f"{hub}:{hub}", f"{root}:{root}", f"{checkout}:{checkout}"]
+
+
+def test_the_hub_cache_is_mounted_once_where_the_environment_names_it(tmp_path, monkeypatch):
+    from lsa import paths, site
+    from lsa.sglang.launch import checkout_root, mount_list
+
+    root = tmp_path / "root"
+    root.mkdir()
+    hub = tmp_path / "env_hub"
+    hub.mkdir()
+    (tmp_path / "here.yaml").write_text(f"root: {root}\nhf_home: {tmp_path}/site_hub\nmounts:\n  - {hub}\n")
+    monkeypatch.setattr(site, "SITES", tmp_path)
+    monkeypatch.setattr(site, "DEFAULT_SITE", "here")
+    monkeypatch.setattr(site, "_selected", None)
+    monkeypatch.delenv(paths.ROOT_VARIABLE, raising=False)
+    monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    # HF_HOME beats the site's cache, and a site that also lists it does not mount it twice
+    monkeypatch.setenv("HF_HOME", str(hub))
+    checkout = str(checkout_root())
+    assert mount_list() == [f"{hub}:{hub}", f"{root}:{root}", f"{checkout}:{checkout}"]

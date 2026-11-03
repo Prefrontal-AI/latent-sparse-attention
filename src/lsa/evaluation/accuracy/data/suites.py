@@ -221,6 +221,27 @@ def smoke() -> list[Plan]:
 
 SUITES = {"ruler": ruler, "full": full, "papertrail": papertrail, "smoke": smoke}
 
+# A name `data.tasks` takes for a group of tasks, so a run need not spell each one
+# => `ruler` is every RULER task at every length, which `data.lengths` narrows
+TASK_GROUPS = {"ruler": lambda: [plan.task for plan in ruler_plans()]}
+
+
+def expand_groups(tasks: list[str]) -> list[str]:
+    """Return a task list with each group name replaced by the tasks it stands for.
+
+    Args:
+        tasks: Task names, plan keys and group names from `TASK_GROUPS`.
+
+    Returns:
+        The same list with every group spelled out, in order and without repeats.
+    """
+    spelled: list[str] = []
+    for name in tasks:
+        for task in TASK_GROUPS[name]() if name in TASK_GROUPS else [name]:
+            if task not in spelled:
+                spelled.append(task)
+    return spelled
+
 
 def select(suite_name: str, only: list[str] | None = None, lengths: list[int] | None = None) -> list[Plan]:
     """Return the plans of a suite a run asks for - only the named tasks, and only the named lengths.

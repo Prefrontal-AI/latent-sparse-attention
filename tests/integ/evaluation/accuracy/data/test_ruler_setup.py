@@ -268,3 +268,38 @@ def test_install_fetches_the_essays_and_never_scrapes_them(tmp_path, monkeypatch
     ruler.install(str(tmp_path / "checkout"))
     assert fetched["PaulGrahamEssays.json"] == (RELEASE + "PaulGrahamEssays.json",)
     assert not any("download_paulgraham_essay.py" in part for command in commands for part in command)
+
+
+def prepare_submission(monkeypatch, *flags):
+    fetched = []
+    submitted = []
+    monkeypatch.setattr(ruler, "ensure", lambda: fetched.append("fetched"))
+    monkeypatch.setattr("lsa.slurm.submit", lambda *call: submitted.append(call))
+    cli.main(["data", "prepare", "ruler", "--tasks", "vt", "--lengths", "4096", *flags])
+    return fetched, submitted
+
+
+def test_the_prerequisites_are_fetched_where_the_command_is_typed_by_default(monkeypatch):
+    fetched, submitted = prepare_submission(monkeypatch)
+    assert fetched == ["fetched"]
+    assert submitted[0][-1] is False
+
+
+def test_fetch_in_job_leaves_the_submitting_host_alone(monkeypatch):
+    fetched, submitted = prepare_submission(monkeypatch, "--fetch-in-job")
+    assert fetched == []
+    assert submitted[0][-1] is True
+
+
+def test_the_job_fetches_first_when_asked(monkeypatch, tmp_path):
+    order = []
+    monkeypatch.setattr(ruler, "ensure", lambda: order.append("ensure"))
+    monkeypatch.setattr(ruler, "load_manifest", lambda root: order.append("manifest") or {})
+    ruler.prepare_ruler([], [], 1, str(tmp_path), "tok", fetch_first=True)
+    assert order[0] == "ensure"
+
+
+def test_the_default_job_asks_for_the_full_grid_s_resources():
+    assert ruler.PARAMETERS["cpus_per_task"] == 64
+    assert ruler.PARAMETERS["mem_gb"] == 512
+    assert ruler.PARAMETERS["timeout_min"] == 12 * 60

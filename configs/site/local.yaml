@@ -15,7 +15,8 @@ root: ./runs
 datasets: ./datasets
 
 # No `hf_home`, so Hugging Face's own default applies, and `HF_HOME` still overrides it
-# Directories the serving container mounts besides the root and the checkout
+# The serving container mounts the hub cache itself, so it is not listed under `mounts`
+# Directories the serving container mounts besides the root, the checkout and the hub cache
 mounts: []
 
 images:

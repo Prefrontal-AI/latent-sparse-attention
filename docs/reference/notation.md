@@ -332,7 +332,7 @@ The values that belong to one machine rather than to a run, kept in one file per
 | site images - the server containers, by name | `images` | `site.images.<name>` | a squashfs path or a docker tag, one per name |
 | site datasets - where read-only datasets that are not ours sit | `datasets` | `site.datasets` | an absolute path; a card names a folder in it as `${datasets:<folder>}` |
 | site hub cache - the Hugging Face home | `hf_home` | `site.hf_home` | a path, `$USER` allowed; `HF_HOME` overrides it, and a site that omits it leaves Hugging Face's own default |
-| site mounts - what the serving container mounts besides the root and the checkout | `mounts` | `site.mounts` | a list of paths, `$USER` allowed, each mounted at its own path; empty for none |
+| site mounts - what the serving container mounts besides the root, the checkout and the hub cache | `mounts` | `site.mounts` | a list of paths, `$USER` allowed, each mounted at its own path; empty for none |
 
 A config names an image as `${site.images.h200}` and a path under the root as `${root:models/maps/map.pt}`, and `site=local` on the command line picks another site for that run.
 The root is `LSA_ROOT` when it is set and the site's `root` otherwise, and a command that takes no config reads the default site, or the one `--site` selects.

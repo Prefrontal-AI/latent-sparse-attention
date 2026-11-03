@@ -35,7 +35,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from lsa import io, paths, site
+from lsa import env, io, paths, site
 from lsa.sglang.constants import Banner, Plugin, Server
 
 
@@ -244,8 +244,13 @@ def mount_list() -> list[str]:
     """Return what the container needs to see.
 
     The project root carries the checkpoints, the teacher trees and the prompt corpus, the checkout carries
-    the plugin, and the site's `mounts` carry what else its machine keeps weights in - a user's own cache
-    root, say. Nothing else is mounted - no other user's tree.
+    the plugin, the hub cache carries the snapshots a model card names, and the site's `mounts` carry what
+    else its machine keeps weights in - a user's own cache root, say. Nothing else is mounted - no other user's tree.
+
+    The hub cache is the one `env.hf_home` returns, so `HF_HOME`, the site's `hf_home` and the hub's own default
+    are mounted by the same precedence the checkpoint's path was built with. It goes in at its own path, because a
+    model card's snapshot is named by that host path and the server opens it as given - a cache left unmounted
+    makes the server fail on a path it cannot open. A cache that is not a directory on this host is skipped.
 
     Both are needed rather than one. A served checkpoint lives under the project root and may
     symlink its weight blobs into the user's `HF_HOME`, so mounting either alone leaves a dangling link.
@@ -259,8 +264,8 @@ def mount_list() -> list[str]:
     root = str(checkout_root())
     mounts = [f"{root}:{root}"]
     declared = [os.path.expandvars(mount) for mount in site.load().get("mounts") or []]
-    for shared in (str(paths.root()), *declared):
-        if Path(shared).is_dir():
+    for shared in (str(paths.root()), str(env.hf_home()), *declared):
+        if Path(shared).is_dir() and f"{shared}:{shared}" not in mounts:
             mounts.insert(0, f"{shared}:{shared}")
     # A checkpoint that lives in neither root - another user's hub cache, say - is named by the operator,
     # each directory mounted at its own path, so its snapshot's links into `blobs/` still resolve

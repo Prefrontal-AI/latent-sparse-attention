@@ -37,6 +37,7 @@ Writes are atomic, because a rerun may overwrite `meta.json` while something els
 import argparse
 import copy
 import os
+import shlex
 import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
@@ -130,6 +131,10 @@ def require_output(experiment: "Experiment") -> None:
             f"{experiment.name}: the config names no records root - set run.output, which each tree's base "
             "names as `results` or `${root:evaluation}`"
         )
+
+
+# Task names a dry run lists before it counts the rest
+DRY_RUN_TASKS: int = 40
 
 
 @dataclass(frozen=True)
@@ -439,6 +444,44 @@ def describe(experiment: "Experiment") -> str:
     if isinstance(experiment, ProductionConfig):
         return f"{head}, production, lengths {experiment.data.lengths}"
     return f"{head}, suite {experiment.data.suite}"
+
+
+def resolved_lines(experiment: "Experiment", parameters: Mapping[str, Any]) -> list[str]:
+    """Return what a dry run prints under an evaluation's one-line summary - what it would run, serve and ask for.
+
+    Args:
+        experiment: The evaluation, as loaded.
+        parameters: What its job asks slurm for, the command line's flags already laid over.
+
+    Returns:
+        One indented line each for the tasks and lengths of a scored run, the server's command as the container
+        runs it, and the job's resources.
+
+    Raises:
+        NotNamed: The site names no image for a run that serves.
+    """
+    from lsa.evaluation.accuracy.data import suites
+    from lsa.evaluation.config import AccuracyConfig, KernelsConfig
+    from lsa.sglang.launch import container_command, launch_line, with_settings
+
+    lines: list[str] = []
+    if isinstance(experiment, AccuracyConfig):
+        data = experiment.data
+        plans = suites.select(data.suite, data.tasks or None, data.lengths or None)
+        shown = ", ".join(plan.task for plan in plans[:DRY_RUN_TASKS])
+        more = f", and {len(plans) - DRY_RUN_TASKS} more" if len(plans) > DRY_RUN_TASKS else ""
+        lines.append(f"  tasks ({len(plans)}): {shown}{more}")
+        lengths = sorted({plan.length for plan in plans if plan.length})
+        if lengths:
+            lines.append(f"  lengths: {lengths}")
+    if not isinstance(experiment, KernelsConfig):
+        server = experiment.server()
+        if experiment.model.settings is not None:
+            server = replace(server, serve_args=with_settings(server.serve_args, experiment.model.settings))
+        argv = container_command(server, launch_line(server, experiment.model.checkpoint))
+        lines.append(f"  server: {shlex.join(argv)}")
+    lines.append("  resources: " + ", ".join(f"{key} {value}" for key, value in parameters.items()))
+    return lines
 
 
 def gpu_count(experiments: list["Experiment"]) -> int:
@@ -755,13 +798,14 @@ def main(kind: str) -> None:
         raise SystemExit(
             "--force scores every sample again, which a pooled run never does - give the rerun a run id of its own"
         )
+    parameters = {**job_parameters(experiments, args.gpus), **slurm.overrides(args)}
     if args.dry_run:
         for experiment, is_pooled in zip(experiments, pooled, strict=False):
+            print("\n".join(resolved_lines(experiment, parameters)), flush=True)
             if is_pooled:
                 print(f"{experiment.name}: would submit {args.workers} workers onto one run", flush=True)
         return
 
-    parameters = {**job_parameters(experiments, args.gpus), **slurm.overrides(args)}
     if not any(pooled):
         submit(experiments, parameters, args.folder, args.force)
         return

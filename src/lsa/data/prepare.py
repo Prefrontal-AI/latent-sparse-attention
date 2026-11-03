@@ -8,6 +8,7 @@
     lsa data prepare papertrail                          # a benchmark copied from its own repository
     lsa data prepare production                          # the workload a production run sends
     lsa data prepare ruler --check                       # read RULER's prepared cells, submit nothing
+    lsa data prepare ruler --fetch-in-job                # clone its generators in the job, where compute nodes have egress
     lsa data prepare ruler --help                        # what that card's generator takes
 
 A source with a `collector` is collected from the hub by [collect](collect.py), the one preparer whose job reads

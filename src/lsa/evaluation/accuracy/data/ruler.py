@@ -18,7 +18,9 @@ The grid is CPU work - a cell is one generator process, which counts a prompt's 
 share of the node's cores (ruler.patch) - so
 `lsa data prepare ruler` sends it to slurm as one job on one node's CPUs and no GPU, with the options
 `add_options` declares. Preparation first verifies or installs the pinned generators and haystacks where
-the command is typed, since a compute node has no egress. A dry run only prints the submission, and `--check` only reads.
+the command is typed, since a compute node may have no egress - a clone and a download, a few minutes on a shared host.
+`--fetch-in-job` moves that into the submitted job, for a site whose compute nodes can reach the network.
+A dry run only prints the submission, and `--check` only reads.
 """
 
 import argparse
@@ -42,7 +44,9 @@ from lsa.data import manifests
 from lsa.data.tokenizer import tokenizer_repo
 from lsa.evaluation.accuracy.data import DATA_ROOT, load_manifest, ruler_card, ruler_path
 
-# What the generating job asks for - 64 CPUs and 512G of one node for twelve hours, and no GPU
+# What the generating job asks for when no flag says otherwise - 64 CPUs and 512G of one node for twelve hours, and no GPU
+# The full grid to 10M is what this is sized for, and a short one asks for less: 16 CPUs, 64 GB and 2 hours generated
+# the 26 cells of 4,096 and 32,768 in about 32 minutes
 PARAMETERS: dict[str, Any] = {
     "gpus_per_node": 0,
     "tasks_per_node": 1,
@@ -338,6 +342,7 @@ def prepare_ruler(
     tokenizer_name: str | None = None,
     force: bool = False,
     jobs: int = 1,
+    fetch_first: bool = False,
 ) -> None:
     """Generate every (task, length) cell that the manifest does not already hold at its row count.
 
@@ -349,7 +354,11 @@ def prepare_ruler(
         samples: Rows per cell - one count for every length, or one count per length.
         tokenizer_name: The tokenizer to count in, or None for the one the corpus names.
         jobs: Cells generated at once.
+        fetch_first: Verify or install the pinned generators and sources first, as `ensure` does - for a job that
+            runs where the command was not typed.
     """
+    if fetch_first:
+        ensure()
     tokenizer_name = tokenizer_name or tokenizer_repo(ruler_card())
     manifest = load_manifest(root)
     cells = []
@@ -620,6 +629,12 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true", help="regenerate cells the manifest holds")
     parser.add_argument("--jobs", type=int, default=1, help="cells generated at once")
     parser.add_argument(
+        "--fetch-in-job",
+        action="store_true",
+        help="clone the generators and download the sentence tokenizer in the submitted job rather than here - "
+        "needs compute nodes that can reach the network",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="read the prepared cells and print one line each, submitting nothing",
@@ -646,13 +661,23 @@ def job(card: assets.DatasetCard, args: argparse.Namespace) -> tuple[Callable[..
         args: The parsed command line.
 
     Returns:
-        `prepare_ruler`, and the tasks, lengths, rows per cell, absolute root, tokenizer, force flag and jobs.
+        `prepare_ruler`, and the tasks, lengths, rows per cell, absolute root, tokenizer, force flag, jobs and
+        whether the job fetches the prerequisites itself.
 
     Raises:
         ValueError: The prerequisites the generators need are incomplete, which a submitted job would only meet later.
     """
     samples = args.samples or {length: ruler_card().rows_at(length) for length in args.lengths}
     root = os.path.abspath(args.root)
-    if not args.dry_run:
+    if not (args.dry_run or args.fetch_in_job):
         ensure()
-    return prepare_ruler, (args.tasks, args.lengths, samples, root, args.tokenizer, args.force, args.jobs)
+    return prepare_ruler, (
+        args.tasks,
+        args.lengths,
+        samples,
+        root,
+        args.tokenizer,
+        args.force,
+        args.jobs,
+        args.fetch_in_job,
+    )

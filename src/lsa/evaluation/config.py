@@ -451,6 +451,8 @@ class AccuracyDataConfig:
 
     `suite` is which of `Suite.NAMES` to run. `tasks` takes only those tasks of it and `lengths` only those
     RULER lengths, and either left empty takes all.
+    `tasks` also takes `ruler`, a name for every RULER task, so `data.tasks=[ruler]` with `data.lengths` is the
+    RULER cells of those lengths without a list of names - a config that pins other tasks is replaced by it.
 
     `root` is where the fixed RULER and LongBench files live. Empty leaves the suite its own default, and
     naming it here is what keeps a run off a directory somebody else writes to - the shared one was
@@ -479,6 +481,7 @@ class AccuracyDataConfig:
             raise ValueError(f"data.suite must be one of {Suite.NAMES} - got {self.suite!r}")
         from lsa.evaluation.accuracy.data import suites
 
+        self.tasks = suites.expand_groups(self.tasks)
         try:
             suites.select(self.suite, self.tasks or None, self.lengths or None)
         except KeyError as error:

@@ -67,6 +67,7 @@ A site holds the values that belong to one machine, so no run spells them: the s
 The loader composes the chosen site into every run as `site`, and a config names an image as `${site.images.h200}`, directly or through `_image_b300`, and a path under the root as `${root:models/maps/<map>.pt}`.
 The site also holds the hub cache `hf_home`, the `mounts` the serving container adds and the `datasets` directory a card names as `${datasets:<folder>}`.
 The hub cache is `HF_HOME` when it is set, then the site's `hf_home`, and otherwise Hugging Face's own default.
+The serving container mounts that cache at its own path, so the snapshot a model card names opens inside it, and `mounts` holds only what else a machine keeps weights in.
 A name the site does not hold fails at load, and a name it leaves empty fails when the run is built, saying `run.image` is not named.
 
 ```bash

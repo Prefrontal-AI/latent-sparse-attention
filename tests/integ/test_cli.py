@@ -1,5 +1,6 @@
 """The public command routes arguments intact, prints help and handles dry runs without work."""
 
+import os
 import subprocess
 import sys
 
@@ -122,3 +123,16 @@ run:
     assert "unit" in shown
     assert str(output) in shown
     assert not output.exists()
+
+
+def test_a_relative_path_is_read_from_where_the_command_was_typed(tmp_path, monkeypatch):
+    run = tmp_path / "results" / "accuracy" / "run"
+    run.mkdir(parents=True)
+    (run / "record.json").write_text('{"schema": "not-a-record"}')
+    monkeypatch.chdir(tmp_path)
+    # The record is found, and refused for what it is rather than for being absent
+    with pytest.raises(ValueError, match="not one this publishes"):
+        cli.main(["records", "show", "results/accuracy/run/record.json"])
+    with pytest.raises(ValueError, match="not one this publishes"):
+        cli.main(["records", "show", "results/accuracy/run"])
+    assert os.getcwd() == str(tmp_path)
