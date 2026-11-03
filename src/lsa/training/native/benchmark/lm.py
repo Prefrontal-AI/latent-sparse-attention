@@ -33,14 +33,14 @@ from lm_eval.api.instance import Instance
 from lm_eval.api.model import LM
 from lm_eval.models.utils import handle_stop_sequences
 
+from lsa.training.native.constants import Benchmark
+
 logger = logging.getLogger(__name__)
 
 # The shortest padded length, which is the sparse arms' block
 MIN_PADDED = 512
 # Rows of hidden states projected to the vocabulary at once
 PROJECTION_CHUNK = 2048
-# Tokens one forward holds, a batch being as many rows as fit
-BATCH_TOKENS = 16384
 # What lm-eval's HFLM generates when a task does not say
 DEFAULT_GEN_TOKS = 256
 
@@ -279,7 +279,7 @@ class NativeLM(LM):
         backbone: Backbone,
         tokenizer: Tokenizer,
         max_length: int,
-        batch_tokens: int = BATCH_TOKENS,
+        batch_tokens: int = Benchmark.BATCH_TOKENS,
         max_gen_toks: int | None = None,
         process_group: Any = None,
     ) -> None:

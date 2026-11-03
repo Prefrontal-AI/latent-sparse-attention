@@ -1,7 +1,5 @@
 """RULER's official scoring (scripts/eval/synthetic/constants.py) over lm-eval's answer post-processing."""
 
-from lm_eval.tasks.ruler import common_utils as ruler_common
-
 # The QA tasks carry several gold answers and any one of them counts; every other task needs them all
 ANY_REFERENCE = ("qa_squad", "qa_hotpot")
 
@@ -19,6 +17,9 @@ def string_match_part(pred, refs):
 
 def results_for(task):
     """Return the process_results a RULER task is graded by - its string match over the first reply."""
+    # lm-eval's module reaches transformers and torch, so only a task that is graded loads it
+    from lm_eval.tasks.ruler import common_utils as ruler_common
+
     match = string_match_part if task in ANY_REFERENCE else string_match_all
 
     def process_results(doc, results):

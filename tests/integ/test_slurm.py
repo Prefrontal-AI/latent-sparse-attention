@@ -5,6 +5,8 @@ No scheduler installation or submission is required.
 """
 
 import argparse
+import sys
+from pathlib import Path
 
 import pytest
 import submitit
@@ -43,7 +45,7 @@ def test_the_executor_asks_for_the_parameters_it_is_given():
         "gpus_per_node": 4,
         "cpus_per_task": 32,
         "mem": "600GB",
-        "setup": ["export A=1", "export LSA_SITE=test"],
+        "setup": ["export A=1", f'export PATH={Path(sys.executable).parent}:"$PATH"', "export LSA_SITE=test"],
     }
     assert str(executor.folder) == "/logs"
 
@@ -70,6 +72,16 @@ def test_a_parameter_at_none_is_left_unset():
 def test_the_job_runs_under_the_python_it_is_given():
     executor = slurm.executor("lsa-test", [], "/logs", slurm_python="/snapshot/.venv/bin/python")
     assert executor._executor.python == "/snapshot/.venv/bin/python"
+
+
+def test_the_job_puts_its_pythons_bin_directory_on_path_so_the_venvs_tools_are_found():
+    executor = slurm.executor("lsa-test", [], "/logs", slurm_python="/snapshot/my venv/bin/python")
+    assert sbatch(executor)["setup"][0] == "export PATH='/snapshot/my venv/bin':\"$PATH\""
+
+
+def test_the_job_without_a_python_of_its_own_uses_the_one_that_submitted_it():
+    setup = sbatch(slurm.executor("lsa-test", [], "/logs"))["setup"]
+    assert f'export PATH={Path(sys.executable).parent}:"$PATH"' in setup
 
 
 def test_the_folder_defaults_to_the_log_root_of_lsa_root(monkeypatch, tmp_path):
@@ -179,7 +191,11 @@ def test_the_local_launcher_builds_the_local_executor_and_passes_no_slurm_flag(m
     on_site(monkeypatch, tmp_path, "launcher: local\n")
     executor = slurm.executor("lsa-test", ["export A=1"], str(tmp_path / "logs"), **PARAMETERS)
     assert isinstance(executor._executor, submitit.LocalExecutor)
-    assert executor._executor.parameters["setup"] == ["export A=1", "export LSA_SITE=test"]
+    assert executor._executor.parameters["setup"] == [
+        "export A=1",
+        f'export PATH={Path(sys.executable).parent}:"$PATH"',
+        "export LSA_SITE=test",
+    ]
     assert "partition" not in executor._executor.parameters
 
 
@@ -216,7 +232,7 @@ def test_the_roofline_job_takes_the_open_partition_the_site_names(monkeypatch, t
 def test_a_job_reads_the_site_its_submitter_selected(monkeypatch):
     monkeypatch.delenv(site.SITE_VARIABLE, raising=False)
     executor = slurm.executor("lsa-test", ["export A=1"], "/logs", **PARAMETERS)
-    assert sbatch(executor)["setup"] == ["export A=1", "export LSA_SITE=test"]
+    assert sbatch(executor)["setup"][-1] == "export LSA_SITE=test"
 
 
 def test_a_process_with_no_selected_site_reads_the_one_the_job_exports(monkeypatch):

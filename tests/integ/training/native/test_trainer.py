@@ -1,9 +1,21 @@
+from pathlib import Path
+
+import pytest
 import torch
 
-from lsa.training.native.config import CheckpointConfig, DataConfig, NativeConfig, OptimConfig, RunConfig
+from lsa.training.native.config import (
+    CheckpointConfig,
+    DataConfig,
+    NativeConfig,
+    OptimConfig,
+    RunConfig,
+    load,
+)
 from lsa.training.native.trainer import checkpoint_config, trainer_config
 from tests.helpers.training.data.fake_corpus import write_corpus
 from tests.helpers.training.schedule import reference_factor
+
+CONFIGS = Path(__file__).resolve().parents[4] / "configs/training/native"
 
 
 def test_a_save_is_staged_to_pinned_memory_and_written_in_the_background_by_default():
@@ -105,3 +117,11 @@ def test_trainer_config_preserves_cosine_schedule_and_its_warmup(tmp_path):
         assert optimizer.param_groups[0]["lr"] == expected * 0.001
         optimizer.step()
         schedulers.step()
+
+
+def test_a_scorer_of_released_weights_reads_no_corpus_manifest(monkeypatch, tmp_path):
+    monkeypatch.setenv("LSA_ROOT", str(tmp_path))
+    [experiment] = load(CONFIGS / "qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml")
+    with pytest.raises(FileNotFoundError, match="corpus.json"):
+        trainer_config(experiment)
+    assert trainer_config(experiment, check_corpora=False).model_spec is not None

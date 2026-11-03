@@ -22,9 +22,11 @@ from lsa import env, paths, slurm
 from lsa.config_loader import run_provenance
 from lsa.training import require_extra
 from lsa.training.native.benchmark import records, tasks
-from lsa.training.native.benchmark.lm import BATCH_TOKENS, Backbone, NativeLM, Tokenizer
+from lsa.training.native.constants import Benchmark
 
+# The model module reaches torch and lm-eval, which a dry run on a login node has no business loading
 if TYPE_CHECKING:
+    from lsa.training.native.benchmark.lm import Backbone, NativeLM, Tokenizer
     from lsa.training.native.config import NativeConfig
     from lsa.training.native.evaluation import EvaluationModel
 
@@ -88,7 +90,20 @@ def preset_name(tasks_argument: str) -> str:
     return "+".join(item.strip() for item in tasks_argument.split(","))
 
 
-def titan_backbone(built: "EvaluationModel", parallelism: Any) -> Backbone:
+def context_length(seq_len: int, names: list[str]) -> int:
+    """Return the longest context a run feeds the model by default.
+
+    Args:
+        seq_len: The length the model was trained at.
+        names: The tasks, as `tasks.expand` returns them.
+
+    Returns:
+        The training length, or the longest RULER cell among the tasks when that is longer.
+    """
+    return max([seq_len, *tasks.lengths_of(names)])
+
+
+def titan_backbone(built: "EvaluationModel", parallelism: Any) -> "Backbone":
     """Split a model built for evaluation into the hidden-state forward and the output projection.
 
     The sparse arms read a sequence as the blocks their layers were built with, so each forward sets the length of
@@ -106,6 +121,7 @@ def titan_backbone(built: "EvaluationModel", parallelism: Any) -> Backbone:
     import torch
     from torchtitan.tools import utils
 
+    from lsa.training.native.benchmark.lm import Backbone
     from lsa.training.native.layers import MultiresInnerAttention
 
     model: Any = built.model
@@ -137,7 +153,7 @@ def titan_backbone(built: "EvaluationModel", parallelism: Any) -> Backbone:
     return Backbone(hidden=hidden, project=project, device=torch.device(utils.device_type))
 
 
-def load_backbone(experiment: "NativeConfig", checkpoint: str) -> Backbone:
+def load_backbone(experiment: "NativeConfig", checkpoint: str) -> "Backbone":
     """Build the model a config names with the evaluation's own builder, load a checkpoint's weights and split it.
 
     The config has to name a replica on every rank - `run.dp_shard=1 run.dp_replicate=<ranks>` - because each rank
@@ -153,13 +169,14 @@ def load_backbone(experiment: "NativeConfig", checkpoint: str) -> Backbone:
     from lsa.training.native.evaluation import build_model, load_model_weights
     from lsa.training.native.trainer import trainer_config
 
-    config = trainer_config(experiment)
+    # The weights come from the checkpoint, so the training corpus is not read
+    config = trainer_config(experiment, check_corpora=False)
     built = build_model(config)
     load_model_weights([built.model], checkpoint)
     return titan_backbone(built, config.parallelism)
 
 
-def load_tokenizer(experiment: "NativeConfig") -> Tokenizer:
+def load_tokenizer(experiment: "NativeConfig") -> "Tokenizer":
     """Return the tokenizer the model was trained with, as lm-eval needs it.
 
     Args:
@@ -169,6 +186,8 @@ def load_tokenizer(experiment: "NativeConfig") -> Tokenizer:
         The tokenizer, whose end id is the end-of-text token.
     """
     from transformers import AutoTokenizer
+
+    from lsa.training.native.benchmark.lm import Tokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(experiment.tokenizer_path)
     return Tokenizer(
@@ -212,7 +231,7 @@ def benchmark(
     records_root: str,
     limit: int | None = None,
     max_length: int | None = None,
-    batch_tokens: int = BATCH_TOKENS,
+    batch_tokens: int = Benchmark.BATCH_TOKENS,
     max_gen_toks: int | None = None,
 ) -> Path:
     """Run a checkpoint through tasks and write its records, from every rank of a job.
@@ -239,8 +258,10 @@ def benchmark(
     import torch.distributed as dist
     from lm_eval.tasks import TaskManager
 
+    from lsa.training.native.benchmark.lm import NativeLM
+
     start = time.perf_counter()
-    max_length = max_length or max(experiment.data.seq_len, *tasks.lengths_of(names))
+    max_length = max_length or context_length(experiment.data.seq_len, names)
     backbone = load_backbone(experiment, checkpoint)
     # The builder started NCCL, which a collective of python objects does not run on
     group = (
@@ -295,7 +316,7 @@ def benchmark(
     return folder
 
 
-def gather_seconds(lm: NativeLM) -> dict[str, float]:
+def gather_seconds(lm: "NativeLM") -> dict[str, float]:
     """Return the seconds each request type took, on the slowest rank, since the job waits for it.
 
     Args:
@@ -403,7 +424,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-length", type=int, default=None, help="longest context fed to the model - the training length"
     )
-    parser.add_argument("--batch-tokens", type=int, default=BATCH_TOKENS, help="tokens one forward holds")
+    parser.add_argument(
+        "--batch-tokens", type=int, default=Benchmark.BATCH_TOKENS, help="tokens one forward holds"
+    )
     parser.add_argument("--max-gen-toks", type=int, default=None, help="cap on the tokens any task generates")
     parser.add_argument(
         "overrides", nargs="*", help="dotted key=value assignments to the config, applied last"
@@ -425,7 +448,7 @@ def command(args: argparse.Namespace) -> None:
     ranks = parameters["gpus_per_node"] * parameters["nodes"]
     # A replica on every rank, then the user's own overrides
     [experiment] = load(args.config, ["run.dp_shard=1", f"run.dp_replicate={ranks}", *args.overrides])
-    tasks.expand(args.tasks)
+    names = tasks.expand(args.tasks)
     checkpoint = experiment.scored_checkpoint(args.checkpoint)
     label = args.label or default_label(checkpoint)
     records_root = args.records or str(paths.training() / RECORDS)
@@ -440,5 +463,8 @@ def command(args: argparse.Namespace) -> None:
         flush=True,
     )
     if args.dry_run:
+        print(
+            f"{label}: would submit lsa-native-benchmark of {len(names)} tasks with {parameters}", flush=True
+        )
         return
     submit(experiment, checkpoint, args.tasks, label, records_root, extra, parameters, args.folder)

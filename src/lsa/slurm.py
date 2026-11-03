@@ -35,7 +35,9 @@ merges them into the dict `overrides` returned rather than passing a second one:
 
 import argparse
 import re
+import shlex
 import subprocess
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +86,8 @@ def executor(
     `slurm_python` is a constructor argument of submitit's rather than an update, so it goes there, and a
     parameter left at None is unset, as submitit reads it.
     The job's shell exports the site this process reads, so a site picked with `--site` is the job's too.
+    It also puts the bin directory of the interpreter the job runs under on `PATH`, because a job is not
+    started from an activated venv and a build tool the venv installs, such as ninja, is found there or not at all.
 
     Args:
         name: Job name, as `squeue` shows it.
@@ -101,12 +105,19 @@ def executor(
     if launcher == "local":
         require_local(asked)
     python = asked.pop("slurm_python", None)
+    scripts = shlex.quote(str(Path(python or sys.executable).parent))
     auto_executor = submitit.AutoExecutor(
         folder=folder or paths.logs(), cluster=launcher, **{f"{launcher}_python": python}
     )
     auto_executor.update_parameters(
         name=name,
-        **{f"{launcher}_setup": [*environment, f"export {site.SITE_VARIABLE}={site.current()}"]},
+        **{
+            f"{launcher}_setup": [
+                *environment,
+                f'export PATH={scripts}:"$PATH"',
+                f"export {site.SITE_VARIABLE}={site.current()}",
+            ]
+        },
         **asked,
     )
     return auto_executor

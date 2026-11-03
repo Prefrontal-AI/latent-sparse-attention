@@ -310,11 +310,13 @@ def provide_process_group_timeout() -> None:
         torch.distributed.set_timeout = torch.distributed.distributed_c10d._set_pg_timeout  # type: ignore[attr-defined]
 
 
-def trainer_config(experiment: NativeConfig) -> NativeTrainer.Config:
+def trainer_config(experiment: NativeConfig, check_corpora: bool = True) -> NativeTrainer.Config:
     """Translate one run into the config torchtitan's trainer takes.
 
     Args:
         experiment: The experiment.
+        check_corpora: Whether to read each tokenized corpus's manifest and refuse one tokenized for a wider
+            vocabulary than the model has. A scorer of released weights reads no corpus, so it passes False.
 
     Returns:
         A `Trainer.Config` ready to build.
@@ -327,7 +329,8 @@ def trainer_config(experiment: NativeConfig) -> NativeTrainer.Config:
     allow_exact_fp32_matmul()
     built = model_spec(experiment)
     vocab_size = decoder_vocab_size(built)
-    for card, _ in experiment.data.cards:
+    cards = experiment.data.cards if check_corpora else []
+    for card, _ in cards:
         # Text is tokenized by the model's own tokenizer as it is read, so only ids already written can be too wide
         if isinstance(card, assets.SourceCard):
             continue
