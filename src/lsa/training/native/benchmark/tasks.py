@@ -1,23 +1,21 @@
 """The tasks a benchmark runs and the presets that name them.
 
-A preset mirrors the reference training code's `core` and RULER sets. The core tasks are lm-eval's own, read from the hub cache
-the offline contract names. RULER is NVIDIA's own generators' output, and the choice is deliberate.
-
-lm-eval ports RULER's needle-in-a-haystack tasks and the reference training code ran those, sized by a tokenizer that is not the
-model's. The prompts here are the ones `lsa data prepare ruler` makes from the pinned NVIDIA clone and sizes by the
-model's own tokenizer, so a prompt of "16,384 tokens" is 16,384 of this model's, and the files, their seed and their
-grading are the ones the served accuracy suite uses. The one thing a Qwen3.5 run needs that the card's own files lack
-is its tokenizer's rendering, so the files are prepared into a root of their own and read from there.
+The presets are the paper's: `core` is the short-task set and `ruler` the thirteen RULER tasks, scored at the lengths the native
+models trained at. The core tasks are lm-eval's own, read from the hub cache the offline contract names.
+RULER is lm-eval's port of it, rendered by `lsa native prepare-ruler` with the models' own GPT-2 tokenizer, which is how the
+paper's evaluation rendered it, so a prompt of "4,096 tokens" is 4,096 of the model's.
+It is not `lsa data prepare ruler`'s output - NVIDIA's generators draw other needles and haystacks, and a checkpoint scores
+about 5 points lower on seven of the needle tasks, mostly niah_single_3. The files are read from a root of their own, and are graded by RULER's
+own string match, as the served accuracy suite grades its files.
 """
 
-import os
 from typing import Any
 
-from lsa import paths
 from lsa.evaluation.accuracy.data import ruler_card, ruler_path
 from lsa.evaluation.accuracy.grading import ruler
+from lsa.training.native import ruler_data
 
-# The tasks the reference training code's `core` preset reads that fit a short context, and sciq beside them
+# The short tasks the paper's core set reads that fit a short context, and sciq beside them
 CORE_TASKS: tuple[str, ...] = (
     "hellaswag",
     "arc_easy",
@@ -29,30 +27,33 @@ CORE_TASKS: tuple[str, ...] = (
     "sciq",
 )
 
-# The reference training code's RULER_TASKS - the card's other needle task, multikey 3, and its six non-needle tasks are left out
+# The thirteen RULER tasks the paper's RULER column averages
 RULER_TASKS: tuple[str, ...] = (
     "niah_single_1",
     "niah_single_2",
     "niah_single_3",
     "niah_multikey_1",
     "niah_multikey_2",
+    "niah_multikey_3",
     "niah_multiquery",
     "niah_multivalue",
+    "vt",
+    "cwe",
+    "fwe",
+    "qa_hotpot",
+    "qa_squad",
 )
 
 # The lengths the native models were trained at and below, and the one past it
 TRAINED_LENGTHS: tuple[int, ...] = (4096, 8192, 16384)
 EXTRAPOLATED_LENGTHS: tuple[int, ...] = (32768,)
 
-# Where a Qwen3.5 rendering of the card's grid lives, beside the card's own root
-RULER_ROOT_NAME = "benchmarks-qwen35"
-
 RULER_PREFIX = "ruler_"
 
 
 def ruler_root() -> str:
-    """Return the root the Qwen3.5 rendering of RULER is read from - `LSA_RULER_ROOT`, else beside the card's own."""
-    return os.environ.get("LSA_RULER_ROOT") or str(paths.data() / RULER_ROOT_NAME)
+    """Return the root the GPT-2 rendering of RULER is read from - `LSA_RULER_ROOT`, else beside the card's own."""
+    return ruler_data.root_default()
 
 
 def ruler_name(task: str, length: int) -> str:
@@ -61,7 +62,7 @@ def ruler_name(task: str, length: int) -> str:
 
 
 def ruler_cells(lengths: tuple[int, ...]) -> list[str]:
-    """Return every needle task at each length, shortest length first."""
+    """Return every RULER task at each length, shortest length first."""
     return [ruler_name(task, length) for length in lengths for task in RULER_TASKS]
 
 

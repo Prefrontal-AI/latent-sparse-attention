@@ -20,6 +20,7 @@ corpus, the config loader, slurm - and nothing from [distillation](../distillati
 | [evaluation](evaluation.py) | the held-out evaluation, and building a model to score a checkpoint with |
 | [trainer](trainer.py) | torchtitan's trainer configured from a run, with a corpus loader |
 | [benchmark](benchmark/__init__.py) | `lsa native evaluate --suite benchmark`, a checkpoint scored on standard tasks through lm-eval, in process |
+| [ruler_data](ruler_data.py) | `lsa native prepare-ruler`, the RULER files the benchmark reads, rendered as the paper's evaluation did |
 | [run](run.py) | `lsa native train` and `lsa native evaluate`, which submit one slurm job per run and one task per GPU |
 
 `config`, `constants`, `buckets`, `lsa` and `losses` reach torch and `lsa` alone, so `make check` gates them with no

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from lsa.evaluation.accuracy.data import ruler_path
+from lsa.evaluation.accuracy.data import ruler_card, ruler_path
 from lsa.training.native.benchmark import tasks
 
 
@@ -19,9 +19,10 @@ def test_core_expands_to_the_short_tasks():
     ]
 
 
-def test_ruler_is_seven_needle_tasks_at_the_trained_lengths_and_32k_is_apart():
+def test_ruler_is_the_card_s_thirteen_tasks_at_the_trained_lengths_and_32k_is_apart():
     names = tasks.expand("ruler")
-    assert len(names) == 7 * 3
+    assert sorted(tasks.RULER_TASKS) == sorted(ruler_card().tasks)
+    assert len(names) == 13 * 3
     assert tasks.lengths_of(names) == [4096, 8192, 16384]
     assert tasks.lengths_of(tasks.expand("ruler-32k")) == [32768]
     assert names[0] == "ruler_niah_single_1_4096"

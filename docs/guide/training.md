@@ -318,10 +318,11 @@ lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b/multir
 lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler
 ```
 
-`--tasks` is a preset - `core`, `ruler` at 4,096, 8,192 and 16,384, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
+`--tasks` is a preset - `core`, `ruler`, its 13 tasks at 4,096, 8,192 and 16,384, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
 Every rank holds a full replica and lm-eval hands it a share of each task's requests.
 A run leaves `<records>/<label>/<tasks>/` with a `config.json` naming the checkpoint, its step and the attention, lm-eval's `results.json`, and one row per example under `samples/`, so two arms can be compared example by example with `lsa native report`.
-The RULER files are NVIDIA's generators' output sized by the model's own tokenizer, prepared into a root of their own once with `lsa data prepare ruler --root <root> --tokenizer <tokenizer snapshot> --tasks ... --lengths 4096 8192 16384 32768 --samples 100`.
+The RULER files are lm-eval's port of RULER, sized by the model's own GPT-2 tokenizer as the paper's evaluation did, and prepared once into a root of their own with `lsa native prepare-ruler --lengths 4096 8192 16384`.
+The [native preset README](../../configs/training/native/qwen35_0_8b_gpt2/README.md) says where the files land and why `lsa data prepare ruler` is not the command.
 The datasets of the core tasks are fetched once, from a machine with internet access, into the caches that `lsa env` exports:
 
 ```bash

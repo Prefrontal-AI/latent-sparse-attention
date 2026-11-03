@@ -94,6 +94,10 @@ COMMANDS: Commands = {
             "score a native checkpoint on the held-out set or the standard benchmarks, by --suite",
             ("evaluate",),
         ),
+        "prepare-ruler": Command(
+            "lsa.training.native.ruler_data",
+            "render the RULER files the native benchmark reads, as the paper did",
+        ),
         "report": Command(
             "lsa.training.native.benchmark.report", "pair the arms of benchmark records, with an interval"
         ),
