@@ -2,7 +2,7 @@
 # every head dim rotated, no gate and no norm on the heads, untied embeddings, 0.34B parameters.
 #
 # One node, 65,536 tokens a GPU and two passes of them to a step: 1,048,576 tokens a step, 19,074 steps, about 20B tokens,
-# warmup over the first 0.42B. The schedule is the one the reference training code ran this model on, a 3e-4 peak, with a cosine decay after warmup.
+# warmup over the first 0.42B. The schedule is the one the paper used for this model, a 3e-4 peak, with a cosine decay after warmup.
 #
 # Pretrains on FineWeb-Edu shards at 2,048, whose validation file is not read yet, so the held-out pass is off.
 # The tokenizer is the corpus's own, GPT-2's.

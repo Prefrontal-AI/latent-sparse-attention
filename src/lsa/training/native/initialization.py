@@ -1,4 +1,4 @@
-"""Initialize the GPT-2 hybrid's recurrent decays with the reference training code's FLA recipe."""
+"""Initialize the GPT-2 hybrid's recurrent decays with the paper's FLA recipe."""
 
 import math
 

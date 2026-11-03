@@ -283,6 +283,11 @@ lsa native train configs/training/native/qwen35_0_8b/dense.yaml --dry-run run.op
 lsa native evaluate configs/training/native/qwen35_0_8b/multires.yaml --checkpoint ${LSA_ROOT}/training/native/qwen35_0_8b/b16k-multires/checkpoint/step-8000 attention.coarse=false run.name=evaluate-multires-coarse-false
 ```
 
+The native indexer kernels are compiled the first time a job uses them, on the GPU node, through torch's inline extension loader.
+The node needs `nvcc` on its `PATH`, at the CUDA version of the installed torch, and `ninja`, which the `training` extra installs into `.venv/bin`.
+`lsa` adds `.venv/bin` to `PATH` when it finds no `ninja`, and a script of your own needs `export PATH=$PWD/.venv/bin:$PATH`.
+The first step of a run waits for the build, and later runs reuse torch's extension cache.
+
 One file is one arm: `base.yaml` holds the model from random initialisation, the corpus and the schedule, and each arm names it and sets `attention`.
 Dense, a sliding window of the same key budget, multi-resolution attention, the same selection with no summaries, the equal-chunk partition and the flat LSA read lsa serves are the six that ship.
 `data.name` names the corpus by card - `qwen3_5` or `gpt2` for tokenized rows, `fineweb_edu_100bt` for token shards, a source card for text tokenized as it is read - and `data.mixture` replaces it with weighted cards:
@@ -314,4 +319,10 @@ lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler
 `--tasks` is a preset - `core`, `ruler` at 4,096, 8,192 and 16,384, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
 Every rank holds a full replica and lm-eval hands it a share of each task's requests.
 A run leaves `<records>/<label>/<tasks>/` with a `config.json` naming the checkpoint, its step and the attention, lm-eval's `results.json`, and one row per example under `samples/`, so two arms can be compared example by example with `lsa native report`.
-The RULER files are NVIDIA's generators' output sized by the model's own tokenizer, prepared into a root of their own once with `lsa data prepare ruler --root <root> --tokenizer <tokenizer snapshot> --tasks ... --lengths 4096 8192 16384 32768 --samples 100`, and the datasets of the core tasks are fetched once on the login node into the shared hub cache.
+The RULER files are NVIDIA's generators' output sized by the model's own tokenizer, prepared into a root of their own once with `lsa data prepare ruler --root <root> --tokenizer <tokenizer snapshot> --tasks ... --lengths 4096 8192 16384 32768 --samples 100`.
+The datasets of the core tasks are fetched once, from a machine with internet access, into the caches that `lsa env` exports:
+
+```bash
+eval "$(lsa env)"
+HF_HUB_OFFLINE=0 uv run --no-sync python -c 'from lm_eval.tasks import TaskManager, get_task_dict; get_task_dict(["hellaswag", "arc_easy", "arc_challenge", "piqa", "winogrande", "lambada_openai", "wikitext", "sciq"], TaskManager())'
+```

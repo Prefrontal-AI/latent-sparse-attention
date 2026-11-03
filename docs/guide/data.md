@@ -56,7 +56,7 @@ A generator's own options - lengths, tasks, parallel jobs - are flags of `lsa da
 A source card is its own origin: `dataset` is the hub dataset it was streamed from at `revision`, or `collected_from` the directory of a source that never left the cluster.
 Its text is one folder of parquet shards, each carrying a `doc_id` and a `text` column, with a `_DONE` marker written when collecting finished.
 The nine collected sources are `data/sources/<card>` under the shared root.
-The collector streamed `main` and recorded no revision, so each card's `revision` is the one that was its dataset's head that day, read off the commit history afterwards - except `code`, whose dataset is gated and whose revision nobody could read.
+The collector streamed `main` and recorded no revision, so each card's `revision` is the one that was its dataset's head that day, read off the commit history afterwards - except `code`, whose dataset is gated and whose revision is not recorded.
 
 `licence` is an SPDX id, `internal` or `per-document`.
 A shard's own `license` column is the collector's one label per source, and arxiv's is wrong - upstream holds CC BY-SA and public-domain papers beside CC BY and CC0.
@@ -217,7 +217,7 @@ The essays and SQuAD are fetched from release assets of the exact files, with SQ
 A cell is one generator process with the card's seed, and `--jobs` runs that many at once.
 A 1M cell takes about five minutes, a 2M cell about three and a 10M cell fifteen to twenty-seven.
 
-These files were generated on 2026-09-19 by the driver that predates this repository, and the port reproduces every prompt-set pin it gave.
+These files were generated on 2026-09-19 with an earlier version of the generator, and the generator here reproduces every prompt-set pin that version gave.
 The files lm-eval's port generated on 2026-09-13 are kept under `$LSA_EVAL_DATA/ruler-lmeval-0.4.13`, the root to regrade a record made on them against.
 
 The hub datasets are read from a HuggingFace cache, which matters on a site whose compute nodes have no egress; `lsa env` prints the exports, and [evaluation.md](evaluation.md#on-slurm) says what they are.

@@ -1,6 +1,6 @@
 """Run a native checkpoint through lm-eval in process, whatever attention it was trained under.
 
-Mirrors the `ReferenceLM` wrapper of the reference training code this training code descends from, so a score here
+Mirrors the lm-eval wrapper of the paper's trainer, which is not released, so a score here
 means what it means there and for a HuggingFace model: a context and its continuation are encoded as lm-eval's HFLM
 encodes them, left-truncated to the last `max_length + 1` tokens, and rolling windows score every token once.
 The only prefix token is the end-of-text token, which is what separates documents in the training corpus.

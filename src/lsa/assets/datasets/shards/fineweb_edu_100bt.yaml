@@ -1,4 +1,4 @@
-# FineWeb-Edu's 100BT sample in GPT-2 ids, 100.2B tokens, written by the reference training code's data preparation and read
+# FineWeb-Edu's 100BT sample in GPT-2 ids, 100.2B tokens, written by the data preparation of the paper's trainer, which is not released, and read
 # where it is.
 #
 # The directory is shared and read-only and is not ours, so it is never copied and nothing here prepares it.

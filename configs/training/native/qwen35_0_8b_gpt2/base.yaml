@@ -3,7 +3,7 @@
 #
 # One node, 32,768 tokens a GPU and four passes of them to a step: 1,048,576 tokens a step, 17,167 steps, about 18B
 # tokens, warmup over the first 0.9B. The step is a token count and not a node count, so a run on more GPUs makes up the
-# same step with fewer passes. The schedule is the one the reference training code ran these models on, a 5e-4 peak, with a square-root decay.
+# same step with fewer passes. The schedule is the one the paper used for these models, a 5e-4 peak, with a square-root decay.
 #
 # Pretrains on the GPT-2 long-document corpus at 4,096. FineWeb pretrains and long-context decays use phase overlays.
 # The tokenizer is the corpus's own, GPT-2's.

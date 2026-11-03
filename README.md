@@ -50,9 +50,25 @@ uv sync --locked --extra evaluation --extra training
 uv run lsa --help
 ```
 
-The `training` extra builds `causal-conv1d`, which needs the CUDA toolkit.
-Without `nvcc`, add `--no-install-package causal-conv1d`.
 For evaluation alone, use `uv sync --locked --extra evaluation`.
+
+The `training` extra builds `causal-conv1d` from source, which needs `nvcc` on `PATH`.
+Without `nvcc`, or when the sync stops with `RuntimeError: The detected CUDA version (12.9) mismatches the version that was used to compile PyTorch (13.2)`, skip it:
+
+```bash
+uv sync --locked --extra evaluation --extra training --no-install-package causal-conv1d
+```
+
+The mismatch comes from uv's isolated build environment, which installs a newer torch than the locked 2.13.0 and so a newer CUDA than your `nvcc`.
+Only GLM-5.3-Flash's delta-attention layers use the package, and without it `transformers` runs a slower PyTorch kernel for them.
+
+A failed sync does not fail loudly later.
+`uv run lsa --help` works on the base dependencies alone, so it proves nothing about the extras.
+To check them, run this - `hf` is the Hugging Face CLI that `transformers` installs, so it lands in `.venv/bin` only with an extra:
+
+```bash
+.venv/bin/hf version && uv run --no-sync python -c "import transformers, lm_eval"
+```
 
 The results in the paper were measured on NVIDIA H200 GPUs.
 
@@ -83,11 +99,12 @@ With enroot on Slurm, which needs no GPU to import:
 ```bash
 enroot import -o sglang-lsa-042d955ba3.sqsh 'docker://ghcr.io#prefrontal-ai/sglang:lsa-v0.1.0'
 enroot create --name lsa sglang-lsa-042d955ba3.sqsh
-enroot start --rw -e HF_HOME=/hf -m $PWD:/workspace/latent-sparse-attention \
-  -m <maps directory>:/maps -m $HF_HOME:/hf lsa bash
+enroot start --rw -e HF_HOME=/hf -m $PWD:/workspace/latent-sparse-attention:none:rbind,ro \
+  -m <maps directory>:/maps:none:rbind,ro -m $HF_HOME:/hf lsa bash
 ```
 
-The import takes about 10 minutes and `enroot create` about 20, so create the container once and reuse it.
+The import takes about 10 minutes and `enroot create` about 20 for the 26 GB image, and both print little while they run, so create the container once and reuse it.
+The checkout and the maps are read-only as in Docker - enroot reads `:none:rbind,ro` where Docker reads `:ro`, and a bare `-m` is read-write.
 
 Inside the container, install this repository and pass an `lsa` block in the model config:
 
@@ -140,9 +157,13 @@ Configs are named `<method>_<mesh>[_<slice>].yaml` under one directory per model
 Prepare RULER once for the model's tokenizer, then score a config.
 Preparation is deterministic - every haystack source is pinned by checksum, so the sets match the paper's byte for byte.
 
+The accuracy config reads the sets from `data/benchmarks-qwen38` under the site's root, so `--root` is that exact directory.
+`eval "$(lsa --site mycluster env)"` sets `LSA_ROOT` to the site's `root` if it is not set already.
+
 ```bash
+eval "$(lsa --site mycluster env)"
 lsa --site mycluster data prepare ruler --tokenizer Qwen/Qwen3.8-27b \
-  --root <root>/benchmarks-qwen38 --lengths 4096 32768 --cpus 16 --mem-gb 64 --hours 2
+  --root "$LSA_ROOT/data/benchmarks-qwen38" --lengths 4096 32768 --cpus 16 --mem-gb 64 --hours 2
 lsa --site mycluster evaluate accuracy configs/evaluation/accuracy/qwen38_27b/lsa_flat_tp1.yaml \
   data.suite=ruler "data.lengths=[4096,32768]" "data.tasks=[<the 26 tasks below>]" \
   run.output=<dir> --gpus 1 --hours 4
@@ -233,6 +254,8 @@ lsa distill export <run's maps.pt> <out.pt>
 
 The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, and the checkpoints of the native comparison, N-LSA included, of the release `n-lsa-weights-v1`.
 Both unpack into the layout the configs read, under the site's `root` (`LSA_ROOT` overrides it).
+The commands below use `gh`, which must be installed and needs no login for a public repository.
+Without it, `curl -fLO https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/<tag>/<asset>` fetches one asset, with no login either.
 The distilled maps are single files that go in `models/maps/`, where the `lsa_*` configs name them as `${root:models/maps/<name>.pt}`:
 
 ```bash
@@ -260,7 +283,7 @@ lsa native evaluate configs/training/native/qwen35_0_8b_gpt2/evaluate_released_l
 
 Each config names its checkpoint, so no `--checkpoint` is needed.
 The archive holds the step folder only.
-The weights were trained with the paper's own trainer, which is not part of this repository, and the tensors are mapped to the names of this one, which a reload checks exactly.
+The weights were trained with a different trainer, which is not released, and the tensors are mapped to the names of this one, which a reload checks exactly.
 
 ## Running on a cluster
 
@@ -290,6 +313,7 @@ Every `slurm` key is optional, and an unset key adds no sbatch flag.
 Large artifacts - targets, maps, records and logs - live under `root`.
 `LSA_ROOT` and `HF_HOME` override `root` and `hf_home`, and `LSA_EXTRA_MOUNTS` adds directories to the serving container.
 Jobs read the Hugging Face cache offline, so download a model first, for example `hf download Qwen/Qwen3.8-27b`.
+That download is about 52 GB and a job log shows no progress for it, so run it in a terminal where the progress bar prints.
 `images` names the image built above, or a docker tag your runner can pull, and `run.image=<file or tag>` overrides it for one run.
 
 </details>

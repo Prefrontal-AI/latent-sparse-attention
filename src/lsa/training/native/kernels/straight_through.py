@@ -8,7 +8,7 @@ The term is zero, so only its backward matters, which gives s the logit's gradie
 summed over each query's picked keys bucket by bucket, and taken as is for its window keys.
 Each g_ij needs only its own logit and the row's log-sum-exp, so neither is recomputed for keys whose gradient nobody wants.
 A Triton kernel, flash-style: a tile of queries walks the key tiles holding a picked or window key, sums g over every head in registers, then adds each picked key's into its bucket atomically and stores each window key's.
-The kernel is the reference training code's `straight_through.gradients`, over a span of query rows so the picked-key table is one span's.
+The kernel follows the paper's trainer, over a span of query rows so the picked-key table is one span's.
 """
 
 import torch

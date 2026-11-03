@@ -1,7 +1,7 @@
 # GPT-2's tokenizer over the nine collected sources - the documents `qwen3_5` holds, in the ids of the 50,257-token
-# vocabulary the reference training code trains on.
+# vocabulary the paper's models train on.
 #
-# It is the long-document corpus the decays read, 71G of 65,536-token rows: the reference training code pretrains on FineWeb-Edu
+# It is the long-document corpus the decays read, 71G of 65,536-token rows: the paper pretrains on FineWeb-Edu
 # shards in these ids and decays each run on this, so the decay's vocabulary has to be the pretrain's. Built by this
 # repository's packer, a row one contiguous span of one document, so it holds out the documents every other copy does.
 #

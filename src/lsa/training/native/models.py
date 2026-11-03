@@ -270,7 +270,7 @@ def model_spec(experiment: NativeConfig) -> ModelSpec:
 
 
 def gpt2_model(config: Any, flavor: str) -> None:
-    """Turn the 0.8B hybrid's config into a flavour at the GPT-2 vocabulary, as the reference training code trained it.
+    """Turn the 0.8B hybrid's config into a flavour at the GPT-2 vocabulary, as the paper trained it.
 
     The hybrid keeps Qwen3.5-0.8B's layers and ties its embeddings. The 340M flavour is nineteen blocks of plain
     attention and a SwiGLU, untied. Both draw their linear weights from N(0, 0.02), with the layers that write into the

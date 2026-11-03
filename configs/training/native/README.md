@@ -1,8 +1,8 @@
 # Reproduce the paper's training families
 
 Run `lsa native train <config> --dry-run <overrides>` to inspect every resolved run before submitting it.
-The reference is the paper's own trainer, which is not part of this repository.
-Schedules convert token budgets and warmups to steps with `ceil`, matching that trainer even where its comments print a smaller number.
+The paper trained with a different trainer, which is not released.
+Schedules convert token budgets and warmups to steps with `ceil`, matching the paper's trainer even where its comments print a smaller number.
 Seed 42 initializes the model and corpus order; decay branches use corpus seed 1042 with a fresh optimizer and schedule.
 An identical seed does not establish identical initial weights across implementations.
 
