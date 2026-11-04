@@ -41,7 +41,7 @@ Everything runs through one command, `lsa`.
 
 ## Installation
 
-Python 3.12 and [uv](https://docs.astral.sh/uv/) are needed.
+Python 3.12 and [uv](https://docs.astral.sh/uv/) 0.10 or later are needed.
 
 ```bash
 git clone https://github.com/Prefrontal-AI/latent-sparse-attention.git
@@ -52,7 +52,8 @@ uv run lsa --help
 
 For evaluation alone, use `uv sync --locked --extra evaluation`.
 
-The `training` extra builds `causal-conv1d` from source against the locked torch (CUDA 12.9), which needs `nvcc` 12.8 or later on `PATH`, since it builds sm_100 kernels (B300) only from 12.8.
+The `training` extra builds `causal-conv1d` from source against the locked torch (CUDA 12.9), which needs a 12.x `nvcc` on `PATH`, 12.8 or later for B300 (sm_100) kernels.
+torch's extension builder raises on an `nvcc` of another CUDA major version, so CUDA 13 does not work, and a 12.4 to 12.7 `nvcc` still builds for H200.
 Without one, skip it:
 
 ```bash
