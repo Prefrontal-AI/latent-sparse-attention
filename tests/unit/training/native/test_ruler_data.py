@@ -86,7 +86,7 @@ def test_a_dry_run_submits_nothing_and_fetches_nothing(capsys, tmp_path):
 
 @pytest.mark.parametrize(
     "task",
-    ["niah_single_1", "niah_multikey_2", "niah_multiquery", "vt", "cwe", "fwe", "qa_squad", "qa_hotpot"],
+    ["niah_single_1", "niah_multikey_2", "niah_multikey_3", "vt", "cwe", "fwe", "qa_squad", "qa_hotpot"],
 )
 def test_a_cell_has_the_fields_the_benchmark_reads_within_its_length(task, root):
     rows = cell(task, root)

@@ -5,9 +5,10 @@ lengths the native models trained at, and `ruler-4k` the same thirteen at 4,096 
 The core tasks are lm-eval's own, read from the hub cache the offline contract names.
 RULER is lm-eval's port of it, rendered by `lsa native prepare-ruler` with the GPT-2 tokenizer the native models use,
 so a prompt of "4,096 tokens" is 4,096 of the model's. A model with another tokenizer needs files of its own.
-It is not `lsa data prepare ruler`'s output - NVIDIA's generators draw other needles and haystacks, and a checkpoint scores
-about 5 points lower on seven of the needle tasks, mostly niah_single_3. The files are read from a root of their own, and are graded by RULER's
-own string match, as the served accuracy suite grades its files.
+It is not `lsa data prepare ruler`'s output - NVIDIA's generators draw other needles and haystacks, and a checkpoint
+scores about 5 points lower on their files over the seven needle tasks other than niah_multikey_3, mostly on niah_single_3.
+The files are read from a root of their own, and are graded by RULER's own string match, as the served accuracy suite
+grades its files.
 """
 
 import os

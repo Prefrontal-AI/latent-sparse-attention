@@ -3,10 +3,11 @@
     lsa native prepare-ruler --lengths 4096 8192 16384
 
 The paper scored the native models on lm-eval's port of RULER, sized by the models' own GPT-2 tokenizer, 100 documents a
-cell and one seed a cell. The files are reproducible under the lm-eval version `uv.lock` pins, whose generators the rendering calls. These files are that rendering, a card-named task at a time, written under
+cell and one seed a cell. These files are that rendering, a card-named task at a time, written under
 `<root>/data/benchmarks-gpt2/ruler/<task>_<length>.jsonl` where the benchmark reads them.
+They are reproducible under the lm-eval version `uv.lock` pins, whose generators the rendering calls.
 They are not the files `lsa data prepare ruler` makes - NVIDIA's own generators draw other needles and haystacks, and a
-checkpoint scores about 5 points lower on seven of the needle tasks than on these.
+checkpoint scores about 5 points lower on their files over the seven needle tasks other than niah_multikey_3.
 
 Generation is CPU work and runs as one slurm job. A compute node has no egress, so the sources are fetched where the
 command is typed: the essays and the tokenizer from the hub, SQuAD and HotpotQA from the release the generators' own

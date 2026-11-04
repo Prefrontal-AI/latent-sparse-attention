@@ -31,14 +31,14 @@ lsa --site mycluster native prepare-ruler --lengths 4096 8192 16384
 ```
 
 The command fetches its sources where it is typed, because a compute node has no egress, and then submits one CPU job.
-It needs lm-eval's `ruler` extra, which the `evaluation` extra carries: `uv sync --extra training --extra evaluation`.
+It needs lm-eval's `ruler` extra, which the `training` extra carries.
 
 The files land at `$LSA_ROOT/data/benchmarks-gpt2/ruler/<task>_<length>.jsonl`.
 Set `LSA_RULER_ROOT` to read and write another root, which holds the same `ruler/` folder.
 An existing file is kept, and `--force` regenerates it.
 
 Do not use `lsa data prepare ruler` for this.
-It renders NVIDIA's own generators, which draw other needles and haystacks, and the same checkpoint scores about 5 points lower on the seven needle tasks they share, mostly on `niah_single_3`.
+It renders NVIDIA's own generators, which draw other needles and haystacks, and over the seven needle tasks other than `niah_multikey_3`, the same checkpoint scores about 5 points lower on their files, mostly on `niah_single_3`.
 Those files are what the served accuracy suite reads, under the tokenizer of the model it serves.
 
 Grading is RULER's string match.

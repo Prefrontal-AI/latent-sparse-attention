@@ -77,5 +77,6 @@ def test_ruler_4k_is_the_thirteen_tasks_at_4096_under_a_short_run_folder_name():
     assert len(names) == 13
     assert tasks.lengths_of(names) == [4096]
     assert [tasks.parse_ruler(name)[0] for name in names] == list(tasks.RULER_TASKS)
-    # A run folder is named after the `--tasks` value and a file name holds 255 characters
-    assert len("ruler-4k") < 255
+    # A run folder is named after the `--tasks` value, and the thirteen cells spelled out pass a file name's 255
+    # => the preset is how the paper's column is run
+    assert len("+".join(names)) > 255

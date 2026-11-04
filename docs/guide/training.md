@@ -315,7 +315,7 @@ The held-out pass, in a run or an evaluation, writes a summary and the per-seque
 ```bash
 lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b/multires.yaml --checkpoint ${LSA_ROOT}/training/native/qwen35_0_8b/b16k-multires/checkpoint/step-8000 --tasks core --gpus 8
 lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml --tasks ruler-4k --gpus 1
-lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler
+lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler-4k
 ```
 
 `--tasks` is a preset - `core`, `ruler`, its 13 tasks at 4,096, 8,192 and 16,384, `ruler-4k`, the same 13 at 4,096, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
