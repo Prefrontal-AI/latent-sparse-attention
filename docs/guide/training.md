@@ -286,7 +286,8 @@ lsa native evaluate configs/training/native/qwen35_0_8b/multires.yaml --checkpoi
 The native indexer kernels are compiled the first time a job uses them, on the GPU node, through torch's inline extension loader.
 The node needs `nvcc` on its `PATH`, at the CUDA version of the installed torch, and `ninja`, which the `training` extra installs into `.venv/bin`.
 The `cuda_sparse` kernels add the interpreter's own `bin` directory to `PATH` when they find no `ninja`, and the FA3 indexer does not.
-A script of your own that builds either needs `export PATH=$PWD/.venv/bin:$PATH`, or `uv run`, which puts `.venv/bin` first.
+A script of your own that builds the FA3 indexer needs `export PATH=$PWD/.venv/bin:$PATH`, or `uv run`, which puts `.venv/bin` first.
+The `cuda_sparse` build needs neither.
 The first step of a run waits for the build, and later runs reuse torch's extension cache.
 
 One file is one arm: `base.yaml` holds the model from random initialisation, the corpus and the schedule, and each arm names it and sets `attention`.

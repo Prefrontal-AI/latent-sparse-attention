@@ -257,8 +257,8 @@ lsa distill export <run's maps.pt> <out.pt>
 The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, and the checkpoints of the native comparison, N-LSA included, of the release `n-lsa-weights-v1`.
 Both unpack into the layout the configs read, under the site's `root` (`LSA_ROOT` overrides it).
 The commands below use `gh`, which must be installed and needs no login for a public repository.
-Without it, `curl -fLO https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/<tag>/<asset>` fetches one asset, with no login either.
-Add `--create-dirs -o "$LSA_ROOT/models/maps/<asset>"` so it lands where the configs read it, and repeat the command for each asset.
+Without it, `curl -fL --create-dirs -o "<dest>/<asset>" https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/<tag>/<asset>` fetches one asset, with no login either.
+Repeat the command for each asset, with the `<dest>` of the `gh` command that follows for that kind of asset: `$LSA_ROOT/models/maps` for the distilled maps and `$LSA_ROOT/downloads` for the parts of a native checkpoint and `SHA256SUMS`.
 The distilled maps are single files that go in `models/maps/`, where the `lsa_*` configs name them as `${root:models/maps/<name>.pt}`:
 
 ```bash
