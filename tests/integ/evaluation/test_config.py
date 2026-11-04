@@ -743,10 +743,33 @@ def test_a_dry_run_without_an_image_prints_the_experiment_and_says_so(tmp_path, 
     cli.main(["evaluate", "accuracy", str(path), *PAPER_RULER, *named, "--dry-run"])
     printed = capsys.readouterr().out
     assert "tasks (26): ruler_niah_single_1_4096" in printed
-    assert f"server: (run.image not named in site {site.current()})" in printed
+    assert f"server: (not resolved in site {site.current()} - run.image is not named" in printed
     assert "resources: " in printed
     with pytest.raises(SystemExit, match="run.image is not named"):
         cli.main(["evaluate", "accuracy", str(path), *PAPER_RULER, *named, "--cpus", "12"])
+
+
+@pytest.mark.parametrize(
+    ("kind", "config", "summary"),
+    [
+        ("kernels", "configs/evaluation/kernels/glm53_flash/lsa_flat.yaml", ", kernels "),
+        (
+            "production",
+            "configs/evaluation/production/glm53_flash/lsa_flat_cp8.yaml",
+            ", production, lengths ",
+        ),
+    ],
+)
+def test_a_dry_run_of_a_kind_that_is_never_pooled_prints_it(kind, config, summary, monkeypatch, capsys):
+    from lsa import cli
+
+    monkeypatch.setattr(
+        "lsa.slurm.executor", lambda *args, **kwargs: pytest.fail("a dry run built an executor")
+    )
+    cli.main(["evaluate", kind, config, "--dry-run"])
+    printed = capsys.readouterr().out
+    assert summary in printed
+    assert "resources: " in printed
 
 
 def test_a_long_task_list_is_counted_after_its_first_forty(tmp_path):

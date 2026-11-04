@@ -190,7 +190,7 @@ The shared reader and the benchmark generators are separate: [`data/benchmarks`]
 Preparation first verifies the pinned generators, dependency versions, haystack hashes and sentence tokenizer resources on the submitting host.
 It installs absent prerequisites there before submitting the CPU job, since a compute node may have none.
 Existing mismatched inputs are never replaced; use fresh `RULER_NVIDIA` and `NLTK_DATA` paths for a clean installation.
-`--fetch-in-job` moves the RULER clone and the NLTK download into the job, for a site whose login node has no network access but whose compute nodes do.
+`--fetch-in-job` moves the RULER clone and the NLTK download into the job, for a site whose submitting machine has no network access but whose compute nodes do.
 `--dry-run` prints the submission without installing prerequisites, and `--force` regenerates prompt cells without replacing the generator.
 
 The [RULER card](../../src/lsa/assets/datasets/benchmarks/ruler.yaml) holds the grid - thirteen tasks, eight needle variants, `vt`, `cwe`, `fwe`, `qa_squad` and `qa_hotpot`, each generated at 4096, 32768, 131072, 524288 and 1000000 with 100 rows, and at 2000000, 5000000 and 10000000 with 20.

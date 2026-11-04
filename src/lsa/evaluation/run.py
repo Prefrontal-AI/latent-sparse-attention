@@ -463,10 +463,10 @@ def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = No
             server = replace(server, serve_args=with_settings(server.serve_args, experiment.model.settings))
         try:
             argv = container_command(server, launch_line(server, experiment.model.checkpoint))
-        except site.NotNamed:
-            # A dry run is how a fresh clone finds out what it would run, and its site names no image yet
-            # => say so here, and leave the refusal to the submission
-            lines.append(f"  server: (run.image not named in site {site.current()})")
+        except site.NotNamed as unnamed:
+            # A dry run is how a fresh clone finds out what it would run, and its site names no image or root yet
+            # => say what is missing here, and leave the refusal to the submission
+            lines.append(f"  server: (not resolved in site {site.current()} - {unnamed})")
         else:
             lines.append(f"  server: {shlex.join(argv)}")
     lines.append("  resources: " + ", ".join(f"{key} {value}" for key, value in parameters.items()))
@@ -777,9 +777,9 @@ def main(kind: str) -> None:
     from lsa.evaluation.config import load
 
     experiments = load(args.config, args.overrides, kind)
-    pooled = (
-        [pooled_run(experiment, args) for experiment in experiments] if kind == Evaluation.ACCURACY else []
-    )
+    # Only an accuracy run is pooled, and every evaluation needs an entry
+    # => the dry run and the submission below walk both lists together
+    pooled = [kind == Evaluation.ACCURACY and pooled_run(experiment, args) for experiment in experiments]
     for experiment in experiments:
         require_model(experiment)
         if not args.dry_run:
@@ -790,7 +790,7 @@ def main(kind: str) -> None:
         )
     parameters = {**job_parameters(experiments, args.gpus), **slurm.overrides(args)}
     if args.dry_run:
-        for experiment, is_pooled in zip(experiments, pooled, strict=False):
+        for experiment, is_pooled in zip(experiments, pooled, strict=True):
             print(describe(experiment, parameters), flush=True)
             if is_pooled:
                 print(f"{experiment.name}: would submit {args.workers} workers onto one run", flush=True)

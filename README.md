@@ -144,13 +144,13 @@ Preparation is deterministic - every haystack source is pinned by checksum, so t
 lsa --site mycluster data prepare ruler --tokenizer Qwen/Qwen3.8-27b \
   --root <root>/benchmarks-qwen38 --lengths 4096 32768 --cpus 16 --mem-gb 64 --hours 2
 lsa --site mycluster evaluate accuracy configs/evaluation/accuracy/qwen38_27b/lsa_flat_tp1.yaml \
-  data.suite=ruler data.tasks=[ruler] "data.lengths=[4096,32768]" \
+  data.suite=ruler "data.tasks=[ruler]" "data.lengths=[4096,32768]" \
   run.output=<dir> --gpus 1 --hours 4
 ```
 
 `data.tasks=[ruler]` selects every RULER task, and `data.lengths` narrows the cells.
 For GLM-5.3-Flash, drop `--tokenizer` and `--root`, since its tokenizer is the default.
-Add `--fetch-in-job` to `data prepare` when the login node has no network access but the compute nodes do.
+Add `--fetch-in-job` to `data prepare` when the machine you submit from has no network access but the compute nodes do.
 
 Expected results, RULER mean over 13 tasks of 100 rows each, from a clean checkout:
 
