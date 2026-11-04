@@ -75,9 +75,10 @@ def test_a_dry_run_says_what_it_would_run_and_loads_neither_torch_nor_lm_eval(su
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
         env={**os.environ, "LSA_ROOT": str(tmp_path)},
     )
+    assert done.returncode == 0, done.stderr
     *printed, loaded = done.stdout.splitlines()
     assert loaded == "LOADED []"
     assert any("decay128k-lsa-2048" in line for line in printed)

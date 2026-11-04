@@ -389,7 +389,7 @@ def submit(
         The submitit job.
     """
     executor = slurm.executor(
-        "lsa-native-benchmark",
+        Benchmark.JOB_NAME,
         (*env.OFFLINE_HF, *env.exports(env.DISTRIBUTED_TORCH)),
         folder,
         **{**parameters, "tasks_per_node": parameters["gpus_per_node"]},
@@ -464,7 +464,7 @@ def command(args: argparse.Namespace) -> None:
     )
     if args.dry_run:
         print(
-            f"{label}: would submit lsa-native-benchmark of {len(names)} tasks with {parameters}", flush=True
+            f"{label}: would submit {Benchmark.JOB_NAME} of {len(names)} tasks with {parameters}", flush=True
         )
         return
     submit(experiment, checkpoint, args.tasks, label, records_root, extra, parameters, args.folder)
