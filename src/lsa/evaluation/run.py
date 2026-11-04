@@ -44,7 +44,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from lsa import env, io, slurm
+from lsa import env, io, site, slurm
 from lsa.evaluation import gpu, launches, require_extra
 from lsa.evaluation.accuracy import pool
 from lsa.evaluation.accuracy.records import build_run_id, records_dir
@@ -433,9 +433,6 @@ def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = No
     Returns:
         The summary line, followed for a dry run by one indented line each for the tasks and lengths of a scored
         run, the server's command as the container runs it, and the job's resources.
-
-    Raises:
-        NotNamed: A dry run of a served evaluation on a site that names no image.
     """
     from lsa.evaluation.accuracy.data import suites
     from lsa.evaluation.config import AccuracyConfig, KernelsConfig, ProductionConfig
@@ -464,8 +461,14 @@ def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = No
         server = experiment.server()
         if experiment.model.settings is not None:
             server = replace(server, serve_args=with_settings(server.serve_args, experiment.model.settings))
-        argv = container_command(server, launch_line(server, experiment.model.checkpoint))
-        lines.append(f"  server: {shlex.join(argv)}")
+        try:
+            argv = container_command(server, launch_line(server, experiment.model.checkpoint))
+        except site.NotNamed:
+            # A dry run is how a fresh clone finds out what it would run, and its site names no image yet
+            # => say so here, and leave the refusal to the submission
+            lines.append(f"  server: (run.image not named in site {site.current()})")
+        else:
+            lines.append(f"  server: {shlex.join(argv)}")
     lines.append("  resources: " + ", ".join(f"{key} {value}" for key, value in parameters.items()))
     return "\n".join(lines)
 

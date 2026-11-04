@@ -240,6 +240,19 @@ def checkout_root() -> Path:
 EXTRA_MOUNTS = "LSA_EXTRA_MOUNTS"
 
 
+def _as_named(path: str | Path) -> str:
+    """Return a path as it is named, minus trailing slashes, so two spellings of one directory compare equal.
+
+    Args:
+        path: A directory, as a mount source.
+
+    Returns:
+        The path without its trailing slashes. Links are not resolved, because a mount has to be named as given.
+    """
+    named = str(path)
+    return named.rstrip("/") or named
+
+
 def mount_list() -> list[str]:
     """Return what the container needs to see.
 
@@ -261,17 +274,16 @@ def mount_list() -> list[str]:
     Returns:
         One `source:target` per mount.
     """
-    root = str(checkout_root())
+    root = _as_named(checkout_root())
     mounts = [f"{root}:{root}"]
     declared = [os.path.expandvars(mount) for mount in site.load().get("mounts") or []]
-    for shared in (str(paths.root()), str(env.hf_home()), *declared):
-        if Path(shared).is_dir() and f"{shared}:{shared}" not in mounts:
-            mounts.insert(0, f"{shared}:{shared}")
     # A checkpoint that lives in neither root - another user's hub cache, say - is named by the operator,
     # each directory mounted at its own path, so its snapshot's links into `blobs/` still resolve
-    for extra in os.environ.get(EXTRA_MOUNTS, "").split(","):
-        if extra.strip() and Path(extra.strip()).is_dir():
-            mounts.insert(0, f"{extra.strip()}:{extra.strip()}")
+    extra = [mount for mount in os.environ.get(EXTRA_MOUNTS, "").split(",") if mount.strip()]
+    for shared in (str(paths.root()), str(env.hf_home()), *declared, *extra):
+        shared = _as_named(shared.strip())
+        if Path(shared).is_dir() and f"{shared}:{shared}" not in mounts:
+            mounts.insert(0, f"{shared}:{shared}")
     return mounts
 
 

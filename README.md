@@ -144,21 +144,13 @@ Preparation is deterministic - every haystack source is pinned by checksum, so t
 lsa --site mycluster data prepare ruler --tokenizer Qwen/Qwen3.8-27b \
   --root <root>/benchmarks-qwen38 --lengths 4096 32768 --cpus 16 --mem-gb 64 --hours 2
 lsa --site mycluster evaluate accuracy configs/evaluation/accuracy/qwen38_27b/lsa_flat_tp1.yaml \
-  data.suite=ruler "data.lengths=[4096,32768]" "data.tasks=[<the 26 tasks below>]" \
+  data.suite=ruler data.tasks=[ruler] "data.lengths=[4096,32768]" \
   run.output=<dir> --gpus 1 --hours 4
 ```
 
-<details>
-<summary>The 26 RULER tasks at 4k and 32k</summary>
-
-```text
-ruler_niah_single_1_4096,ruler_niah_single_2_4096,ruler_niah_single_3_4096,ruler_niah_multikey_1_4096,ruler_niah_multikey_2_4096,ruler_niah_multikey_3_4096,ruler_niah_multiquery_4096,ruler_niah_multivalue_4096,ruler_vt_4096,ruler_cwe_4096,ruler_fwe_4096,ruler_qa_squad_4096,ruler_qa_hotpot_4096,ruler_niah_single_1_32768,ruler_niah_single_2_32768,ruler_niah_single_3_32768,ruler_niah_multikey_1_32768,ruler_niah_multikey_2_32768,ruler_niah_multikey_3_32768,ruler_niah_multiquery_32768,ruler_niah_multivalue_32768,ruler_vt_32768,ruler_cwe_32768,ruler_fwe_32768,ruler_qa_squad_32768,ruler_qa_hotpot_32768
-```
-
-The Qwen configs pin the paper's task list, so `data.tasks` selects the cells.
+`data.tasks=[ruler]` selects every RULER task, and `data.lengths` narrows the cells.
 For GLM-5.3-Flash, drop `--tokenizer` and `--root`, since its tokenizer is the default.
-
-</details>
+Add `--fetch-in-job` to `data prepare` when the login node has no network access but the compute nodes do.
 
 Expected results, RULER mean over 13 tasks of 100 rows each, from a clean checkout:
 

@@ -732,6 +732,23 @@ def test_a_dry_run_prints_the_experiment_it_resolved(tmp_path, monkeypatch, caps
     assert "cpus_per_task 12" in printed
 
 
+def test_a_dry_run_without_an_image_prints_the_experiment_and_says_so(tmp_path, monkeypatch, capsys):
+    from lsa import cli
+
+    monkeypatch.setattr(
+        "lsa.slurm.executor", lambda *args, **kwargs: pytest.fail("a dry run built an executor")
+    )
+    path = write(tmp_path, MINIMAL.replace("  image: /images/sglang.img\n", ""))
+    named = ["model.name=Qwen/Qwen3.8-27b", "run.output=results"]
+    cli.main(["evaluate", "accuracy", str(path), *PAPER_RULER, *named, "--dry-run"])
+    printed = capsys.readouterr().out
+    assert "tasks (26): ruler_niah_single_1_4096" in printed
+    assert f"server: (run.image not named in site {site.current()})" in printed
+    assert "resources: " in printed
+    with pytest.raises(SystemExit, match="run.image is not named"):
+        cli.main(["evaluate", "accuracy", str(path), *PAPER_RULER, *named, "--cpus", "12"])
+
+
 def test_a_long_task_list_is_counted_after_its_first_forty(tmp_path):
     from lsa.evaluation import run
 
