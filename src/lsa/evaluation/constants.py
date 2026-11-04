@@ -303,6 +303,9 @@ class Evaluation:
     PRODUCTION: str = "production"
     KINDS: tuple[str, ...] = (ACCURACY, KERNELS, PRODUCTION)
 
+    # Task names a dry run lists before it counts the rest
+    DRY_RUN_TASKS: int = 40
+
     # Each kind's run directories under the results root, nested as the package is
     DIRS: ClassVar[dict[str, tuple[str, ...]]] = {
         ACCURACY: ("accuracy",),

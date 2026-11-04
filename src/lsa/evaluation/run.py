@@ -133,10 +133,6 @@ def require_output(experiment: "Experiment") -> None:
         )
 
 
-# Task names a dry run lists before it counts the rest
-DRY_RUN_TASKS: int = 40
-
-
 @dataclass(frozen=True)
 class Launch:
     """What every runner settles before it writes anything - the settings, the run's name and its directory.
@@ -426,50 +422,40 @@ RUNNERS: dict[str, Callable[[Any, bool], Path]] = {
 }
 
 
-def describe(experiment: "Experiment") -> str:
-    """Return the one line a dry run prints for an evaluation.
-
-    Args:
-        experiment: The evaluation.
-
-    Returns:
-        What it will run.
-    """
-    model = experiment.model
-    head = f"{experiment.name}: attention {model.attention}"
-    from lsa.evaluation.config import KernelsConfig, ProductionConfig
-
-    if isinstance(experiment, KernelsConfig):
-        return f"{head}, kernels {experiment.data.phase}, contexts {experiment.data.contexts}"
-    if isinstance(experiment, ProductionConfig):
-        return f"{head}, production, lengths {experiment.data.lengths}"
-    return f"{head}, suite {experiment.data.suite}"
-
-
-def resolved_lines(experiment: "Experiment", parameters: Mapping[str, Any]) -> list[str]:
-    """Return what a dry run prints under an evaluation's one-line summary - what it would run, serve and ask for.
+def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = None) -> str:
+    """Return what an evaluation will run - one line, and with its job's parameters what a dry run resolves.
 
     Args:
         experiment: The evaluation, as loaded.
-        parameters: What its job asks slurm for, the command line's flags already laid over.
+        parameters: What its job asks slurm for, the command line's flags already laid over, or None for the
+            summary line alone.
 
     Returns:
-        One indented line each for the tasks and lengths of a scored run, the server's command as the container
-        runs it, and the job's resources.
+        The summary line, followed for a dry run by one indented line each for the tasks and lengths of a scored
+        run, the server's command as the container runs it, and the job's resources.
 
     Raises:
-        NotNamed: The site names no image for a run that serves.
+        NotNamed: A dry run of a served evaluation on a site that names no image.
     """
     from lsa.evaluation.accuracy.data import suites
-    from lsa.evaluation.config import AccuracyConfig, KernelsConfig
+    from lsa.evaluation.config import AccuracyConfig, KernelsConfig, ProductionConfig
     from lsa.sglang.launch import container_command, launch_line, with_settings
 
-    lines: list[str] = []
+    head = f"{experiment.name}: attention {experiment.model.attention}"
+    if isinstance(experiment, KernelsConfig):
+        lines = [f"{head}, kernels {experiment.data.phase}, contexts {experiment.data.contexts}"]
+    elif isinstance(experiment, ProductionConfig):
+        lines = [f"{head}, production, lengths {experiment.data.lengths}"]
+    else:
+        lines = [f"{head}, suite {experiment.data.suite}"]
+    if parameters is None:
+        return lines[0]
     if isinstance(experiment, AccuracyConfig):
         data = experiment.data
         plans = suites.select(data.suite, data.tasks or None, data.lengths or None)
-        shown = ", ".join(plan.task for plan in plans[:DRY_RUN_TASKS])
-        more = f", and {len(plans) - DRY_RUN_TASKS} more" if len(plans) > DRY_RUN_TASKS else ""
+        shown = ", ".join(plan.task for plan in plans[: Evaluation.DRY_RUN_TASKS])
+        hidden = len(plans) - Evaluation.DRY_RUN_TASKS
+        more = f", and {hidden} more" if hidden > 0 else ""
         lines.append(f"  tasks ({len(plans)}): {shown}{more}")
         lengths = sorted({plan.length for plan in plans if plan.length})
         if lengths:
@@ -481,7 +467,7 @@ def resolved_lines(experiment: "Experiment", parameters: Mapping[str, Any]) -> l
         argv = container_command(server, launch_line(server, experiment.model.checkpoint))
         lines.append(f"  server: {shlex.join(argv)}")
     lines.append("  resources: " + ", ".join(f"{key} {value}" for key, value in parameters.items()))
-    return lines
+    return "\n".join(lines)
 
 
 def gpu_count(experiments: list["Experiment"]) -> int:
@@ -793,7 +779,8 @@ def main(kind: str) -> None:
     )
     for experiment in experiments:
         require_model(experiment)
-        print(describe(experiment), flush=True)
+        if not args.dry_run:
+            print(describe(experiment), flush=True)
     if any(pooled) and args.force:
         raise SystemExit(
             "--force scores every sample again, which a pooled run never does - give the rerun a run id of its own"
@@ -801,7 +788,7 @@ def main(kind: str) -> None:
     parameters = {**job_parameters(experiments, args.gpus), **slurm.overrides(args)}
     if args.dry_run:
         for experiment, is_pooled in zip(experiments, pooled, strict=False):
-            print("\n".join(resolved_lines(experiment, parameters)), flush=True)
+            print(describe(experiment, parameters), flush=True)
             if is_pooled:
                 print(f"{experiment.name}: would submit {args.workers} workers onto one run", flush=True)
         return

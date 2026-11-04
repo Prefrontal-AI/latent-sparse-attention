@@ -736,7 +736,7 @@ def test_a_long_task_list_is_counted_after_its_first_forty(tmp_path):
     from lsa.evaluation import run
 
     experiment_ = load(tmp_path, overrides=["data.suite=ruler"])[0]
-    tasks_line = run.resolved_lines(experiment_, {"gpus_per_node": 1})[0]
+    tasks_line = run.describe(experiment_, {"gpus_per_node": 1}).splitlines()[1]
     assert tasks_line.startswith("  tasks (")
     assert tasks_line.count("ruler_") == 40
     assert ", and " in tasks_line
