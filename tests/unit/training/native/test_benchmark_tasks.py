@@ -72,6 +72,26 @@ def test_a_ruler_cell_is_graded_by_the_official_string_match(tmp_path):
     assert task.process_results(docs[1], [" 123"]) == {"score": 0.0}
 
 
+def test_a_qa_cell_scores_the_fraction_of_references_found_as_the_paper_did(tmp_path):
+    path = ruler_path("qa_squad", 4096, str(tmp_path))
+    row = {
+        "index": 0,
+        "input": "documents and a question",
+        "outputs": ["Denver Broncos", "the Broncos"],
+        "gen_prefix": "Answer:",
+        "length": 100,
+        "max_length": 4096,
+    }
+    tmp_path.joinpath("ruler").mkdir()
+    with open(path, "w") as sink:
+        sink.write(json.dumps(row) + "\n")
+    [task] = [tasks.build_ruler("ruler_qa_squad_4096", str(tmp_path))]
+    [doc] = list(task.eval_docs)
+    # Official RULER would count either reference alone as a full answer
+    assert task.process_results(doc, [" Denver Broncos"]) == {"score": 0.5}
+    assert task.process_results(doc, [" the Denver Broncos, the Broncos"]) == {"score": 1.0}
+
+
 def test_ruler_4k_is_the_thirteen_tasks_at_4096_under_a_short_run_folder_name():
     names = tasks.expand("ruler-4k")
     assert len(names) == 13

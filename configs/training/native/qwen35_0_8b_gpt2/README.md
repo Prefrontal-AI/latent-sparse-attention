@@ -41,10 +41,9 @@ Do not use `lsa data prepare ruler` for this.
 It renders NVIDIA's own generators, which draw other needles and haystacks, and over the seven needle tasks other than `niah_multikey_3`, the same checkpoint scores about 5 points lower on their files, mostly on `niah_single_3`.
 Those files are what the served accuracy suite reads, under the tokenizer of the model it serves.
 
-Grading is RULER's string match.
-The needle, `vt`, `cwe` and `fwe` tasks score the fraction of their references found in the reply, and the two QA tasks score 1 if any one reference is found.
-Scoring the QA tasks by the fraction of references found as well lowers `qa_squad` from .410 to .371 and the mean of 13 from 52.8 to 52.5.
-The grading rule for the QA tasks alone moves the mean between those two figures.
+Grading is RULER's string match, and every task scores the fraction of its references found in the reply, as the paper's native column did.
+The served accuracy suite scores the two QA tasks by official RULER instead, as 1 when any one reference is found.
+Under that rule the released checkpoint's `qa_squad` rises from .371 to .410 and the mean of 13 from 52.5 to 52.8.
 
 ## Reproducing the paper's RULER column
 
@@ -55,7 +54,7 @@ lsa --site mycluster native evaluate configs/training/native/qwen35_0_8b_gpt2/ev
 ```
 
 The paper reports 52.2 for the mean of the 13 tasks.
-The released `decay128k-lsa-2048` scores 52.8 here with any reference counting for the QA tasks, and 52.5 with the fraction of references found.
+The released `decay128k-lsa-2048` scores 52.5 here, graded as the paper graded it, and 52.8 with any reference counting for the QA tasks.
 A cell holds 100 documents, so its standard error is up to 5 points, and only the mean is worth comparing.
 The preset is the run's folder name, so it stays short: a run is filed under the `--tasks` value as typed, and a list of the 13 cells spelled out is over the 255 characters a file name holds.
 

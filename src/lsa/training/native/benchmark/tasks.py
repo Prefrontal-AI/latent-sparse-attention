@@ -166,7 +166,9 @@ def build_ruler(name: str, root: str) -> Any:
         "doc_to_target": "{{outputs}}",
         "gen_prefix": "{{gen_prefix}}",
         "target_delimiter": " ",
-        "process_results": ruler.results_for(task),
+        # The paper's native column scored the QA tasks by the fraction of references found, as every other task
+        # => graded so here, where the served suite counts any one reference
+        "process_results": ruler.results_for(task, any_reference=()),
         "metric_list": [{"metric": "score", "aggregation": "mean", "higher_is_better": True}],
         "generation_kwargs": {"max_gen_toks": 128, "temperature": 0, "do_sample": False, "until": []},
         "num_fewshot": 0,
