@@ -1,7 +1,8 @@
 """The learning-rate schedules - warmup-stable-decay and a cosine after warmup.
 
-torchtitan's own WSD differs from the paper's trainer's by one step in the warmup and by a rounding of the decay length, and
-the comparison is held to the paper's numbers, so the schedule is the one function here and
+torchtitan's own WSD differs from the paper's trainer's by one step in the warmup and by a rounding of the decay
+length, and the tests hold this schedule to the trainer's WSD factors, transcribed, so the schedule is the one function
+here and
 [the trainer](trainer.py)'s container only steps it.
 It imports nothing from torchtitan, so the config can say where the decay starts.
 """

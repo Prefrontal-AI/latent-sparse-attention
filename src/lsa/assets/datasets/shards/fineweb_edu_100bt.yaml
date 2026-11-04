@@ -1,7 +1,7 @@
-# FineWeb-Edu's 100BT sample in GPT-2 ids, 100.2B tokens, written by the data preparation of the paper's trainer, which is not released, and read
-# where it is.
+# FineWeb-Edu's 100BT sample in GPT-2 ids, 100.2B tokens, written by the data preparation of the paper's trainer,
+# which is not released, and read where it is.
 #
-# The directory is shared and read-only and is not ours, so it is never copied and nothing here prepares it.
+# The shards are made elsewhere, so this card only points at them: nothing here copies or prepares them.
 # A shard is 100M uint16 ids of documents joined with GPT-2's end-of-text id, 1,002 of them in name order, and
 # `val.bin` is the 10M-token validation file the writer fixed. There is no row, no document id and no
 # held-out hash: a reader cuts consecutive windows, and the validation file is its own held-out split.

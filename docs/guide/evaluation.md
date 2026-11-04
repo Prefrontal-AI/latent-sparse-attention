@@ -380,6 +380,7 @@ The paper's GLM-5.3-Flash H200 records behind those figures carry its overrides 
 
 ```bash
 lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated --dry-run
+lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
 lsa evaluate isolated glm53_flash --phase decode --arm pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
 lsa evaluate isolated glm53_flash --gpu b300 --output $LSA_ROOT/layer-perf/isolated-b300
 ```
@@ -549,7 +550,7 @@ Say in the run's note which tasks ran under which budget and on which mesh, sinc
 
 The joined directory holds every part's samples, each part's launch log, metadata, server info and log under `parts/<part id>/`, and a launch log of every part's launches with the join's own last, so its status is complete once every task any part planned is scored.
 A part still going is joined only with `--in-progress`, as a snapshot, and `--replace` rebuilds a join written before - so while a battery runs, joining again and syncing `results/joined` keeps one entry per configuration on the shared root.
-Publishing a joined run with `--replace` moves its base and its other parts, where they were published on their own, into an archive directory beside the published root - moved, never deleted - and a part a published joined run holds is not published on its own again.
+Publishing a joined run with `--replace` moves its base and its other parts, where they were published on their own, into `archive/evaluations/` beside the published root - moved, never deleted - and a part a published joined run holds is not published on its own again.
 
 ### Naming a production record
 

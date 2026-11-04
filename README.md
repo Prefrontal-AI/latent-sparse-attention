@@ -99,12 +99,13 @@ With enroot on Slurm, which needs no GPU to import:
 ```bash
 enroot import -o sglang-lsa-042d955ba3.sqsh 'docker://ghcr.io#prefrontal-ai/sglang:lsa-v0.1.0'
 enroot create --name lsa sglang-lsa-042d955ba3.sqsh
-enroot start --rw -e HF_HOME=/hf -m $PWD:/workspace/latent-sparse-attention:none:rbind,ro \
-  -m <maps directory>:/maps:none:rbind,ro -m $HF_HOME:/hf lsa bash
+enroot start --rw -e HF_HOME=/hf -m $PWD:/workspace/latent-sparse-attention:none:x-create=dir,rbind,ro \
+  -m <maps directory>:/maps:none:x-create=dir,rbind,ro -m $HF_HOME:/hf lsa bash
 ```
 
 The import takes about 10 minutes and `enroot create` about 20 for the 26 GB image, and both print little while they run, so create the container once and reuse it.
-The checkout and the maps are read-only as in Docker - enroot reads `:none:rbind,ro` where Docker reads `:ro`, and a bare `-m` is read-write.
+The checkout and the maps are read-only as in Docker, and a bare `-m` is read-write.
+Enroot spells that `:none:rbind,ro` plus `x-create=dir`: naming any option drops enroot's default `x-create=auto`, so without it the mount fails with `No such file or directory` when the mount point is not in the image (use `x-create=file` for a file).
 
 Inside the container, install this repository and pass an `lsa` block in the model config:
 
@@ -159,6 +160,7 @@ Preparation is deterministic - every haystack source is pinned by checksum, so t
 
 The accuracy config reads the sets from `data/benchmarks-qwen38` under the site's root, so `--root` is that exact directory.
 `eval "$(lsa --site mycluster env)"` sets `LSA_ROOT` to the site's `root` if it is not set already.
+It also sets the Hugging Face cache variables and turns on offline mode (`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`), so in a shell you keep open, run `hf download` with `HF_HUB_OFFLINE=0` in front, or download first.
 
 ```bash
 eval "$(lsa --site mycluster env)"
@@ -256,6 +258,7 @@ The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, and th
 Both unpack into the layout the configs read, under the site's `root` (`LSA_ROOT` overrides it).
 The commands below use `gh`, which must be installed and needs no login for a public repository.
 Without it, `curl -fLO https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/<tag>/<asset>` fetches one asset, with no login either.
+Add `--create-dirs -o "$LSA_ROOT/models/maps/<asset>"` so it lands where the configs read it, and repeat the command for each asset.
 The distilled maps are single files that go in `models/maps/`, where the `lsa_*` configs name them as `${root:models/maps/<name>.pt}`:
 
 ```bash
