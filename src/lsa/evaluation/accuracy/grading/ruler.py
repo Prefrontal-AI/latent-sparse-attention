@@ -1,6 +1,6 @@
 """RULER's official scoring (scripts/eval/synthetic/constants.py) over lm-eval's answer post-processing."""
 
-# The QA tasks carry several gold answers and any one of them counts; every other task needs them all
+# The QA tasks carry several gold answers and any one counts; every other task scores the fraction found
 ANY_REFERENCE = ("qa_squad", "qa_hotpot")
 
 
