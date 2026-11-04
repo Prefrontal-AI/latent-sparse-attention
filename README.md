@@ -52,7 +52,7 @@ uv run lsa --help
 
 For evaluation alone, use `uv sync --locked --extra evaluation`.
 
-The `training` extra builds `causal-conv1d` from source against the locked torch (CUDA 12.9), which needs a 12.x `nvcc` on `PATH`.
+The `training` extra builds `causal-conv1d` from source against the locked torch (CUDA 12.9), which needs `nvcc` 12.8 or later on `PATH`, since it builds sm_100 kernels (B300) only from 12.8.
 Without one, skip it:
 
 ```bash

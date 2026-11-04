@@ -98,6 +98,10 @@ blackwell = [
     "flash-attn-4==4.0.0b36",
 ]
 
+# `match-runtime` in the causal-conv1d build dependencies below is stable from uv 0.10
+[tool.uv]
+required-version = ">=0.10"
+
 # The driver is the ceiling, not the index: driver 570 takes any CUDA 12.x runtime
 # and will not load a cu130 wheel. cu129 is the last 12.x build of torch 2.13.0 and the first with Blackwell's
 # sm_100 and sm_103 kernels, so one lock serves the H200 and the B300 nodes alike.
