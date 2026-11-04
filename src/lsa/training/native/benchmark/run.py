@@ -449,6 +449,8 @@ def command(args: argparse.Namespace) -> None:
     # A replica on every rank, then the user's own overrides
     [experiment] = load(args.config, ["run.dp_shard=1", f"run.dp_replicate={ranks}", *args.overrides])
     names = tasks.expand(args.tasks)
+    if any(tasks.is_ruler(name) for name in names):
+        tasks.check_ruler_tokenizer(names, experiment.tokenizer)
     checkpoint = experiment.scored_checkpoint(args.checkpoint)
     label = args.label or default_label(checkpoint)
     records_root = args.records or str(paths.training() / RECORDS)
