@@ -12,6 +12,7 @@ The README at the repository root lists which file trains which arm.
 |---|---|
 | `core` | hellaswag, arc_easy, arc_challenge, piqa, winogrande, lambada_openai, wikitext, sciq |
 | `ruler` | the 13 RULER tasks at 4,096, 8,192 and 16,384 tokens |
+| `ruler-4k` | the same 13 at 4,096 tokens, the paper's RULER column |
 | `ruler-32k` | the same 13 at 32,768, past the length the models trained at |
 
 A RULER cell is also a task of its own, `ruler_<task>_<length>`, for example `ruler_niah_single_3_4096`.
@@ -22,6 +23,8 @@ The paper's RULER column is the mean of all 13 at 4,096 tokens.
 
 The benchmark reads fixed prompt files, so prepare them once.
 Pass nothing to choose a tokenizer: `lsa native prepare-ruler` counts every prompt in the models' own GPT-2 tokenizer, which is the tokenizer the paper's evaluation sized them by.
+The files are therefore for the GPT-2 family only, and a model with another tokenizer, such as the Qwen3.5 family under `configs/training/native/qwen35_0_8b`, would see mis-sized prompts.
+Score RULER with the configs in this folder.
 
 ```bash
 lsa --site mycluster native prepare-ruler --lengths 4096 8192 16384
@@ -38,22 +41,23 @@ Do not use `lsa data prepare ruler` for this.
 It renders NVIDIA's own generators, which draw other needles and haystacks, and the same checkpoint scores about 5 points lower on the seven needle tasks they share, mostly on `niah_single_3`.
 Those files are what the served accuracy suite reads, under the tokenizer of the model it serves.
 
-Grading is RULER's string match: every reference must appear for the needle, `vt`, `cwe` and `fwe` tasks, and any one of them for the two QA tasks.
-The paper's QA cells took the fraction of references found instead, which scores `qa_squad` about 4 points lower and leaves the mean 0.4 points lower.
+Grading is RULER's string match.
+The needle, `vt`, `cwe` and `fwe` tasks score the fraction of their references found in the reply, and the two QA tasks score 1 if any one reference is found.
+Scoring the QA tasks by the fraction of references found as well lowers `qa_squad` from .410 to .371 and the mean of 13 from 52.8 to 52.5.
+The grading rule for the QA tasks alone moves the mean between those two figures.
 
 ## Reproducing the paper's RULER column
 
 ```bash
 lsa --site mycluster native prepare-ruler --lengths 4096
 lsa --site mycluster native evaluate configs/training/native/qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml \
-  --suite benchmark --tasks ruler_niah_single_1_4096,ruler_niah_single_2_4096,ruler_niah_single_3_4096,ruler_niah_multikey_1_4096,ruler_niah_multikey_2_4096,ruler_niah_multikey_3_4096,ruler_niah_multiquery_4096,ruler_niah_multivalue_4096,ruler_vt_4096,ruler_cwe_4096,ruler_fwe_4096,ruler_qa_hotpot_4096,ruler_qa_squad_4096 \
-  --gpus 1
+  --suite benchmark --tasks ruler-4k --gpus 1
 ```
 
-The released `decay128k-lsa-2048` scores 52.8 on the 13 tasks, against the paper's 52.2.
+The paper reports 52.2 for the mean of the 13 tasks.
+The released `decay128k-lsa-2048` scores 52.8 here with any reference counting for the QA tasks, and 52.5 with the fraction of references found.
 A cell holds 100 documents, so its standard error is up to 5 points, and only the mean is worth comparing.
-A run folder is named after the task list as typed, and the file system caps a name at 255 characters, so 13 explicit cells do not fit in one run.
-Split them over two runs of `--tasks` lists, or name a preset, whose folder is its short name.
+The preset is the run's folder name, so it stays short: a run is filed under the `--tasks` value as typed, and a list of the 13 cells spelled out is over the 255 characters a file name holds.
 
 ## Not provided
 

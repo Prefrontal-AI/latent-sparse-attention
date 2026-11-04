@@ -314,14 +314,15 @@ The held-out pass, in a run or an evaluation, writes a summary and the per-seque
 
 ```bash
 lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b/multires.yaml --checkpoint ${LSA_ROOT}/training/native/qwen35_0_8b/b16k-multires/checkpoint/step-8000 --tasks core --gpus 8
-lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b/multires.yaml --checkpoint ${LSA_ROOT}/training/native/qwen35_0_8b/b16k-multires/checkpoint/step-8000 --tasks ruler --label b16k-multires-fine-only-read attention.coarse=false
+lsa native evaluate --suite benchmark configs/training/native/qwen35_0_8b_gpt2/evaluate_released_lsa_k2048.yaml --tasks ruler-4k --gpus 1
 lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler
 ```
 
-`--tasks` is a preset - `core`, `ruler`, its 13 tasks at 4,096, 8,192 and 16,384, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
+`--tasks` is a preset - `core`, `ruler`, its 13 tasks at 4,096, 8,192 and 16,384, `ruler-4k`, the same 13 at 4,096, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
 Every rank holds a full replica and lm-eval hands it a share of each task's requests.
 A run leaves `<records>/<label>/<tasks>/` with a `config.json` naming the checkpoint, its step and the attention, lm-eval's `results.json`, and one row per example under `samples/`, so two arms can be compared example by example with `lsa native report`.
-The RULER files are lm-eval's port of RULER, sized by the model's own GPT-2 tokenizer as the paper's evaluation did, and prepared once into a root of their own with `lsa native prepare-ruler --lengths 4096 8192 16384`.
+The RULER files are lm-eval's port of RULER, sized by the GPT-2 tokenizer of the `qwen35_0_8b_gpt2` family as the paper's evaluation did, and prepared once into a root of their own with `lsa native prepare-ruler --lengths 4096 8192 16384`.
+They are for that family only: another tokenizer, such as the Qwen3.5 family's under `configs/training/native/qwen35_0_8b`, would see mis-sized prompts, so score RULER with a config of the GPT-2 family.
 The [native preset README](../../configs/training/native/qwen35_0_8b_gpt2/README.md) says where the files land and why `lsa data prepare ruler` is not the command.
 The datasets of the core tasks are fetched once, from a machine with internet access, into the caches that `lsa env` exports:
 

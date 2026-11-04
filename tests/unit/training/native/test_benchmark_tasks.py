@@ -70,3 +70,12 @@ def test_a_ruler_cell_is_graded_by_the_official_string_match(tmp_path):
     assert task.doc_to_target(docs[0]) == ["1234567"]
     assert task.process_results(docs[0], [" 1234567."]) == {"score": 1.0}
     assert task.process_results(docs[1], [" 123"]) == {"score": 0.0}
+
+
+def test_ruler_4k_is_the_thirteen_tasks_at_4096_under_a_short_run_folder_name():
+    names = tasks.expand("ruler-4k")
+    assert len(names) == 13
+    assert tasks.lengths_of(names) == [4096]
+    assert [tasks.parse_ruler(name)[0] for name in names] == list(tasks.RULER_TASKS)
+    # A run folder is named after the `--tasks` value and a file name holds 255 characters
+    assert len("ruler-4k") < 255

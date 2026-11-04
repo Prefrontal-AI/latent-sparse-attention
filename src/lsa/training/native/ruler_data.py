@@ -3,7 +3,7 @@
     lsa native prepare-ruler --lengths 4096 8192 16384
 
 The paper scored the native models on lm-eval's port of RULER, sized by the models' own GPT-2 tokenizer, 100 documents a
-cell and one seed a cell. These files are that rendering, a card-named task at a time, written under
+cell and one seed a cell. The files are reproducible under the lm-eval version `uv.lock` pins, whose generators the rendering calls. These files are that rendering, a card-named task at a time, written under
 `<root>/data/benchmarks-gpt2/ruler/<task>_<length>.jsonl` where the benchmark reads them.
 They are not the files `lsa data prepare ruler` makes - NVIDIA's own generators draw other needles and haystacks, and a
 checkpoint scores about 5 points lower on seven of the needle tasks than on these.
@@ -22,14 +22,14 @@ from typing import Any
 from lsa import assets, env, io, paths, slurm
 from lsa.evaluation.accuracy.data import ruler as nvidia
 from lsa.evaluation.accuracy.data import ruler_card, ruler_path
+from lsa.training.native.benchmark.tasks import RULER_TOKENIZER, ruler_root
 
-# Beside the card's own root, named for the tokenizer its prompts are counted in
-ROOT_NAME = "benchmarks-gpt2"
-TOKENIZER = "gpt2"
 ESSAYS = "baber/paul_graham_essays"
 # The sources lm-eval reads over http, and the file each is kept in under the root
 SOURCES = {"squad.json": "sources/squad.json", "hotpotqa.json": "sources/hotpotqa.json"}
 SEED = 1234
+# The seed lm-eval's cwe_utils gives its own generator at import
+CWE_SEED = 42
 SAMPLES = 100
 LENGTHS: tuple[int, ...] = (4096, 8192, 16384)
 FIELDS = ("input", "outputs", "gen_prefix", "length", "max_length")
@@ -38,16 +38,10 @@ FIELDS = ("input", "outputs", "gen_prefix", "length", "max_length")
 PARAMETERS: dict[str, Any] = {
     "gpus_per_node": 0,
     "tasks_per_node": 1,
-    "cpus_per_task": 8,
-    "mem_gb": 64,
-    "timeout_min": 6 * 60,
+    "cpus_per_task": 4,
+    "mem_gb": 16,
+    "timeout_min": 60,
 }
-
-TEMPLATE = (
-    "Some special magic {type_needle_v} are hidden within the following text. Make sure to "
-    "memorize it. I will quiz you about the {type_needle_v} afterwards.\n{context}\nWhat are "
-    "all the special magic {type_needle_v} for {query} mentioned in the provided text?"
-)
 
 # The needle tasks - the haystack, the kind of key and value, and how many keys, values and queries
 NEEDLES: dict[str, dict[str, Any]] = {
@@ -69,12 +63,12 @@ FWE_ANSWER = 50
 
 def tokenizer_path() -> str:
     """Return the pinned snapshot of the tokenizer the files are counted in."""
-    return assets.model(TOKENIZER).checkpoint
+    return assets.model(RULER_TOKENIZER).checkpoint
 
 
 def root_default() -> str:
     """Return the root the rendering lives under unless the command line names one."""
-    return os.environ.get("LSA_RULER_ROOT") or str(paths.data() / ROOT_NAME)
+    return ruler_root()
 
 
 def source_path(root: str, name: str) -> str:
@@ -83,11 +77,19 @@ def source_path(root: str, name: str) -> str:
 
 
 def seeded() -> None:
-    """Seed the global generators the lm-eval ports draw from, so a cell is the same file on every run."""
+    """Seed every generator the lm-eval ports draw from, so a cell is the same file whatever was rendered before it."""
     import numpy
+    from lm_eval.tasks.ruler import cwe_utils
 
     random.seed(SEED)
     numpy.random.seed(SEED)
+    # cwe_utils keeps a generator of its own, seeded once at import and then used to shuffle the word list.
+    # Put it, and the list, back in the state a fresh import leaves them in.
+    words = sorted(cwe_utils.WORDS)
+    fresh = random.Random(CWE_SEED)
+    fresh.shuffle(words)
+    cwe_utils.WORDS[:] = words
+    cwe_utils.RNG.setstate(fresh.getstate())
 
 
 def needle_rows(task: str, length: int, samples: int, tokenizer: Any) -> list[dict]:
@@ -102,6 +104,7 @@ def needle_rows(task: str, length: int, samples: int, tokenizer: Any) -> list[di
     Returns:
         The rows, as lm-eval's port makes them.
     """
+    from lm_eval.tasks.ruler.niah_utils import TEMPLATE
     from lm_eval.tasks.ruler.prepare_niah import generate_samples, get_haystack
 
     options = dict(NEEDLES[task])
@@ -140,6 +143,8 @@ def common_words_rows(length: int, samples: int, tokenizer: Any) -> list[dict]:
 
 def frequent_words_rows(length: int, samples: int, tokenizer: Any) -> list[dict]:
     """Generate the frequent words extraction cell, with room in the context for the words it asks for."""
+    # Unlike lm-eval's own `get_dataset`, which sizes the prompt at `length`, this leaves `FWE_ANSWER` tokens so the
+    # prompt and the words it asks for fit in the `max_length` the row records
     from lm_eval.tasks.ruler import fwe_utils
 
     rows = fwe_utils.sys_kwext(tokenizer=tokenizer, max_seq_length=length - FWE_ANSWER, num_samples=samples)
@@ -153,8 +158,9 @@ def fitting_questions(
 ) -> list:
     """Keep the first questions whose own paragraphs fit in the length.
 
-    lm-eval's sampler drops distractors to fit a prompt but never a question's own paragraphs, so at a short length a
-    HotpotQA question with long ones would make it loop forever.
+    lm-eval's sampler drops distractors to fit a prompt but never a question's own paragraphs.
+    Keeping only questions whose own paragraphs fit, with `QA_ROOM` tokens to spare, is this module's choice,
+    so a cell never holds a question its context cannot carry.
 
     Args:
         questions: lm-eval's question records.
@@ -199,7 +205,8 @@ def question_rows(task: str, length: int, samples: int, tokenizer: Any, root: st
     seeded()
     return qa_utils.generate_samples(
         tokenizer=tokenizer,
-        docs=documents,
+        # lm-eval shuffles the list it is given in place once a prompt takes every paragraph, and the reader's copy is cached
+        docs=list(documents),
         qas=fitting_questions(questions, documents, length, samples, tokenizer),
         max_seq_length=length,
         num_samples=samples,
@@ -296,7 +303,7 @@ def ensure(root: str) -> None:
         if io.file_sha256(path) != nvidia.ASSETS[name]:
             raise ValueError(f"{path} is not the file the release pins - delete it and prepare again")
     nvidia.ensure_nltk()
-    model = assets.model(TOKENIZER)
+    model = assets.model(RULER_TOKENIZER)
     snapshot_download(model.repo, revision=model.revision, allow_patterns=["*.json", "merges.txt"])
     cache = os.environ.get("HF_DATASETS_CACHE") or str(paths.data() / "hf")
     datasets.load_dataset(ESSAYS, split="train", cache_dir=cache)

@@ -77,7 +77,7 @@ training = [
     # The teacher extraction loads the fp8 checkpoint through the evaluation adapter, so it needs the same
     # dequantisation kernel that extra does
     "kernels>=0.16.0,<0.17.0",
-    "lm-eval>=0.4.12",
+    "lm-eval[ruler]>=0.4.12",
     # The native indexer kernel is compiled on first use through torch's inline C++ extension loader, which shells out to it
     "ninja>=1.11",
     "omegaconf>=2.3.0",
