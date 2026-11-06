@@ -51,16 +51,10 @@ def _square_sum(vectors: tl.tensor, BLOCK: tl.constexpr, D: tl.constexpr) -> tl.
     first, third = tl.split(first_third)
     second, fourth = tl.split(second_fourth)
     runs = tl.fma(fourth, fourth, tl.fma(third, third, tl.fma(first, first, second * second)))
-    if D // 4 >= 64:
-        runs = _halve(runs, BLOCK, 64)
-    if D // 4 >= 32:
-        runs = _halve(runs, BLOCK, 32)
-    if D // 4 >= 16:
-        runs = _halve(runs, BLOCK, 16)
-    if D // 4 >= 8:
-        runs = _halve(runs, BLOCK, 8)
-    runs = _halve(_halve(runs, BLOCK, 4), BLOCK, 2)
-    return tl.reshape(runs, [BLOCK])
+    # NPU port: the ordered `_halve` reduction (3D permute/split, sum over axis=2) hits a
+    # triton-ascend compiler bug inside for-loops (MLIR "same parent block" assert), so the
+    # tail is one 2D reduction instead - the rounding order differs from the CUDA build
+    return tl.sum(runs, axis=1)
 
 
 @triton.jit
@@ -90,52 +84,37 @@ def _merge_cost_key(merge_cost: tl.tensor, index: tl.tensor) -> tl.tensor:
 
 
 @triton.jit
-def _ward_merge_kernel(
+def _ward_init_kernel(
     key_sums_ptr: tl.tensor,
     sizes_ptr: tl.tensor,
-    labels_ptr: tl.tensor,
-    reached_ptr: tl.tensor,
     work_ptr: tl.tensor,
     square_ptr: tl.tensor,
     size_ptr: tl.tensor,
     alive_ptr: tl.tensor,
     parent_ptr: tl.tensor,
-    best_ptr: tl.tensor,
-    key_ptr: tl.tensor,
-    mutual_ptr: tl.tensor,
-    bucket_count: tl.tensor,
-    bucket_cap: tl.tensor,
     P: tl.constexpr,
     D: tl.constexpr,
     BLOCK: tl.constexpr,
-    PREC: tl.constexpr,
-    MAX_ROUNDS: tl.constexpr,
-    JUMPS: tl.constexpr,
 ) -> None:
-    """Merge one cluster block's pools down to `bucket_count` buckets, one program a block.
+    """Copy a block's pools into the merge scratch - one program a block.
+
+    NPU port: the original fused kernel ran its rounds in a device while-loop whose counters
+    were tensor scalars produced inside nested loops - triton-ascend fails to compile that
+    (MLIR "same parent block" assert) - so the rounds now run on the host, one launch a round.
 
     Args:
         key_sums_ptr: Pool key sums [G, P, D] fp32.
         sizes_ptr: Keys each pool holds [G, P] fp32.
-        labels_ptr: Each pool's bucket [G, P] int64.
-        reached_ptr: Whether each block reached its count [G] int32.
         work_ptr: Scratch for the merged key sums [G, P, D] fp32.
         square_ptr: Scratch for the squared lengths [G, P] fp32.
         size_ptr: Scratch for the sizes [G, P] fp32.
         alive_ptr: Scratch for the live pools [G, P] int32.
         parent_ptr: Scratch for the pool each merged into [G, P] int32.
-        best_ptr: Scratch for the cheapest partners [G, P] int32.
-        key_ptr: Scratch for the cheapest partners' keys [G, P] int64.
-        mutual_ptr: Scratch for the keys of mutual pairs [G, P] int64.
-        bucket_count: Buckets a block ends with.
-        bucket_cap: Most keys a merged bucket may hold.
     """
     block = tl.program_id(0).to(tl.int64)
     base = block * P
     dims = tl.arange(0, D)
     lane = tl.arange(0, BLOCK)
-    index_mask = (1 << INDEX_BITS) - 1
-
     for tile in range(0, P // BLOCK):
         rows = tile * BLOCK + lane
         at = (base + rows)[:, None] * D + dims[None, :]
@@ -145,99 +124,162 @@ def _ward_merge_kernel(
         tl.store(size_ptr + base + rows, tl.load(sizes_ptr + base + rows))
         tl.store(alive_ptr + base + rows, tl.full([BLOCK], 1, tl.int32))
         tl.store(parent_ptr + base + rows, rows)
+
+
+@triton.jit
+def _ward_round_kernel(
+    work_ptr: tl.tensor,
+    square_ptr: tl.tensor,
+    size_ptr: tl.tensor,
+    alive_ptr: tl.tensor,
+    parent_ptr: tl.tensor,
+    best_ptr: tl.tensor,
+    key_ptr: tl.tensor,
+    mutual_ptr: tl.tensor,
+    alive_count_ptr: tl.tensor,
+    applied_ptr: tl.tensor,
+    bucket_count: tl.tensor,
+    bucket_cap: tl.tensor,
+    P: tl.constexpr,
+    D: tl.constexpr,
+    BLOCK: tl.constexpr,
+    PREC: tl.constexpr,
+) -> None:
+    """Run one round of mutual-cheapest Ward merges - one program a block.
+
+    Args:
+        work_ptr: The merged key sums so far [G, P, D] fp32, updated in place.
+        square_ptr: Squared lengths of the merged sums [G, P] fp32, updated in place.
+        size_ptr: Sizes of the merged pools [G, P] fp32, updated in place.
+        alive_ptr: Live pools [G, P] int32, updated in place.
+        parent_ptr: Pool each merged pool went into [G, P] int32, updated in place.
+        best_ptr: Scratch for the cheapest partners [G, P] int32.
+        key_ptr: Scratch for the cheapest partners' keys [G, P] int64.
+        mutual_ptr: Scratch for the keys of mutual pairs [G, P] int64.
+        alive_count_ptr: Live pools a block had coming in [G] int32, written with the new count.
+        applied_ptr: Merges the block did this round [G] int32.
+        bucket_count: Buckets a block ends with.
+        bucket_cap: Most keys a merged bucket may hold.
+    """
+    block = tl.program_id(0).to(tl.int64)
+    base = block * P
+    dims = tl.arange(0, D)
+    lane = tl.arange(0, BLOCK)
+    index_mask = (1 << INDEX_BITS) - 1
+    alive_count = tl.load(alive_count_ptr + block)
+
+    for tile in range(0, P // BLOCK):
+        rows = tile * BLOCK + lane
+        row_sums = tl.load(work_ptr + (base + rows)[:, None] * D + dims[None, :])
+        row_square = tl.load(square_ptr + base + rows)
+        row_size = tl.load(size_ptr + base + rows)
+        row_alive = tl.load(alive_ptr + base + rows) > 0
+        best = tl.full([BLOCK], MAX_KEY, tl.int64)
+        for column_tile in range(0, P // BLOCK):
+            columns = column_tile * BLOCK + lane
+            column_sums = tl.load(work_ptr + (base + columns)[:, None] * D + dims[None, :])
+            column_square = tl.load(square_ptr + base + columns)
+            column_size = tl.load(size_ptr + base + columns)
+            column_alive = tl.load(alive_ptr + base + columns) > 0
+            merge_cost = _merge_cost(row_sums, row_square, column_sums, column_square, PREC)
+            allowed = (
+                row_alive[:, None]
+                & column_alive[None, :]
+                & (rows[:, None] != columns[None, :])
+                & (row_size[:, None] + column_size[None, :] <= bucket_cap)
+            )
+            key = tl.where(allowed, _merge_cost_key(merge_cost, columns[None, :]), MAX_KEY)
+            best = tl.minimum(best, tl.min(key, axis=1))
+        tl.store(key_ptr + base + rows, best)
+        tl.store(best_ptr + base + rows, tl.where(best < MAX_KEY, (best & index_mask).to(tl.int32), -1))
     tl.debug_barrier()
 
-    alive_count = P
-    applied = 1
-    rounds = 0
-    while (alive_count > bucket_count) & (applied > 0) & (rounds < MAX_ROUNDS):
-        # Every live bucket's cheapest partner the cap allows, a tile of rows against every tile of columns
-        for tile in range(0, P // BLOCK):
-            rows = tile * BLOCK + lane
-            row_sums = tl.load(work_ptr + (base + rows)[:, None] * D + dims[None, :])
-            row_square = tl.load(square_ptr + base + rows)
-            row_size = tl.load(size_ptr + base + rows)
-            row_alive = tl.load(alive_ptr + base + rows) > 0
-            best = tl.full([BLOCK], MAX_KEY, tl.int64)
-            for column_tile in range(0, P // BLOCK):
-                columns = column_tile * BLOCK + lane
-                column_sums = tl.load(work_ptr + (base + columns)[:, None] * D + dims[None, :])
-                column_square = tl.load(square_ptr + base + columns)
-                column_size = tl.load(size_ptr + base + columns)
-                column_alive = tl.load(alive_ptr + base + columns) > 0
-                merge_cost = _merge_cost(row_sums, row_square, column_sums, column_square, PREC)
-                allowed = (
-                    row_alive[:, None]
-                    & column_alive[None, :]
-                    & (rows[:, None] != columns[None, :])
-                    & (row_size[:, None] + column_size[None, :] <= bucket_cap)
-                )
-                key = tl.where(allowed, _merge_cost_key(merge_cost, columns[None, :]), MAX_KEY)
-                best = tl.minimum(best, tl.min(key, axis=1))
-            tl.store(key_ptr + base + rows, best)
-            tl.store(best_ptr + base + rows, tl.where(best < MAX_KEY, (best & index_mask).to(tl.int32), -1))
-        tl.debug_barrier()
+    mutual_count = tl.full([], 0, tl.int32)
+    for tile in range(0, P // BLOCK):
+        rows = tile * BLOCK + lane
+        partner = tl.load(best_ptr + base + rows)
+        # masked lanes still form the address on NPU, so clamp it into the row even when masked
+        back = tl.load(best_ptr + base + tl.maximum(partner, 0), mask=partner >= 0, other=-1)
+        mutual = (partner >= 0) & (back == rows) & (rows < partner)
+        tl.store(mutual_ptr + base + rows, tl.where(mutual, tl.load(key_ptr + base + rows), MAX_KEY))
+        mutual_count = mutual_count + tl.sum(mutual.to(tl.int32), axis=0)
+    tl.debug_barrier()
 
-        # A pair that is each other's cheapest, named by its lower pool
-        mutual_count = 0
-        for tile in range(0, P // BLOCK):
-            rows = tile * BLOCK + lane
-            partner = tl.load(best_ptr + base + rows)
-            back = tl.load(best_ptr + base + partner, mask=partner >= 0, other=-1)
-            mutual = (partner >= 0) & (back == rows) & (rows < partner)
-            tl.store(mutual_ptr + base + rows, tl.where(mutual, tl.load(key_ptr + base + rows), MAX_KEY))
-            mutual_count += tl.sum(mutual.to(tl.int32), axis=0)
-        tl.debug_barrier()
+    merges_left = alive_count - bucket_count
+    applied = tl.minimum(mutual_count, merges_left)
+    for tile in range(0, P // BLOCK):
+        rows = tile * BLOCK + lane
+        mine = tl.load(mutual_ptr + base + rows)
+        keep = mine < MAX_KEY
+        # branchless rank check: triton-ascend miscompiles scalar-if on loop-carried
+        # tensor scalars, so the rank is always taken and gated by a where instead
+        rank = tl.zeros([BLOCK], dtype=tl.int32)
+        for column_tile in range(0, P // BLOCK):
+            theirs = tl.load(mutual_ptr + base + column_tile * BLOCK + lane)
+            rank = rank + tl.sum((theirs[None, :] < mine[:, None]).to(tl.int32), axis=1)
+        keep = keep & ((mutual_count <= merges_left) | (rank < merges_left))
+        partner = tl.load(best_ptr + base + rows)
+        partner_safe = tl.maximum(partner, 0)
+        row_at = (base + rows)[:, None] * D + dims[None, :]
+        partner_at = (base + partner_safe)[:, None] * D + dims[None, :]
+        joined = tl.load(work_ptr + row_at, mask=keep[:, None], other=0.0) + tl.load(
+            work_ptr + partner_at, mask=keep[:, None], other=0.0
+        )
+        tl.store(work_ptr + row_at, joined, mask=keep[:, None])
+        tl.store(square_ptr + base + rows, _square_sum(joined, BLOCK, D), mask=keep)
+        partner_size = tl.load(size_ptr + base + partner_safe, mask=keep, other=0.0)
+        tl.store(size_ptr + base + rows, tl.load(size_ptr + base + rows) + partner_size, mask=keep)
+        tl.store(alive_ptr + base + partner_safe, tl.zeros([BLOCK], dtype=tl.int32), mask=keep)
+        tl.store(parent_ptr + base + partner_safe, rows, mask=keep)
+    tl.debug_barrier()
+    tl.store(alive_count_ptr + block, alive_count - applied)
+    tl.store(applied_ptr + block, applied)
 
-        # The cheapest pairs the block's count leaves room for merge, the lower pool taking the higher
-        merges_left = alive_count - bucket_count
-        applied = tl.minimum(mutual_count, merges_left)
-        for tile in range(0, P // BLOCK):
-            rows = tile * BLOCK + lane
-            mine = tl.load(mutual_ptr + base + rows)
-            keep = mine < MAX_KEY
-            if mutual_count > merges_left:
-                rank = tl.zeros([BLOCK], dtype=tl.int32)
-                for column_tile in range(0, P // BLOCK):
-                    theirs = tl.load(mutual_ptr + base + column_tile * BLOCK + lane)
-                    rank += tl.sum((theirs[None, :] < mine[:, None]).to(tl.int32), axis=1)
-                keep = keep & (rank < merges_left)
-            partner = tl.load(best_ptr + base + rows)
-            row_at = (base + rows)[:, None] * D + dims[None, :]
-            partner_at = (base + partner)[:, None] * D + dims[None, :]
-            joined = tl.load(work_ptr + row_at, mask=keep[:, None], other=0.0) + tl.load(
-                work_ptr + partner_at, mask=keep[:, None], other=0.0
-            )
-            tl.store(work_ptr + row_at, joined, mask=keep[:, None])
-            tl.store(square_ptr + base + rows, _square_sum(joined, BLOCK, D), mask=keep)
-            partner_size = tl.load(size_ptr + base + partner, mask=keep, other=0.0)
-            tl.store(size_ptr + base + rows, tl.load(size_ptr + base + rows) + partner_size, mask=keep)
-            tl.store(alive_ptr + base + partner, tl.zeros([BLOCK], dtype=tl.int32), mask=keep)
-            tl.store(parent_ptr + base + partner, rows, mask=keep)
-        tl.debug_barrier()
-        alive_count -= applied
-        rounds += 1
 
-    # Every merged pool points at the pool it merged into - jump along the chain to the surviving one
-    for _jump in range(JUMPS):
-        for tile in range(0, P // BLOCK):
-            rows = tile * BLOCK + lane
-            parent = tl.load(parent_ptr + base + rows)
-            tl.store(parent_ptr + base + rows, tl.load(parent_ptr + base + parent))
-        tl.debug_barrier()
-    # A surviving pool's bucket is numbered by how many survive before it
+@triton.jit
+def _ward_tail_kernel(
+    alive_ptr: tl.tensor,
+    parent_ptr: tl.tensor,
+    best_ptr: tl.tensor,
+    labels_ptr: tl.tensor,
+    reached_ptr: tl.tensor,
+    bucket_count: tl.tensor,
+    P: tl.constexpr,
+    BLOCK: tl.constexpr,
+) -> None:
+    """Number the surviving buckets and label every pool - one program a block.
+
+    Args:
+        alive_ptr: Live pools after the last round [G, P] int32.
+        parent_ptr: Pool each merged pool went into [G, P] int32.
+        best_ptr: Scratch, reused for the bucket numbers [G, P] int32.
+        labels_ptr: Each pool's bucket [G, P] int64.
+        reached_ptr: Whether each block reached its count [G] int32.
+        bucket_count: Buckets a block ends with.
+    """
+    block = tl.program_id(0).to(tl.int64)
+    base = block * P
+    lane = tl.arange(0, BLOCK)
+    # NPU port: the parent-chain jump loop corrupts every later load in the same program on
+    # triton-ascend, so the chain is resolved on the host (parent.gather) before this launch
     seen = 0
+    alive_total = tl.full([], 0, tl.int32)
     for tile in range(0, P // BLOCK):
         rows = tile * BLOCK + lane
         alive = tl.load(alive_ptr + base + rows)
-        tl.store(best_ptr + base + rows, tl.cumsum(alive, axis=0) + seen - 1)
+        # NPU port: tl.cumsum on a 1D tensor miscompiles on triton-ascend (values come back
+        # laid out along the wrong axis), so the inclusive prefix sum is taken by a
+        # broadcast-and-reduce instead
+        prefix = tl.sum((lane[:, None] >= tl.arange(0, BLOCK)[None, :]).to(tl.int32) * alive[None, :], axis=1)
+        tl.store(best_ptr + base + rows, prefix + seen - 1)
         seen += tl.sum(alive, axis=0)
+        alive_total = alive_total + tl.sum(alive, axis=0)
     tl.debug_barrier()
     for tile in range(0, P // BLOCK):
         rows = tile * BLOCK + lane
         root = tl.load(parent_ptr + base + rows)
         tl.store(labels_ptr + base + rows, tl.load(best_ptr + base + root).to(tl.int64))
-    tl.store(reached_ptr + block, (alive_count <= bucket_count).to(tl.int32))
+    tl.store(reached_ptr + block, (alive_total <= bucket_count).to(tl.int32))
 
 
 def check_pools(pool_keys: torch.Tensor) -> None:
@@ -263,10 +305,14 @@ def ward_merge(
     bucket_cap: int,
     precision: str = "tf32x3",
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Merge each cluster block's pools down to `bucket_count` buckets on the GPU.
+    """Merge each cluster block's pools down to `bucket_count` buckets on the NPU.
 
     The same contract as `lsa.core.ward.ward_merge`, except that a block the cap stops short is reported in
     the second return rather than raised, since a launch cannot raise from the device.
+
+    NPU port: the merge rounds run on the host - one `_ward_round_kernel` launch a round, the counts read
+    back between launches - because triton-ascend cannot compile the original device while-loop whose
+    counters are tensor scalars produced inside nested loops.
 
     Args:
         pool_keys: Each block's pool keys [G, P, index_dim] fp32, P a power of two from 16 to 4,096, index_dim a power of two from 16
@@ -293,28 +339,27 @@ def ward_merge(
     square, size = (torch.empty(blocks, pools, device=device) for _ in range(2))
     alive, parent, best = (torch.empty(blocks, pools, dtype=torch.int32, device=device) for _ in range(3))
     key, mutual = (torch.empty(blocks, pools, dtype=torch.int64, device=device) for _ in range(2))
-    _ward_merge_kernel[(blocks,)](
-        key_sums,
-        pool_sizes.float().contiguous(),
-        labels,
-        reached,
-        work,
-        square,
-        size,
-        alive,
-        parent,
-        best,
-        key,
-        mutual,
-        bucket_count,
-        float(bucket_cap),
-        P=pools,
-        D=index_dim,
-        BLOCK=min(pools, 64),
-        PREC=PRECISION[precision],
-        MAX_ROUNDS=pools,
-        JUMPS=max(1, (pools - 1).bit_length()),
-        num_warps=4,
+    alive_count = torch.full((blocks,), pools, dtype=torch.int32, device=device)
+    applied = torch.empty(blocks, dtype=torch.int32, device=device)
+    # NPU port: the round kernel keeps two [BLOCK, D] tiles and a [BLOCK, BLOCK] cost tile in
+    # unified buffer, which overflows at BLOCK=64 once D >= 128 - shrink the tile instead
+    tile = min(pools, 64) if index_dim <= 64 else min(pools, 32) if index_dim <= 128 else min(pools, 16)
+    _ward_init_kernel[(blocks,)](
+        key_sums, pool_sizes.float().contiguous(), work, square, size, alive, parent,
+        P=pools, D=index_dim, BLOCK=tile, num_warps=4,
+    )
+    for _ in range(pools):
+        _ward_round_kernel[(blocks,)](
+            work, square, size, alive, parent, best, key, mutual, alive_count, applied,
+            bucket_count, float(bucket_cap), P=pools, D=index_dim, BLOCK=tile,
+            PREC=PRECISION[precision], num_warps=4,
+        )
+        if int(applied.max().item()) == 0:
+            break
+    for _ in range(pools.bit_length() + 1):
+        parent = parent.gather(1, parent)
+    _ward_tail_kernel[(blocks,)](
+        alive, parent, best, labels, reached, bucket_count, P=pools, BLOCK=tile, num_warps=4,
     )
     return labels, reached.bool()
 
@@ -427,7 +472,9 @@ def _compact_kernel(
     for first in range(0, P, BLOCK):
         rows = first + lane
         keep = tl.load(keep_ptr + base + rows)
-        places = kept + tl.cumsum(keep, axis=0) - 1
+        # NPU port: tl.cumsum miscompiles on triton-ascend, see _ward_tail_kernel
+        prefix = tl.sum((lane[:, None] >= tl.arange(0, BLOCK)[None, :]).to(tl.int32) * keep[None, :], axis=1)
+        places = kept + prefix - 1
         tl.store(next_ptr + base + places, tl.load(order_ptr + base + rows), mask=keep > 0)
         kept += tl.sum(keep, axis=0)
     tl.store(count_ptr + block, kept)
