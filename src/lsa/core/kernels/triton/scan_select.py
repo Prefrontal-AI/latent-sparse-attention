@@ -25,6 +25,8 @@ bucket whose shaped score against the planes reaches the threshold is still list
 against the planes, as every other shaped read does.
 """
 
+import logging
+
 import torch
 import triton
 import triton.language as tl
@@ -201,6 +203,128 @@ def _survivor_buckets(
             at += 1
             word = word & (word - 1)
         filled += tl.sum(count, 0)
+
+
+@triton.jit
+def _scan_shaped_words(
+    index_queries: tl.tensor,
+    bucket_centroids: tl.tensor,
+    visible_counts: tl.tensor,
+    thresholds: tl.tensor,
+    basis: tl.tensor,
+    variances: tl.tensor,
+    floor: tl.tensor,
+    planes: tl.tensor,
+    steps: tl.tensor,
+    totals: tl.tensor,
+    word_bits: tl.tensor,
+    query_count: tl.tensor,
+    bucket_count: tl.tensor,
+    word_count: tl.tensor,
+    deviations: tl.tensor,
+    D: tl.constexpr,
+    WORDS: tl.constexpr,
+    DKC: tl.constexpr,
+    RHO: tl.constexpr,
+    RHOP: tl.constexpr,
+    PLANES: tl.constexpr,
+) -> None:
+    # Shaped scan, one row a program: the old survivor scan split apart. This kernel holds the score dot
+    # (fp32, exact) and the spread math and writes every word's survivor bits out - no atomic anywhere,
+    # which is what the dot-plus-atomic compiler crash (upstream #14/#15) forbids. The collect kernel does
+    # the appending. A BLOCK_Q-rows-a-program form was tried first and blew the UB budget - the compiler
+    # inlines _spread once per row (upstream #21's layout blowup) - so rows go one per program. The spread
+    # math matches _score_buckets' SHAPED branch (same _spread, same fp32 order), and the listing condition
+    # scores + deviations * spread >= threshold is the reference scorer's condition on the same fp32 dot,
+    # so the listing is a superset of the buckets the per-query scoring reaches.
+    row = tl.program_id(0).to(tl.int64)
+    dims = tl.arange(0, D)
+    query = tl.load(index_queries + row * D + dims).to(tl.float32)
+    length = tl.load(visible_counts + row)
+    threshold = tl.load(thresholds + row)
+    words = tl.arange(0, D // 32)
+    step_row = tl.load(steps + row * (D // DKC) + words * 32 // DKC)
+    total_row = tl.load(totals + row)
+    planes_row = planes + row * PLANES * (D // 32)
+    slots = tl.arange(0, WORDS)
+    first = tl.program_id(1) * WORDS
+    buckets1d = first * 32 + tl.arange(0, WORDS * 32)
+    bucket_live = buckets1d < bucket_count
+    centroid = tl.load(
+        bucket_centroids + buckets1d[:, None].to(tl.int64) * D + dims[None, :],
+        mask=bucket_live[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    scores = tl.sum(centroid * query[None, :], 1)
+    directions = tl.arange(0, RHOP)
+    kept_dirs = directions < RHO
+    shaped = buckets1d.to(tl.int64)
+    word = tl.load(
+        basis
+        + ((shaped[:, None] * RHO + directions[None, :]) * (D // 32))[:, :, None]
+        + words[None, None, :],
+        mask=bucket_live[:, None, None] & kept_dirs[None, :, None],
+        other=0,
+    )
+    shape_variances = tl.load(
+        variances + shaped[:, None] * RHO + directions[None, :],
+        mask=bucket_live[:, None] & kept_dirs[None, :],
+        other=0.0,
+    )
+    fl = tl.load(floor + shaped, mask=bucket_live, other=0.0)
+    spread = _spread(
+        word,
+        planes_row,
+        step_row,
+        total_row,
+        shape_variances,
+        fl,
+        kept_dirs[None, :],
+        D,
+        PLANES,
+    )
+    total = scores + deviations * spread
+    kept = (bucket_live & (buckets1d < length) & (total >= threshold)).to(tl.int32)
+    kept2 = tl.reshape(kept, [WORDS, 32])
+    b2 = tl.reshape(
+        tl.arange(0, 32)[None, :] + tl.zeros([WORDS, 32], tl.int32), [WORDS, 32]
+    )
+    packed = tl.sum(kept2 << b2, 1)
+    at = first + slots
+    tl.store(
+        word_bits + row * word_count + at,
+        packed,
+        mask=at < word_count,
+    )
+
+
+@triton.jit
+def _collect_words(
+    word_bits: tl.tensor,
+    word_counts: tl.tensor,
+    survivor_counts: tl.tensor,
+    listed_words: tl.tensor,
+    listed_bits: tl.tensor,
+    word_count: tl.tensor,
+    capacity: tl.tensor,
+    EXPAND: tl.constexpr,
+) -> None:
+    # The append half of the shaped scan: no dot in here, so the atomic_add calls that crash next to a dot
+    # are safe. Same append protocol as _survivor_words' tail - one atomic per row per chunk.
+    row = tl.program_id(0).to(tl.int64)
+    slots = tl.arange(0, EXPAND)
+    for start in range(0, word_count, EXPAND):
+        first = start + slots
+        packed = tl.load(word_bits + row * word_count + first, mask=first < word_count, other=0)
+        hit = (packed != 0).to(tl.int32)
+        count = tl.sum(hit, 0)
+        base = tl.atomic_add(word_counts + row, count, mask=count > 0)
+        kept_count = tl.sum(libdevice.popc(packed), 0)
+        tl.atomic_add(survivor_counts + row, kept_count, mask=kept_count > 0)
+        at = base + _prefix1d(hit, EXPAND) - 1
+        held = (hit > 0) & (at < capacity)
+        tl.store(listed_words + row * capacity + at, first, mask=held)
+        tl.store(listed_bits + row * capacity + at, packed, mask=held)
 
 
 @triton.jit
@@ -436,6 +560,7 @@ def word_listing(
     thresholds: torch.Tensor,
     capacity: int,
     shapes: ShapeTable | None = None,
+    query_planes: SignQuery | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """List the buckets each row scores at or above its threshold by survivor words, then expand the words.
 
@@ -452,10 +577,59 @@ def word_listing(
         Buckets each row listed [R] int32 - above capacity for a row whose listing overflowed.
     """
     if shapes is not None:
-        raise NotImplementedError(
-            "shaped word_listing is pending - the scan needs a shaped form the "
-            "dot-plus-atomic compiler crash forbids in its current shape"
+        rows, d = index_queries.shape
+        bucket_count = bucket_centroids.shape[0]
+        word_count = triton.cdiv(bucket_count, 32)
+        device = index_queries.device
+        logging.debug("shaped word_listing rows=%d buckets=%d capacity=%d", rows, bucket_count, capacity)
+        sq = query_planes or sign_query(index_queries)
+        rank = shapes.variances.shape[1]
+        word_counts = torch.zeros(rows, device=device, dtype=torch.int32)
+        survivor_counts = torch.zeros(rows, device=device, dtype=torch.int32)
+        listed_words = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        listed_bits = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        buckets = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        words_per_program = 4
+        word_bits = torch.zeros(rows, word_count, device=device, dtype=torch.int32)
+        _scan_shaped_words[(rows, triton.cdiv(word_count, words_per_program))](
+            index_queries,
+            bucket_centroids,
+            visible_counts,
+            thresholds,
+            basis_words(shapes.basis),
+            shapes.variances,
+            shapes.floor,
+            sq.planes,
+            sq.steps,
+            sq.totals,
+            word_bits,
+            rows,
+            bucket_count,
+            word_count,
+            shapes.deviations,
+            D=d,
+            WORDS=words_per_program,
+            DKC=min(128, d),
+            RHO=rank,
+            RHOP=triton.next_power_of_2(max(rank, 1)),
+            PLANES=QUERY_BITS,
+            num_warps=4,
         )
+        _collect_words[(rows,)](
+            word_bits,
+            word_counts,
+            survivor_counts,
+            listed_words,
+            listed_bits,
+            word_count,
+            capacity,
+            EXPAND=128,
+            num_warps=4,
+        )
+        _survivor_buckets[(rows,)](
+            word_counts, listed_words, listed_bits, buckets, capacity, EXPAND=128, num_warps=4
+        )
+        return buckets, survivor_counts
     rows, d = index_queries.shape
     bucket_count = bucket_centroids.shape[0]
     word_count = triton.cdiv(bucket_count, 32)
@@ -519,7 +693,7 @@ def listed_keys(
     device = index_queries.device
     shifted = thresholds - MARGIN * index_queries.float().norm(dim=1)
     buckets, survivor_counts = word_listing(
-        index_queries, bucket_centroids, visible_counts, shifted, capacity, shapes
+        index_queries, bucket_centroids, visible_counts, shifted, capacity, shapes, query_planes
     )
     keys = torch.full((rows, capacity), EMPTY, device=device, dtype=torch.int64)
     reached = torch.empty(rows, device=device, dtype=torch.int32)
