@@ -67,14 +67,14 @@ def ward_rounds(
         alignments = squares.clamp_min(0).sqrt()
         merge_costs = alignments[:, :, None] + alignments[:, None, :] - merged_alignments
         allowed = alive[:, :, None] & alive[:, None, :] & ~diagonal
-        allowed &= bucket_sizes[:, :, None] + bucket_sizes[:, None, :] <= bucket_cap
+        allowed = allowed & (bucket_sizes[:, :, None] + bucket_sizes[:, None, :] <= bucket_cap)
         best_merge_costs, best = merge_costs.masked_fill(~allowed, float("inf")).min(2)
         del gram, merged_alignments, merge_costs, allowed
         # A pair that is each other's cheapest merges into its lower pool
         mutual = (best_merge_costs < float("inf")) & (best.gather(1, best) == index) & (index < best)
         # A block merges no further than its count, its cheapest pairs first
         rank = best_merge_costs.masked_fill(~mutual, float("inf")).argsort(1).argsort(1)
-        mutual &= rank < merges_left.clamp_min(0)[:, None]
+        mutual = mutual & (rank < merges_left.clamp_min(0)[:, None])
         if not mutual.any():
             break
         block_ids, kept = mutual.nonzero(as_tuple=True)
