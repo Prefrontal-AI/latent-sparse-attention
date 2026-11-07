@@ -19,6 +19,23 @@ from lsa.core.kernels.triton.keys import key_bucket
 
 
 @triton.jit
+def _prefix1d(x: tl.tensor, N: tl.constexpr) -> tl.tensor:
+    """The inclusive prefix sums of a 1D int32 tensor of length N.
+
+    triton-ascend miscomputes 1D tl.cumsum (values laid out along the wrong axis), so this reshapes to 2D,
+    cumsums along axis 1, and adds each row's start from a broadcast-compare prefix of the row totals - the one
+    reduction shape the compiler gets right. N must be a power of two.
+    """
+    C: tl.constexpr = 128 if N >= 128 else N
+    R: tl.constexpr = N // C
+    x2 = tl.reshape(x, [R, C])
+    totals = tl.sum(x2, axis=1)
+    lane = tl.arange(0, R)
+    starts = tl.sum((lane[:, None] >= lane[None, :]).to(tl.int32) * totals[None, :], axis=1) - totals
+    return tl.reshape(tl.cumsum(x2, axis=1) + starts[:, None], [R * C])
+
+
+@triton.jit
 def _append_window_and_sink(
     out_row_ptr: tl.tensor,
     slot_row_ptr: tl.tensor,
@@ -49,10 +66,10 @@ def _append_window_and_sink(
     sink_id = local - WINDOW_SIZE
     ids = tl.where(in_window, window_id, sink_id)
     valid = (in_window & (window_id >= 0)) | (in_sinks & (sink_id < window_start) & (sink_id <= position))
-    at = filled + tl.cumsum(valid.to(tl.int32), 0) - 1
+    at = filled + _prefix1d(valid.to(tl.int32), LOCAL_BLOCK) - 1
     if MAP_SLOTS:
-        ids = tl.load(slot_row_ptr + ids, mask=valid, other=-1)
-    tl.store(out_row_ptr + at, ids, mask=valid)
+        ids = tl.load(slot_row_ptr + tl.maximum(ids, 0), mask=valid, other=-1)
+    tl.store(out_row_ptr + tl.maximum(at, 0), ids, mask=valid)
     return filled + tl.sum(valid.to(tl.int32), 0)
 
 
@@ -132,19 +149,21 @@ def _expand_in_order(
     for first in range(0, TOP_P, TILE):
         pick = first + slot // BUCKET_CAP
         bucket = tl.load(
-            selected_ptr + row * selected_stride + pick, mask=(pick < top_p) & (filled < top_k), other=-1
+            selected_ptr + row * selected_stride + tl.minimum(pick, TOP_P - 1),
+            mask=(pick < top_p) & (filled < top_k),
+            other=-1,
         )
         ids = tl.load(
-            bucket_members_ptr + bucket.to(tl.int64) * BUCKET_CAP + slot % BUCKET_CAP,
+            bucket_members_ptr + tl.maximum(bucket, 0).to(tl.int64) * BUCKET_CAP + slot % BUCKET_CAP,
             mask=bucket >= 0,
             other=-1,
         )
         valid = (bucket >= 0) & (ids >= SINK_SIZE) & (ids < window_start)
-        at = filled + tl.cumsum(valid.to(tl.int32)) - 1
+        at = filled + _prefix1d(valid.to(tl.int32), TILE * BUCKET_CAP) - 1
         stored = valid & (at < top_k)
         if MAP_SLOTS:
-            ids = tl.load(slot_table_ptr + slot_row * slot_stride + ids, mask=stored, other=-1)
-        tl.store(out_ptr + row * out_stride + at, ids, mask=stored)
+            ids = tl.load(slot_table_ptr + slot_row * slot_stride + tl.maximum(ids, 0), mask=stored, other=-1)
+        tl.store(out_ptr + row * out_stride + tl.maximum(at, 0), ids, mask=stored)
         filled += tl.sum(valid.to(tl.int32))
     filled = tl.minimum(filled, top_k)
     length = _append_window_and_sink(
@@ -235,6 +254,37 @@ def expand_in_order(
 
 
 @triton.jit
+def _stop_key(high: tl.tensor, low: tl.tensor, weight: tl.tensor, base: tl.constexpr, top_k, top_p):
+    """Bit-search the largest key whose above-set holds the budget, its words as signed int32s.
+
+    The high word of the packed key already ranks as the int64 key does, and the low word is never
+    negative, so plain signed compares over a 31-bit search cover the whole range; the empty key's
+    high word sits below every real one and its zero weight takes it out of every total.
+    """
+    top_u = tl.zeros([], dtype=tl.int32)
+    for i in range(32):
+        candidate = top_u | (1 << (31 - i))
+        total = tl.sum(tl.where(high >= (candidate ^ (-2**31)), weight, 0), 0)
+        top_u = tl.where((total // base >= top_k) | (total % base >= top_p), candidate, top_u)
+    top = top_u ^ (-2**31)
+    above = tl.sum(tl.where(high > top, weight, 0), 0)
+    tied = high == top
+    bottom = tl.zeros([], dtype=tl.int32)
+    if tl.sum(tied.to(tl.int32), 0) > 1:
+        # A low word never sets the top bit, so the first candidate's qualifying set is the
+        # buckets strictly above the stop alone; if they already hold the budget every bit sets
+        ok31 = (above // base >= top_k) | (above % base >= top_p)
+        bottom = tl.where(ok31, -1, 0)
+        for i in range(1, 32):
+            candidate = bottom | (1 << (31 - i))
+            total = above + tl.sum(tl.where(tied & (low >= candidate), weight, 0), 0)
+            bottom = tl.where((total // base >= top_k) | (total % base >= top_p), candidate, bottom)
+    else:
+        bottom = tl.max(tl.where(tied, low, 0), 0)
+    return top, bottom, above
+
+
+@triton.jit
 def _expand_by_threshold(
     keys_ptr: tl.tensor,
     listed_ptr: tl.tensor,
@@ -297,60 +347,55 @@ def _expand_by_threshold(
     # The row's listed keys in unsigned order, the empty key 0, and each one's bucket and cache row
     index = tl.arange(0, LISTED)
     key = tl.load(keys_ptr + row * key_stride + index, mask=index < count, other=-(2**63))
-    order = (key ^ -(2**63)).to(tl.uint64, bitcast=True)
+    held = key != -(2**63)
     bucket = key_bucket(key)
     if PHYSICAL:
         # The keys hold cache rows, and a page knows its first position
-        cache_row = tl.where(order > 0, bucket, -1).to(tl.int64)
-        first_position = tl.load(block_positions_ptr + cache_row // page_size, mask=cache_row >= 0, other=0)
+        cache_row = tl.where(held, bucket, -1).to(tl.int64)
+        first_position = tl.load(
+            block_positions_ptr + tl.maximum(cache_row, 0) // page_size, mask=cache_row >= 0, other=0
+        )
     else:
+        bucket = tl.where(held, bucket, 0)
         block = bucket // page_size
-        page = tl.load(request_blocks_ptr + request * block_stride + block, mask=order > 0, other=-1)
-        cache_row = tl.where((order > 0) & (page >= 0), page * page_size + bucket % page_size, -1).to(
+        page = tl.load(request_blocks_ptr + request * block_stride + block, mask=held, other=-1)
+        cache_row = tl.where(held & (page >= 0), page * page_size + bucket % page_size, -1).to(
             tl.int64
         )
         first_position = block * cluster_block_size
     live = cache_row >= 0
     # Members a bucket gives the read - all it has, unless its block reaches the sinks or the window
-    members = tl.load(bucket_sizes_ptr + cache_row, mask=live, other=0)
+    members = tl.load(bucket_sizes_ptr + tl.maximum(cache_row, 0), mask=live, other=0)
     near = live & ((first_position < SINK_SIZE) | (first_position + cluster_block_size > window_start))
     if tl.sum(near.to(tl.int32), 0) > 0:
         counted = tl.zeros([LISTED], dtype=tl.int32)
         for s in tl.static_range(BUCKET_CAP):
-            member = tl.load(bucket_members_ptr + cache_row * BUCKET_CAP + s, mask=near, other=-1)
+            member = tl.load(
+                bucket_members_ptr + tl.maximum(cache_row, 0) * BUCKET_CAP + s, mask=near, other=-1
+            )
             counted += ((member >= SINK_SIZE) & (member < window_start)).to(tl.int32)
         members = tl.where(near, counted, members)
     # The last bucket a best-first walk reaches - the largest key at or above which the buckets hold the budget
     # or number the picks - its score word first and its bucket word only on a tie, members and buckets in one sum
     base = 2 * LISTED
-    weight = members * base + (order > 0).to(tl.int32)
-    high = (order >> 32).to(tl.uint32)
-    low = order.to(tl.uint32)
-    one = tl.full([], 1, tl.uint32)
-    top = tl.zeros([], dtype=tl.uint32)
-    for i in range(32):
-        candidate = top | (one << tl.cast(31 - i, tl.uint32))
-        total = tl.sum(tl.where(high >= candidate, weight, 0), 0)
-        top = tl.where((total // base >= top_k) | (total % base >= top_p), candidate, top)
-    above = tl.sum(tl.where(high > top, weight, 0), 0)
-    tied = high == top
-    bottom = tl.zeros([], dtype=tl.uint32)
-    if tl.sum(tied.to(tl.int32), 0) > 1:
-        for i in range(32):
-            candidate = bottom | (one << tl.cast(31 - i, tl.uint32))
-            total = above + tl.sum(tl.where(tied & (low >= candidate), weight, 0), 0)
-            bottom = tl.where((total // base >= top_k) | (total % base >= top_p), candidate, bottom)
-    else:
-        bottom = tl.max(tl.where(tied, low, 0), 0)
-    last = (top.to(tl.uint64) << 32) | bottom.to(tl.uint64)
-    room = top_k - tl.sum(tl.where(order > last, members, 0), 0)
+    weight = members * base + held.to(tl.int32)
+    # The packed key compared as one signed int32 pair: the int64 key order matches the uint64
+    # order the reference walks, the empty key sits at the smallest high word, and the low word
+    # is never negative, so plain signed 31-bit searches over both words cover the whole range
+    high = (key >> 32).to(tl.int32)
+    low = (key & 0xFFFFFFFF).to(tl.int32)
+    top, bottom, above = _stop_key(high, low, weight, base, top_k, top_p)
+    beyond = (high > top) | ((high == top) & (low > bottom))
+    room = top_k - tl.sum(tl.where(beyond, members, 0), 0)
     # Every bucket above the last, listed to walk, and the last cut to the room left
-    whole = (order > last) & live
+    whole = beyond & live
     tl.store(
-        scratch_ptr + row * TOP_P + tl.cumsum(whole.to(tl.int32), 0) - 1, cache_row.to(tl.int32), mask=whole
+        scratch_ptr + row * TOP_P + tl.maximum(_prefix1d(whole.to(tl.int32), LISTED) - 1, 0),
+        cache_row.to(tl.int32),
+        mask=whole,
     )
     whole_count = tl.sum(whole.to(tl.int32), 0)
-    cut_row = tl.max(tl.where((order == last) & live, cache_row, -1), 0)
+    cut_row = tl.max(tl.where((high == top) & (low == bottom) & live, cache_row, -1), 0)
     # The request's token table row is its request number
     slot_row = request
     pad = tl.arange(0, PAD_BLOCK)
@@ -360,24 +405,30 @@ def _expand_by_threshold(
     filled = 0
     for first in range(0, whole_count, TILE):
         pick = first + slot // BUCKET_CAP
-        walked = tl.load(scratch_ptr + row * TOP_P + pick, mask=pick < whole_count, other=-1).to(tl.int64)
+        walked = tl.load(
+            scratch_ptr + row * TOP_P + tl.minimum(pick, TOP_P - 1), mask=pick < whole_count, other=-1
+        ).to(tl.int64)
         ids = tl.load(
-            bucket_members_ptr + walked * BUCKET_CAP + slot % BUCKET_CAP, mask=walked >= 0, other=-1
+            bucket_members_ptr + tl.maximum(walked, 0) * BUCKET_CAP + slot % BUCKET_CAP,
+            mask=walked >= 0,
+            other=-1,
         )
         kept = (walked >= 0) & (ids >= SINK_SIZE) & (ids < window_start)
-        at = filled + tl.cumsum(kept.to(tl.int32), 0) - 1
+        at = filled + _prefix1d(kept.to(tl.int32), TILE * BUCKET_CAP) - 1
         if MAP_SLOTS:
-            ids = tl.load(slot_table_ptr + slot_row * slot_stride + ids, mask=kept, other=-1)
-        tl.store(out_ptr + row * out_stride + at, ids, mask=kept)
+            ids = tl.load(slot_table_ptr + slot_row * slot_stride + tl.maximum(ids, 0), mask=kept, other=-1)
+        tl.store(out_ptr + row * out_stride + tl.maximum(at, 0), ids, mask=kept)
         filled += tl.sum(kept.to(tl.int32), 0)
     cut_slot = tl.arange(0, BUCKET_CAP)
-    ids = tl.load(bucket_members_ptr + cut_row * BUCKET_CAP + cut_slot, mask=cut_row >= 0, other=-1)
+    ids = tl.load(
+        bucket_members_ptr + tl.maximum(cut_row, 0) * BUCKET_CAP + cut_slot, mask=cut_row >= 0, other=-1
+    )
     valid = (cut_row >= 0) & (ids >= SINK_SIZE) & (ids < window_start)
-    rank = tl.cumsum(valid.to(tl.int32), 0) - 1
+    rank = _prefix1d(valid.to(tl.int32), BUCKET_CAP) - 1
     kept = valid & (rank < room)
     if MAP_SLOTS:
-        ids = tl.load(slot_table_ptr + slot_row * slot_stride + ids, mask=kept, other=-1)
-    tl.store(out_ptr + row * out_stride + filled + rank, ids, mask=kept)
+        ids = tl.load(slot_table_ptr + slot_row * slot_stride + tl.maximum(ids, 0), mask=kept, other=-1)
+    tl.store(out_ptr + row * out_stride + filled + tl.maximum(rank, 0), ids, mask=kept)
     filled += tl.sum(kept.to(tl.int32), 0)
     length = _append_window_and_sink(
         out_ptr + row * out_stride,
