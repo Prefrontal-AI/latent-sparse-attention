@@ -383,6 +383,7 @@ lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated --dry-r
 lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
 lsa evaluate isolated glm53_flash --phase decode --arm pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
 lsa evaluate isolated glm53_flash --gpu b300 --output $LSA_ROOT/layer-perf/isolated-b300
+lsa evaluate isolated glm53_flash --arm full --arm lsa_flat 'data.contexts=[10485760]' --dry-run
 ```
 
 A layer timing compares across arms only when the card behaved the same for all of them.
@@ -402,6 +403,7 @@ It runs the same measurement as `lsa evaluate kernels`, once per arm and phase, 
 The arms of a model are its dense and native baselines, the two designs and PISA, in that order.
 `--arm` names others instead, such as the two PISA variants, and `--phase` keeps one phase.
 `--gpu b300` loads each arm's B300 config beside the H200 one, with that card's image and backends, and refuses an arm that has none rather than falling back to the H200 file.
+Trailing dotted overrides, as `lsa evaluate kernels` takes, apply to every arm and phase and lay over the table's overrides, so they win.
 An arm that fails does not stop the ones after it, and the job lists the failed arms when the last is done.
 
 ### What runs inside the container

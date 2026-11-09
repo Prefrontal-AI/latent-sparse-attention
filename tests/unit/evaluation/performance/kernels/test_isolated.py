@@ -59,6 +59,30 @@ def test_the_output_override_reaches_every_arm(tmp_path):
     assert {e.run.output for e in experiments} == {str(tmp_path)}
 
 
+@pytest.mark.parametrize("model", sorted(isolated.ARMS))
+def test_trailing_overrides_reach_every_experiment_and_beat_the_arms_own(model):
+    experiments = isolated.load_arms(
+        model, None, overrides=("data.contexts=[10485760]", "data.chunk=8192", "run.hours=3")
+    )
+
+    assert {tuple(e.data.contexts) for e in experiments} == {(10485760,)}
+    assert {e.data.chunk for e in experiments} == {8192}
+    assert {e.hours for e in experiments} == {3}
+
+
+def test_overrides_after_the_flags_reach_the_printout_and_the_job_hours(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["isolated", "glm53_flash", "--arm", "full", "--arm", "lsa_flat", "data.contexts=[10485760]",
+         "run.hours=2", "--dry-run"],
+    )  # fmt: skip
+    isolated.main()
+
+    out = capsys.readouterr().out
+    assert out.count("contexts [10485760]") == 4
+    assert "'timeout_min': 480" in out
+
+
 def test_a_chosen_arm_is_the_only_one_run_and_may_be_a_fair_ablation():
     experiments = isolated.load_arms("glm53_flash", None, arms=("pisa_c8",))
 
