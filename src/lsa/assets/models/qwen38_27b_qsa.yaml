@@ -4,6 +4,11 @@
 # each full-attention layer's `indexer` beside its attention, and the `indexer_*` fields in `text_config` that make
 # the server build the indexer and its sparse backend. Everything else is `qwen38_27b`'s, the rotation it is served
 # under included.
+#
+# The run's indexer is published as release `qsa-weights-v1`, see models/README.md. Built from it with
+#
+#     lsa distill inject --model qwen38_27b --maps $LSA_ROOT/models/maps/qwen38_27b__long-16k-1M-heavy-qsa.pt \
+#       --out $LSA_ROOT/models/qwen38_27b_qsa
 
 name: qwen38_27b_qsa
 about: Qwen3.8-27B with QSA indexers distilled on the frozen model - the baseline LSA is measured against

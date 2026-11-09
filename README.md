@@ -240,13 +240,14 @@ lsa distill export <run's maps.pt> <out.pt>
 | LongDocs, the long-document corpus | distillation and the native 128k decay | assembled from the hub with `lsa data prepare <source>`, see [data/longdocs](https://github.com/Prefrontal-AI/latent-sparse-attention/tree/main/data/longdocs) - the lock files are in [release `longdocs-locks-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/longdocs-locks-v1) |
 | Agent traces `games` and `edgebench`, scrubbed | the distillation mix | [release `traces-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/traces-v1), see [the data guide](docs/guide/data.md#sources) |
 | Distilled maps for Qwen3.8-27B and GLM-5.3-Flash | every `lsa_*` served config | [release `d-lsa-weights-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/d-lsa-weights-v1) |
+| The QSA indexer distilled on Qwen3.8-27B | the `qsa` configs | [release `qsa-weights-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/qsa-weights-v1) |
 | Checkpoints of the ten 128k decays of the native comparison, N-LSA and its baselines | `lsa native evaluate` | [release `n-lsa-weights-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/n-lsa-weights-v1) |
 | PaperTrail | the `papertrail` suite | rebuilt from its kit, which is in the repository, with `lsa data prepare papertrail` - see [data/papertrail](https://github.com/Prefrontal-AI/latent-sparse-attention/tree/main/data/papertrail) |
 | RULER haystack sources | `lsa data prepare ruler`, which rebuilds the paper's RULER sets byte for byte | [release `ruler-sources-v1`](https://github.com/Prefrontal-AI/latent-sparse-attention/releases/tag/ruler-sources-v1) |
 
 ### Weights
 
-The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, and the checkpoints of the native comparison, N-LSA included, of the release `n-lsa-weights-v1`.
+The distilled maps of D-LSA are assets of the release `d-lsa-weights-v1`, the QSA indexer of the Qwen3.8-27B baseline of the release `qsa-weights-v1`, and the checkpoints of the native comparison, N-LSA included, of the release `n-lsa-weights-v1`.
 Both unpack into the layout the configs read, under the site's `root` (`LSA_ROOT` overrides it).
 The commands below use `gh`, which must be installed and needs no login for a public repository.
 Without it, `curl -fL --create-dirs -o "<dest>/<asset>" https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/<tag>/<asset>` fetches one asset, with no login either.
@@ -255,6 +256,13 @@ The distilled maps are single files that go in `models/maps/`, where the `lsa_*`
 
 ```bash
 gh release download d-lsa-weights-v1 -R Prefrontal-AI/latent-sparse-attention --pattern '*.pt' --dir "$LSA_ROOT/models/maps"
+```
+
+The QSA indexer is a maps file too, and the `qsa` configs read the checkpoint that `lsa distill inject` builds from it:
+
+```bash
+gh release download qsa-weights-v1 -R Prefrontal-AI/latent-sparse-attention --pattern '*.pt' --dir "$LSA_ROOT/models/maps"
+lsa distill inject --model qwen38_27b --maps "$LSA_ROOT/models/maps/qwen38_27b__long-16k-1M-heavy-qsa.pt" --out "$LSA_ROOT/models/qwen38_27b_qsa"
 ```
 
 A native checkpoint is a torchtitan step folder of 2.3 GB, split in two parts below the 2 GiB limit of a release asset.

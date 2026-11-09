@@ -6,6 +6,8 @@
 # page of 64 it sets, and no attention backend named. Qwen has no upstream block-sparse attention, so "as served"
 # is the stock it is held to.
 #
+# The QSA checkpoint is built from the indexer of release `qsa-weights-v1`, see models/README.md.
+#
 # `data.checkpoint` is a five-layer cut of the QSA checkpoint, built as the base's is:
 #
 #     lsa kernels cut --layers 5 --weights --snapshot $LSA_ROOT/models/qwen38_27b_qsa \
