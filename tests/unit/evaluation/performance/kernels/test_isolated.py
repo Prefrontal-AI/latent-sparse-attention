@@ -1,4 +1,4 @@
-"""The isolated layer run - every arm of a model, one after another, in one job on a node held whole."""
+"""The isolated layer run - every arm of a model, one after another, in one job on one GPU."""
 
 import argparse
 
@@ -109,15 +109,16 @@ def test_an_unknown_model_names_the_ones_there_are():
         isolated.load_arms("nope", None)
 
 
-def test_the_job_holds_one_gpu_of_a_node_exclusively_inside_the_reservation():
+def test_the_job_holds_one_gpu_of_a_shared_node_inside_the_reservation():
     experiments = isolated.load_arms("qwen38_27b", None)
 
     parameters = isolated.job_parameters(experiments, parsed("--reservation", "res"))
 
     assert parameters["gpus_per_node"] == 1
-    assert parameters["slurm_exclusive"] is True
+    # Not the whole node - an exclusive rerun moved H200 layer prefill by at most 1.5%
+    assert "slurm_exclusive" not in parameters
     assert parameters["slurm_additional_parameters"]["reservation"] == "res"
-    # A one-GPU job is left unbound - the node is held whole, so no other job shares its sockets
+    # A one-GPU job is left unbound, as `bound_to_gpus` leaves every one-GPU job
     assert "gres_flags" not in parameters["slurm_additional_parameters"]
     assert parameters["timeout_min"] == sum(e.hours for e in experiments) * 60
 

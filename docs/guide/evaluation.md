@@ -375,7 +375,7 @@ lsa records rebuild <records>/<run_id>   # rebuild the record from its samples, 
 ### Every arm of a layer in one job
 
 `lsa evaluate isolated` is the driver behind the H200 layer timings of the paper's layer-performance and motivation figures.
-It times every arm of one model's layer, both phases, one after another on one GPU of a node nothing else runs on.
+It times every arm of one model's layer, both phases, one after another on one GPU.
 The paper's GLM-5.3-Flash H200 records behind those figures carry its overrides - a 32,768 chunk where the GLM base config sets 8,192, and FlashMLA sparse prefill with FA3 decode on the sparse arms - and Qwen3.8-27B's configs set the same chunk themselves.
 
 ```bash
@@ -388,7 +388,8 @@ lsa evaluate isolated glm53_flash --arm full --arm lsa_flat 'data.contexts=[1048
 
 A layer timing compares across arms only when the card behaved the same for all of them.
 One job per arm lands on whichever nodes are free, shares them with other users' jobs, and can be timed on a card another job is heating.
-This is one job that asks for a whole node and holds one of its GPUs for every arm and phase in turn, so the arms differ in what they are and not in where they ran.
+This is one job that holds one GPU for every arm and phase in turn, so the arms ran on one card and differ in what they are and not in where they ran.
+It does not ask for the whole node: on H200 an exclusive rerun moved layer prefill by at most 1.5% against the same timings on a shared node, every method, so the node's other GPUs stay free for other jobs.
 The telemetry each point keeps says what the card did.
 
 It runs the same measurement as `lsa evaluate kernels`, once per arm and phase, with the arms' configs under `configs/evaluation/kernels/<model>/` loaded and these overrides laid over them.

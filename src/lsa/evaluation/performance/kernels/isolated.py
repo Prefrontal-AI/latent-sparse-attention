@@ -1,4 +1,4 @@
-"""Time every arm of one model's layer, both phases, one after another on one GPU of a node nothing else runs on.
+"""Time every arm of one model's layer, both phases, one after another on one GPU.
 
     lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
     lsa evaluate isolated qwen38_27b --output $LSA_ROOT/layer-perf/isolated --dry-run
@@ -10,9 +10,10 @@
 
 A layer timing is only comparable across arms when the card behaved the same for all of them. Jobs of one arm each
 land on whichever nodes are free and share them with other users' jobs, so an arm can be timed on a card another
-job is heating or on a node with a busier power budget. This is one job that asks for a whole node - slurm's
-`--exclusive` - and holds one GPU of it for every arm and phase in turn, so the arms differ in what they are
-and not in where they ran. The telemetry each point keeps (see [telemetry](../telemetry.py)) says what the card did.
+job is heating or on a node with a busier power budget. This is one job that holds one GPU for every arm and
+phase in turn, so the arms ran on one card and differ in what they are and not in where they ran. It does not ask
+for the whole node: on H200 an exclusive rerun moved layer prefill by at most 1.5% against the same timings on a
+shared node, every method, so the node's other GPUs stay free for other jobs. The telemetry each point keeps (see [telemetry](../telemetry.py)) says what the card did.
 
 Every arm prefills in chunks of 32,768 tokens, the contexts are the ladder the published records hold, and the
 design's arms - flat and tree - run their kernels in CuTeDSL. The image is the configs' own. An arm that fails
@@ -203,7 +204,7 @@ def run_arms(experiments: list["KernelsConfig"]) -> list[str]:
 
 
 def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace) -> dict[str, Any]:
-    """Return what the one job asks for - one GPU on a node held whole, for the hours its arms add up to.
+    """Return what the one job asks for - one GPU of a shared node, for the hours its arms add up to.
 
     Args:
         experiments: The evaluations the job runs.
@@ -219,7 +220,6 @@ def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace)
     everything: list[Experiment] = [*experiments]
     parameters = shared_parameters(everything, 1)
     parameters["timeout_min"] = sum(experiment.hours for experiment in experiments) * 60
-    parameters["slurm_exclusive"] = True
     given = slurm.overrides(args)
     extra = given.pop("slurm_additional_parameters", {})
     parameters = {**parameters, **given}
@@ -230,7 +230,7 @@ def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace)
 
 def main() -> None:
     """Parse the command line, print the evaluations, and submit them as one job unless asked only to print."""
-    parser = argparse.ArgumentParser(description="Time every arm of a model's layer in one exclusive job")
+    parser = argparse.ArgumentParser(description="Time every arm of a model's layer in one job on one GPU")
     parser.add_argument(
         "model", choices=sorted(ARMS), help="the model's directory under configs/evaluation/kernels"
     )
