@@ -221,5 +221,5 @@ def test_a_collected_source_must_name_what_counts_its_documents():
 
 
 def test_the_preparer_runs_online_and_every_other_one_does_not():
-    assert "export HF_HUB_OFFLINE=0" in collect.ENVIRONMENT
-    assert "export HF_HUB_OFFLINE=1" not in collect.ENVIRONMENT
+    assert "export HF_HUB_OFFLINE=0" in collect.environment()
+    assert "export HF_HUB_OFFLINE=1" not in collect.environment()

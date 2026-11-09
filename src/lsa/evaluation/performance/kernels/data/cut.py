@@ -150,4 +150,4 @@ def main() -> None:
     args = parser.parse_args()
     snapshot = os.path.abspath(args.snapshot or min(glob.glob(HUB)))
     out = os.path.abspath(args.out)
-    slurm.submit(args, "lsa-cut", env.OFFLINE_HF, slurm.CPU, cut, snapshot, out, args.layers, args.weights)
+    slurm.submit(args, "lsa-cut", env.offline_hf(), slurm.CPU, cut, snapshot, out, args.layers, args.weights)

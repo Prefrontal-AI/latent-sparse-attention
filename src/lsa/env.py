@@ -1,9 +1,9 @@
 """What a job's environment has to be before torch or transformers starts.
 
 Four contracts, and they are not the same thing.
-`OFFLINE_HF` is what anything loading a model or a corpus needs on a cluster with no egress, `EVAL_DATA` is
+`offline_hf` is what anything loading a model or a corpus needs on a cluster with no egress, `EVAL_DATA` is
 where the suite's prompt files live, and `DISTRIBUTED_TORCH` is what a run spread over several GPUs needs.
-`OFFLINE_HF` and `DISTRIBUTED_TORCH` meet only at `HF_HUB_OFFLINE`, and keeping them in one module is what lets a reader check that the two
+`offline_hf` and `DISTRIBUTED_TORCH` meet only at `HF_HUB_OFFLINE`, and keeping them in one module is what lets a reader check that the two
 spellings agree.
 
 This is the launch path rather than the code, which is why it is not in [constants](constants.py): a value
@@ -12,7 +12,7 @@ The dashboard project and the rendezvous port span are here for the same reason 
 that spells them into an environment - a recipe read once before the process starts, not a value two modules
 have to agree on.
 
-`OFFLINE_HF` is shell lines rather than a mapping because its paths are built from the environment they are
+`offline_hf` is shell lines rather than a mapping because its paths are built from the environment they are
 being set in - `$USER`, `$HF_HOME` and `$LSA_ROOT` are the target node's, not the submitting host's - and
 only a shell can resolve that. The shell form is also what `lsa env` prints, so an sbatch file
 evaluates it rather than copying it. `DISTRIBUTED_TORCH` is a mapping, which
@@ -35,45 +35,76 @@ def declared_hf_home() -> str:
     return str(site.load().get("hf_home") or "")
 
 
-# The shared root, exported so the job's python resolves the same one its shell did
-# => the site's root unless the node already has `LSA_ROOT`
-ROOT_LINE: str = f'export {paths.ROOT_VARIABLE}="${{{paths.ROOT_VARIABLE}:-{paths.declared_root()}}}"'
+def root_line() -> str:
+    """Return the line that exports the shared root, so the job's python resolves the same one its shell did.
 
-# No egress on the cluster - the model and the datasets come from the caches or not at all
-# => the HF datasets are shared, beside the prompt corpus every run reads
-OFFLINE_HF: tuple[str, ...] = (
-    ROOT_LINE,
-    *((f'export HF_HOME="${{HF_HOME:-{declared_hf_home()}}}"',) if declared_hf_home() else ()),
-    f'export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-${paths.ROOT_VARIABLE}/data/hf}}"',
-    "export HF_HUB_OFFLINE=1",
-    "export TRANSFORMERS_OFFLINE=1",
-    "export TRANSFORMERS_VERBOSITY=error",
-    "export TOKENIZERS_PARALLELISM=false",
-)
+    It reads the site, so it is built when a script is, never on import: an installed copy of the package has
+    no site files beside it, and importing this module must work there.
 
-# A collection streams a dataset from the hub, so it is the one job that is not offline
-# => the same root and cache as the offline lines, and the hub left on
-ONLINE_HF: tuple[str, ...] = (
-    ROOT_LINE,
-    *((f'export HF_HOME="${{HF_HOME:-{declared_hf_home()}}}"',) if declared_hf_home() else ()),
-    "export HF_HUB_OFFLINE=0",
-    "export TRANSFORMERS_VERBOSITY=error",
-    "export TOKENIZERS_PARALLELISM=true",
-)
+    Returns:
+        The site's root, unless the node already has `LSA_ROOT`.
+    """
+    return f'export {paths.ROOT_VARIABLE}="${{{paths.ROOT_VARIABLE}:-{paths.declared_root()}}}"'
 
-# A teacher extraction - a span of GLM-5.3-Flash fills most of an H200, and a 1M document's late chunks ask
-# the allocator for 8 GiB score tiles that a fragmented heap cannot place
-TEACHER: tuple[str, ...] = (*OFFLINE_HF, "export PYTORCH_ALLOC_CONF=expandable_segments:True")
 
-# A distillation run - the card holds a rolling window of 1M-row documents and a report's read-ahead beside it,
-# and a fragmented heap OOMed every shard of the first run with 12-24 GiB reserved but unallocated
-DISTILL: tuple[str, ...] = (*OFFLINE_HF, "export PYTORCH_ALLOC_CONF=expandable_segments:True")
+def hf_home_line() -> tuple[str, ...]:
+    """Return the line that exports the site's hub cache, or nothing where the site names none."""
+    declared = declared_hf_home()
+    return (f'export HF_HOME="${{HF_HOME:-{declared}}}"',) if declared else ()
 
-# The suite's fixed prompt files, 4.1G at the full counts - a cache root under the shared one, filled by `prepare`
-EVAL_DATA: tuple[str, ...] = (
-    ROOT_LINE,
-    f'export LSA_EVAL_DATA="${{LSA_EVAL_DATA:-${paths.ROOT_VARIABLE}/data/benchmarks}}"',
-)
+
+def offline_hf() -> tuple[str, ...]:
+    """Return the shell lines for a job with no egress - the model and the datasets come from the caches or not at all.
+
+    The HF datasets are shared, beside the prompt corpus every run reads.
+    """
+    return (
+        root_line(),
+        *hf_home_line(),
+        f'export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-${paths.ROOT_VARIABLE}/data/hf}}"',
+        "export HF_HUB_OFFLINE=1",
+        "export TRANSFORMERS_OFFLINE=1",
+        "export TRANSFORMERS_VERBOSITY=error",
+        "export TOKENIZERS_PARALLELISM=false",
+    )
+
+
+def online_hf() -> tuple[str, ...]:
+    """Return the shell lines for a collection, which streams a dataset from the hub and so is not offline."""
+    return (
+        root_line(),
+        *hf_home_line(),
+        "export HF_HUB_OFFLINE=0",
+        "export TRANSFORMERS_VERBOSITY=error",
+        "export TOKENIZERS_PARALLELISM=true",
+    )
+
+
+def teacher() -> tuple[str, ...]:
+    """Return the lines for a teacher extraction.
+
+    A span of GLM-5.3-Flash fills most of an H200, and a 1M document's late chunks ask the allocator for 8 GiB
+    score tiles that a fragmented heap cannot place.
+    """
+    return (*offline_hf(), "export PYTORCH_ALLOC_CONF=expandable_segments:True")
+
+
+def distill() -> tuple[str, ...]:
+    """Return the lines for a distillation run.
+
+    The card holds a rolling window of 1M-row documents and a report's read-ahead beside it, and a fragmented
+    heap OOMed every shard of the first run with 12-24 GiB reserved but unallocated.
+    """
+    return (*offline_hf(), "export PYTORCH_ALLOC_CONF=expandable_segments:True")
+
+
+def eval_data() -> tuple[str, ...]:
+    """Return the lines for the suite's fixed prompt files, 4.1G at the full counts - a cache root under the shared one."""
+    return (
+        root_line(),
+        f'export LSA_EVAL_DATA="${{LSA_EVAL_DATA:-${paths.ROOT_VARIABLE}/data/benchmarks}}"',
+    )
+
 
 # What a run spread over several GPUs needs - unbuffered, since a block-buffered job under sbatch looks hung
 DISTRIBUTED_TORCH: dict[str, str] = {
@@ -133,11 +164,13 @@ def site_hf_home() -> str | None:
 def prefer_offline_hub() -> None:
     """Read every hub source from the cache in this process, unless the environment already says otherwise.
 
-    The in-process half of `OFFLINE_HF`, for a package that reads a tokenizer, a dataset or an lm-eval task.
+    The in-process half of `offline_hf`, for a package that reads a tokenizer, a dataset or an lm-eval task.
     Called before any of its modules imports one, because the hub reads its offline switches at import.
     The cluster has no egress, so every source is read from the cache.
     """
-    cache = site_hf_home()
+    # An installed copy has no site files beside it, and this runs on import - so no site names no cache,
+    # and the job's own `HF_HOME` is the one that counts
+    cache = site_hf_home() if (site.SITES / f"{site.current()}.yaml").is_file() else None
     if cache:
         os.environ.setdefault("HF_HOME", cache)
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -210,4 +243,4 @@ def rendezvous_host() -> str:
 
 def main() -> None:
     """Print the offline hub contract as shell lines, for an sbatch file to evaluate."""
-    print("\n".join(OFFLINE_HF))
+    print("\n".join(offline_hf()))

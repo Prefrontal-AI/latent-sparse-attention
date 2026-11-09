@@ -485,7 +485,7 @@ def main() -> None:
     slurm.submit(
         args,
         "lsa-inject",
-        env.OFFLINE_HF,
+        env.offline_hf(),
         slurm.CPU,
         inject_and_report,
         model,

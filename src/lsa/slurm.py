@@ -15,12 +15,12 @@ submits through sbatch, `local` runs through submitit's local executor on one no
 
     slurm.add_flags(parser)
     args = parser.parse_args()
-    slurm.submit(args, "lsa-x", env.OFFLINE_HF, PARAMETERS, work, config)
+    slurm.submit(args, "lsa-x", env.offline_hf(), PARAMETERS, work, config)
 
 `submit` is the one-job case. A submitter that maps over an array builds the executor itself, the same way:
 
     parameters = {**PARAMETERS, **slurm.overrides(args)}
-    executor = slurm.executor("lsa-x", env.OFFLINE_HF, args.folder, **parameters)
+    executor = slurm.executor("lsa-x", env.offline_hf(), args.folder, **parameters)
     jobs = executor.map_array(work, configs)
 
 Every flag defaults to None, so a submitter whose parameters come from its config can load the config first

@@ -384,8 +384,11 @@ def digest(text: str) -> str:
 # every core it is given
 PARAMETERS: dict[str, Any] = {"gpus_per_node": 0, "cpus_per_task": 32, "mem_gb": 128, "timeout_min": 24 * 60}
 
+
 # The hub is read, so the job is not offline as every other preparing job is
-ENVIRONMENT: tuple[str, ...] = env.ONLINE_HF
+def environment() -> tuple[str, ...]:
+    """Return the shell lines the job runs under, which read the site and so are built at submission."""
+    return env.online_hf()
 
 
 def add_options(parser: argparse.ArgumentParser) -> None:

@@ -910,7 +910,7 @@ def main() -> None:
             continue
         io.write_json(experiment.out / Results.DOCUMENTS, documents)
         executor = slurm.executor(
-            Served.JOB_NAME, env.DISTILL, args.folder, **{**PARAMETERS, **slurm.overrides(args)}
+            Served.JOB_NAME, env.distill(), args.folder, **{**PARAMETERS, **slurm.overrides(args)}
         )
         shards = range(args.shards)
         jobs = executor.map_array(

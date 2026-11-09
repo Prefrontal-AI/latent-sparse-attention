@@ -269,4 +269,4 @@ def main() -> None:
     args = parser.parse_args()
     # A checkpoint directory is a path to resolve, and a hub id is not
     name = os.path.abspath(args.name) if os.path.isdir(args.name) else args.name
-    slurm.submit(args, "lsa-probe", env.OFFLINE_HF, slurm.CPU, screen, name)
+    slurm.submit(args, "lsa-probe", env.offline_hf(), slurm.CPU, screen, name)

@@ -145,7 +145,7 @@ def main() -> None:
     slurm.submit(
         args,
         "lsa-modules",
-        env.OFFLINE_HF,
+        env.offline_hf(),
         PARAMETERS,
         time_modules,
         experiment,

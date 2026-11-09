@@ -340,7 +340,7 @@ def main(argv: list[str] | None = None) -> None:
     root = os.path.abspath(args.root)
     if not args.dry_run:
         ensure(root)
-    environment = [*env.OFFLINE_HF, *env.EVAL_DATA, *env.exports({"PYTHONUNBUFFERED": "1"})]
+    environment = [*env.offline_hf(), *env.eval_data(), *env.exports({"PYTHONUNBUFFERED": "1"})]
     slurm.submit(
         args,
         "lsa-prepare-ruler-native",

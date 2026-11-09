@@ -166,7 +166,7 @@ def main() -> None:
     slurm.submit(
         args,
         "lsa-roofline",
-        env.OFFLINE_HF,
+        env.offline_hf(),
         parameters(),
         profile_kernels,
         output,

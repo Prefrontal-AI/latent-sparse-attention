@@ -390,7 +390,7 @@ def submit(
     """
     executor = slurm.executor(
         Benchmark.JOB_NAME,
-        (*env.OFFLINE_HF, *env.exports(env.DISTRIBUTED_TORCH)),
+        (*env.offline_hf(), *env.exports(env.DISTRIBUTED_TORCH)),
         folder,
         **{**parameters, "tasks_per_node": parameters["gpus_per_node"]},
     )
