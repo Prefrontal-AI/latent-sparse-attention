@@ -1,4 +1,4 @@
-"""Time every arm of one model's layer, both phases, one after another on one GPU of a node nothing else runs on.
+"""Time every arm of one model's layer, both phases, one after another on one GPU.
 
     lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
     lsa evaluate isolated qwen38_27b --output $LSA_ROOT/layer-perf/isolated --dry-run
@@ -6,12 +6,14 @@
     lsa evaluate isolated glm53_flash --arm pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
     lsa evaluate isolated glm53_flash --arm pisa_c16 --output $LSA_ROOT/layer-perf/isolated-pisa-c16
     lsa evaluate isolated glm53_flash --gpu b300 --output $LSA_ROOT/layer-perf/isolated-b300 --dry-run
+    lsa evaluate isolated glm53_flash --arm full --arm lsa_flat 'data.contexts=[10485760]' --dry-run
 
 A layer timing is only comparable across arms when the card behaved the same for all of them. Jobs of one arm each
 land on whichever nodes are free and share them with other users' jobs, so an arm can be timed on a card another
-job is heating or on a node with a busier power budget. This is one job that asks for a whole node - slurm's
-`--exclusive` - and holds one GPU of it for every arm and phase in turn, so the arms differ in what they are
-and not in where they ran. The telemetry each point keeps (see [telemetry](../telemetry.py)) says what the card did.
+job is heating or on a node with a busier power budget. This is one job that holds one GPU for every arm and
+phase in turn, so the arms ran on one card and differ in what they are and not in where they ran. It does not ask
+for the whole node: on H200 an exclusive rerun moved layer prefill by at most 1.5% against the same timings on a
+shared node, every method, so the node's other GPUs stay free for other jobs. The telemetry each point keeps (see [telemetry](../telemetry.py)) says what the card did.
 
 Every arm prefills in chunks of 32,768 tokens, the contexts are the ladder the published records hold, and the
 design's arms - flat and tree - run their kernels in CuTeDSL. The image is the configs' own. An arm that fails
@@ -134,6 +136,7 @@ def load_arms(
     phases: tuple[str, ...] = PHASES,
     arms: tuple[str, ...] = (),
     card: str = "h200",
+    overrides: tuple[str, ...] = (),
 ) -> list["KernelsConfig"]:
     """Load the arms of a model, each one's prefill and then its decode.
 
@@ -143,6 +146,7 @@ def load_arms(
         phases: The phases to keep of every arm, `data.phase` values.
         arms: The arms to run, or empty for every arm of the model.
         card: The card's token, one of `GPUS` - `b300` loads each arm's `b300_` file.
+        overrides: Dotted `key=value` assignments laid over every arm after its own overrides, so they win.
 
     Returns:
         The evaluations in the order they run.
@@ -164,7 +168,7 @@ def load_arms(
         loaded = [
             experiment
             for file in arm_files(model, arm, card)
-            for experiment in load(file, arm_overrides(model, arm, output, card), "kernels")
+            for experiment in load(file, [*arm_overrides(model, arm, output, card), *overrides], "kernels")
         ]
         kernels = [
             experiment
@@ -200,7 +204,7 @@ def run_arms(experiments: list["KernelsConfig"]) -> list[str]:
 
 
 def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace) -> dict[str, Any]:
-    """Return what the one job asks for - one GPU on a node held whole, for the hours its arms add up to.
+    """Return what the one job asks for - one GPU of a shared node, for the hours its arms add up to.
 
     Args:
         experiments: The evaluations the job runs.
@@ -216,7 +220,6 @@ def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace)
     everything: list[Experiment] = [*experiments]
     parameters = shared_parameters(everything, 1)
     parameters["timeout_min"] = sum(experiment.hours for experiment in experiments) * 60
-    parameters["slurm_exclusive"] = True
     given = slurm.overrides(args)
     extra = given.pop("slurm_additional_parameters", {})
     parameters = {**parameters, **given}
@@ -227,7 +230,7 @@ def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace)
 
 def main() -> None:
     """Parse the command line, print the evaluations, and submit them as one job unless asked only to print."""
-    parser = argparse.ArgumentParser(description="Time every arm of a model's layer in one exclusive job")
+    parser = argparse.ArgumentParser(description="Time every arm of a model's layer in one job on one GPU")
     parser.add_argument(
         "model", choices=sorted(ARMS), help="the model's directory under configs/evaluation/kernels"
     )
@@ -251,10 +254,18 @@ def main() -> None:
         help="the card to time on - b300 loads each arm's b300_ config, h200 the arm's own",
     )
     slurm.add_flags(parser)
-    args = parser.parse_args()
+    parser.add_argument(
+        "overrides",
+        nargs="*",
+        help="dotted key=value assignments for every arm and phase, applied after the arms' own overrides",
+    )
+    # Intermixed, so overrides may follow the flags as well as the model
+    args = parser.parse_intermixed_args()
 
     require_extra("omegaconf", "hydra")
-    experiments = load_arms(args.model, args.output, tuple(args.phase or PHASES), tuple(args.arm), args.gpu)
+    experiments = load_arms(
+        args.model, args.output, tuple(args.phase or PHASES), tuple(args.arm), args.gpu, tuple(args.overrides)
+    )
     for arm in args.arm or ARMS[args.model]:
         print(
             f"arm {arm}: {[os.path.relpath(file, CONFIGS) for file in arm_files(args.model, arm, args.gpu)]}"

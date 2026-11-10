@@ -1,4 +1,4 @@
-"""The isolated layer run - every arm of a model, one after another, in one job on a node held whole."""
+"""The isolated layer run - every arm of a model, one after another, in one job on one GPU."""
 
 import argparse
 
@@ -59,6 +59,30 @@ def test_the_output_override_reaches_every_arm(tmp_path):
     assert {e.run.output for e in experiments} == {str(tmp_path)}
 
 
+@pytest.mark.parametrize("model", sorted(isolated.ARMS))
+def test_trailing_overrides_reach_every_experiment_and_beat_the_arms_own(model):
+    experiments = isolated.load_arms(
+        model, None, overrides=("data.contexts=[10485760]", "data.chunk=8192", "run.hours=3")
+    )
+
+    assert {tuple(e.data.contexts) for e in experiments} == {(10485760,)}
+    assert {e.data.chunk for e in experiments} == {8192}
+    assert {e.hours for e in experiments} == {3}
+
+
+def test_overrides_after_the_flags_reach_the_printout_and_the_job_hours(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["isolated", "glm53_flash", "--arm", "full", "--arm", "lsa_flat", "data.contexts=[10485760]",
+         "run.hours=2", "--dry-run"],
+    )  # fmt: skip
+    isolated.main()
+
+    out = capsys.readouterr().out
+    assert out.count("contexts [10485760]") == 4
+    assert "'timeout_min': 480" in out
+
+
 def test_a_chosen_arm_is_the_only_one_run_and_may_be_a_fair_ablation():
     experiments = isolated.load_arms("glm53_flash", None, arms=("pisa_c8",))
 
@@ -85,15 +109,16 @@ def test_an_unknown_model_names_the_ones_there_are():
         isolated.load_arms("nope", None)
 
 
-def test_the_job_holds_one_gpu_of_a_node_exclusively_inside_the_reservation():
+def test_the_job_holds_one_gpu_of_a_shared_node_inside_the_reservation():
     experiments = isolated.load_arms("qwen38_27b", None)
 
     parameters = isolated.job_parameters(experiments, parsed("--reservation", "res"))
 
     assert parameters["gpus_per_node"] == 1
-    assert parameters["slurm_exclusive"] is True
+    # Not the whole node - an exclusive rerun moved H200 layer prefill by at most 1.5%
+    assert "slurm_exclusive" not in parameters
     assert parameters["slurm_additional_parameters"]["reservation"] == "res"
-    # A one-GPU job is left unbound - the node is held whole, so no other job shares its sockets
+    # A one-GPU job is left unbound, as `bound_to_gpus` leaves every one-GPU job
     assert "gres_flags" not in parameters["slurm_additional_parameters"]
     assert parameters["timeout_min"] == sum(e.hours for e in experiments) * 60
 
