@@ -5,7 +5,9 @@ it, and a gate that needs four integers must not fail on an unrelated import.
 """
 
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -130,3 +132,27 @@ def test_the_sites_hub_cache_is_adopted_only_where_its_parent_exists(tmp_path, m
     assert env.site_hf_home() is None
     (tmp_path / "users" / "ada").mkdir(parents=True)
     assert env.site_hf_home() == f"{tmp_path}/users/ada/caches/hf_home"
+
+
+def test_an_installed_copy_imports_without_a_site(tmp_path):
+    """`pip install .` leaves no `configs/site` beside the package, and the container's job imports `lsa.env`.
+
+    A fresh interpreter, since an import that already ran cannot show what a first import reads.
+    """
+    packages = tmp_path / "site-packages"
+    shutil.copytree(Path(env.__file__).parent, packages / "lsa", ignore=shutil.ignore_patterns("__pycache__"))
+    code = (
+        "import lsa.env, lsa.sglang.launch, lsa.evaluation.performance.kernels.modules; print(lsa.site.SITES)"
+    )
+    variables = {**os.environ, "PYTHONPATH": str(packages), "LSA_ROOT": str(tmp_path / "root")}
+    variables.pop("LSA_SITE", None)
+    finished = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=variables)
+    assert finished.returncode == 0, finished.stderr
+    assert finished.stdout.strip() == str(tmp_path / "configs" / "site")
+
+
+def test_the_scripts_still_export_the_site_root(tmp_path, monkeypatch):
+    make_site(tmp_path, monkeypatch, f"root: {tmp_path}/shared\n")
+    expected = f'export LSA_ROOT="${{LSA_ROOT:-{tmp_path}/shared}}"'
+    for lines in (env.offline_hf(), env.online_hf(), env.eval_data(), env.teacher(), env.distill()):
+        assert lines[0] == expected

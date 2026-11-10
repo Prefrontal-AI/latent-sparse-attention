@@ -271,7 +271,7 @@ def main() -> None:
     slurm.submit(
         args,
         "lsa-export",
-        env.OFFLINE_HF,
+        env.offline_hf(),
         slurm.CPU,
         export,
         args.maps.resolve(),

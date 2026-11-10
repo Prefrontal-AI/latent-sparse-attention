@@ -151,7 +151,7 @@ def main() -> None:
     slurm.submit(
         args,
         "lsa-calibrate-tau",
-        env.DISTILL,
+        env.distill(),
         PARAMETERS,
         calibrate_tau,
         experiment,

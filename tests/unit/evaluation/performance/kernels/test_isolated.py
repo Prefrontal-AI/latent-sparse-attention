@@ -135,16 +135,16 @@ def test_an_arm_that_fails_does_not_stop_the_ones_after_it(monkeypatch):
     monkeypatch.setattr("lsa.evaluation.run.run_experiment", run_experiment)
     monkeypatch.delenv("SLURM_PROCID", raising=False)
 
-    failed = isolated.run_arms(experiments)
+    with pytest.raises(RuntimeError, match="failed 1 of"):
+        isolated.run_arms(experiments)
 
-    assert failed == [experiments[0].name]
     assert ran == [e.name for e in experiments]
 
 
 def test_only_the_first_task_runs_the_arms(monkeypatch):
     monkeypatch.setenv("SLURM_PROCID", "1")
 
-    assert isolated.run_arms(isolated.load_arms("qwen38_27b", None)) == []
+    assert isolated.run_arms(isolated.load_arms("qwen38_27b", None)) is None
 
 
 def test_qwen_times_both_pisa_sets_as_glm_does():

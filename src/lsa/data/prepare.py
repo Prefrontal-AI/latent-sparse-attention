@@ -120,7 +120,11 @@ def main() -> None:
         parser.error(str(refusal))
     # A preparer that reads the hub names its own environment, and every other one runs offline
     environment = [
-        *getattr(preparer, "ENVIRONMENT", (*env.OFFLINE_HF, *env.EVAL_DATA)),
+        *(
+            preparer.environment()
+            if hasattr(preparer, "environment")
+            else (*env.offline_hf(), *env.eval_data())
+        ),
         *env.exports({"PYTHONUNBUFFERED": "1"}),
     ]
     print(f"{card.name}: prepared by {function.__module__}.{function.__qualname__}", flush=True)

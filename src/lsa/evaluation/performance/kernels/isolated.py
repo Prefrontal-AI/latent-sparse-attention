@@ -179,19 +179,22 @@ def load_arms(
     return experiments
 
 
-def run_arms(experiments: list["KernelsConfig"]) -> list[str]:
+def run_arms(experiments: list["KernelsConfig"]) -> None:
     """Run every evaluation in turn on the job's first task, whatever happens to the ones before.
+
+    Every arm runs, and the job fails afterwards if any did, so a job that timed nothing does not read as done.
+    Nothing runs on any task but the first.
 
     Args:
         experiments: The evaluations, as `load_arms` returns them.
 
-    Returns:
-        The names of the evaluations that failed - empty when all finished, and nothing on any task but the first.
+    Raises:
+        RuntimeError: One or more arms failed, after all of them ran.
     """
     from lsa.evaluation.run import run_experiment
 
     if os.environ.get("SLURM_PROCID", "0") != "0":
-        return []
+        return
     failed = []
     for experiment in experiments:
         try:
@@ -200,7 +203,8 @@ def run_arms(experiments: list["KernelsConfig"]) -> list[str]:
             traceback.print_exc()
             failed.append(experiment.name)
     print(f"failed {len(failed)} of {len(experiments)}: {failed}", flush=True)
-    return failed
+    if failed:
+        raise RuntimeError(f"failed {len(failed)} of {len(experiments)}: {failed}")
 
 
 def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace) -> dict[str, Any]:
@@ -284,7 +288,7 @@ def main() -> None:
         return
 
     executor = slurm.executor(
-        Launches.SINGLE_JOB, [*env.OFFLINE_HF, *env.EVAL_DATA], args.folder, **parameters
+        Launches.SINGLE_JOB, [*env.offline_hf(), *env.eval_data()], args.folder, **parameters
     )
     job = executor.submit(run_arms, experiments)
     print(f"submitted {job.job_id}  {args.model}", flush=True)

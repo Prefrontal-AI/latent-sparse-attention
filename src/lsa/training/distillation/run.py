@@ -76,7 +76,7 @@ def submit(
             raise ValueError(f"{alone} read a cache - only the online teacher reads across nodes")
         parameters = {**parameters, "nodes": nodes, "tasks_per_node": 1}
 
-    executor = slurm.executor(Job.NAME, env.DISTILL, folder, **parameters)
+    executor = slurm.executor(Job.NAME, env.distill(), folder, **parameters)
     for experiment in experiments:
         experiment.run.output = str(Path(experiment.run.output).resolve())
         experiment.data.root = str(Path(experiment.data.root).resolve())
@@ -121,7 +121,7 @@ def submit(
             "dependency": f"afterok:{array_id}",
         },
     }
-    join_executor = slurm.executor(Job.NAME, env.DISTILL, folder, **join_parameters)
+    join_executor = slurm.executor(Job.NAME, env.distill(), folder, **join_parameters)
     join_jobs = [
         join_executor.submit(join, experiment, layers[experiment.run.name], force)
         for experiment in experiments

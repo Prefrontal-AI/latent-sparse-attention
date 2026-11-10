@@ -572,7 +572,7 @@ def main() -> None:
         for _ in range(args.workers)
     ]
     executor = slurm.executor(
-        Teacher.JOB_NAME, env.TEACHER, args.folder, **{**PARAMETERS, **slurm.overrides(args)}
+        Teacher.JOB_NAME, env.teacher(), args.folder, **{**PARAMETERS, **slurm.overrides(args)}
     )
     jobs = executor.map_array(
         extract,

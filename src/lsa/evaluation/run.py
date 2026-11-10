@@ -643,7 +643,7 @@ def submit(
 
     executor = slurm.executor(
         Launches.SINGLE_JOB,
-        [*env.OFFLINE_HF, *env.EVAL_DATA],
+        [*env.offline_hf(), *env.eval_data()],
         folder,
         **bound_to_gpus(parameters or job_parameters(experiments)),
     )
@@ -729,7 +729,7 @@ def submit_pool(
     }
     executor = slurm.executor(
         f"{Launches.POOL_JOB}{out.name}",
-        [*env.OFFLINE_HF, *env.EVAL_DATA],
+        [*env.offline_hf(), *env.eval_data()],
         folder,
         **parameters,
     )

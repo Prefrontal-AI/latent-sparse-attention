@@ -770,7 +770,7 @@ def main() -> None:
         slurm.submit(
             args,
             "lsa-native-picks-check",
-            env.OFFLINE_HF,
+            env.offline_hf(),
             PARAMETERS,
             check,
             root,
@@ -784,7 +784,7 @@ def main() -> None:
         print(f"would submit {args.workers} workers with {PARAMETERS | slurm.overrides(args)}")
         return
     executor = slurm.executor(
-        Native.JOB_NAME, env.OFFLINE_HF, args.folder, **{**PARAMETERS, **slurm.overrides(args)}
+        Native.JOB_NAME, env.offline_hf(), args.folder, **{**PARAMETERS, **slurm.overrides(args)}
     )
     jobs = executor.map_array(
         work,
