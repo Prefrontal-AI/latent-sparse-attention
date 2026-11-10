@@ -54,6 +54,63 @@ CI's `types` job runs on a bare sync, where the extras' packages resolve to `Any
 Every package the evaluation or training code imports from an extra needs an `ignore_missing_imports` entry in `pyproject.toml`, or CI fails where a local run with the extra passes.
 The last command above runs both of them against a bare environment without tearing down the one the extras are installed in.
 
+## Kernel parity
+
+`kernels: cutedsl` is a serving choice that must read the same blocks as `kernels: triton`.
+A design is evaluated for accuracy under one language and timed under the other, so a CuTeDSL step that picks a different bucket would make the timed design a different design.
+Each CuTeDSL kernel is therefore held to the Triton output in `tests/unit/core/test_cutedsl_*.py`, and where the output is a float that decides a pick, held to it bit for bit.
+
+### Why a float must match to the bit
+
+Nothing here feeds a softmax.
+An index score only orders buckets and columns, so a score that is off by an ulp changes nothing the model attends to unless it changes an order.
+It changes an order exactly where two scores are within an ulp of each other, and a top-p or a beam keep then picks a different bucket.
+One ulp is rare per row and certain over enough rows, so the tests cannot ask for "close" on a score that ranks.
+Bit for bit is the only agreement that does not depend on how many near-ties a test happens to draw.
+
+The cost is that a CuTeDSL kernel adds in the order the Triton compiler emits.
+The reduction orders, the 64-dim dot's lanes and the tf32x3 split are copied, and so are two facts about Triton's code generation that no Triton source states.
+A 4096-sample block is summed four wide when the sample count is a multiple of 16, and a mean is divided with the approximate `div.full`.
+[The pins](#what-exact-equality-rests-on) fail on those facts directly, so a Triton change names its cause instead of surfacing as a mismatch in a threshold.
+
+### Where it applies
+
+No kernel here is read by training.
+The distillation arms and the cached teacher maps read through `lsa.core`, the torch reference, and the teacher's attention kernel.
+A teacher cache therefore never depends on a CuTeDSL or Triton bit, and nothing below is about it.
+
+| Step | Output | Read by | Held to Triton | Why |
+| --- | --- | --- | --- | --- |
+| threshold estimate | one fp32 threshold a row | the bucket scan and the listing's width | agreement | it sets how much is listed, and a row that holds fewer than its top-p lists again or scores in full, so the pick does not depend on it |
+| bucket scan | the buckets at or above the threshold | candidate scoring | exact | same tensor-core scores and the same threshold, so equal at no cost; the pick needs only every bucket within the margin of the threshold, which agreement would give |
+| candidate scoring | int64 keys, score and bucket | the top-p pick | exact | the keys are ordered, so an ulp flips a pick |
+| dense scoring | int64 keys | the top-p pick of a row the scan may have missed | exact | as candidate scoring |
+| expansion by threshold | the read, entry for entry | the attention kernel | exact | integer logic over the keys, and the read is what the model attends to |
+| expansion in rank order | the read, entry for entry | the attention kernel | exact | as expansion by threshold |
+| beam step | the kept children of a level | the level below | exact | a child's score is ranked against `beam_width` others, so an ulp keeps a different child and the descent diverges from there |
+| start-level keep, top-p pick | kept columns, picked buckets' keys | the level below, the expansion | exact | as the beam step |
+| node-bucket clustering | which buckets pair | the hierarchy a growth builds | exact | a merge cost is a tf32x3 dot, a different rounding can pair a different bucket, and the tree every later read descends is built from the pairs |
+| ward clustering | the labels of a cluster block | the hierarchy a growth builds | exact | as node-bucket clustering |
+| decode select | scores, and a listing that holds the top-p | the expansion by threshold | exact scores, agreement on the listing | the scores rank, so they are exact; the keys listed past the top-p are only room, and the expansion finds its stopping key in any listing that holds the top-p |
+| short-context listing | a listing that holds the top-p | the expansion by threshold | agreement | the listing's extent follows a sampled threshold and the expansion does not read past the top-p |
+
+Agreement means the same best top-p keys and nothing about the rest of the listing.
+`test_cutedsl_top_k.py` and the decode listing tests already compare that way.
+`test_cutedsl_thresholds.py` compares thresholds that way too: the row's pick is checked exactly, and the threshold only within the tolerance its comment states.
+
+### What exact equality rests on
+
+`tests/unit/core/test_triton_assumptions.py` compiles the Triton kernels the CuTeDSL ones copy and reads what Triton generated.
+It pins the divisibility-by-16 specialization that makes a block load four wide, the absence of a four-wide load for any other sample count, the warp's butterfly from the widest step down, and the approximate division.
+A failure there means Triton changed what the CuTeDSL path copies, whatever the thresholds or scores then do.
+The CuTeDSL kernel and the pin move together, and the torch pin moves only with the image.
+
+### Which could drop the Triton order
+
+The threshold estimate is the one kernel whose bits no pick depends on.
+Its Triton-order sums, `div.full` and four-wide permuted reads exist only to match a value the contract has just stopped asking for.
+Dropping them would remove a compile variant per vectorization and a permuted read, and it is not part of this change.
+
 ## Environment variables
 
 | Variable | Read by | Meaning |
@@ -101,7 +158,7 @@ The driver is the ceiling, not the index.
 It takes any CUDA 12.x runtime, and cu129 is the last 12.x build of torch 2.13.0 and the first with kernels for Blackwell, so the same lock runs on the H200 and the B300 nodes.
 A cu126 wheel holds no Blackwell kernel, and every torch operation on a B300 fails with no kernel image for the device.
 The pin is exact, and so is the CuTeDSL compiler's, because the image installs this package without its deps.
-Triton's order of adding a sum decides the kernels' bits, so a test on a torch the image does not run proves nothing about what serves.
+Triton's order of adding a sum decides the kernels' bits, so a test on a torch the image does not run proves nothing about what serves - see [kernel parity](#kernel-parity).
 Move the pin only with the image.
 
 `torchtitan` is a git pin rather than a release, because it moves with torch and a floating version would change the trainer under a run.
