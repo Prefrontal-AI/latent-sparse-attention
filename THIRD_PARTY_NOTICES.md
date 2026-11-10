@@ -28,7 +28,7 @@ SOFTWARE.
 
 ## Datasets
 
-This repository ships no text of the datasets below, except the PaperTrail kit and the two RULER haystack files of the release `ruler-sources-v1`.
+This repository ships no text of the datasets below, except the PaperTrail kit, the kernels prompt below and the two RULER haystack files of the release `ruler-sources-v1`.
 It holds the scripts and lock files a reader assembles them with, and what a reader assembles keeps the licence its owner gave it.
 Each source's card in `src/lsa/assets/datasets/sources` names the hub dataset and the revision it is read at.
 
@@ -59,6 +59,12 @@ The generators are [NVIDIA RULER](https://github.com/NVIDIA/RULER), Apache-2.0, 
 | `PaulGrahamEssays.json` | Paul Graham's essays, as NVIDIA RULER's download script collected them | The essays state no licence. The file is included only to pin the haystack, because the essays change upstream over time and a fresh download no longer matches the haystack the paper's sets were built from |
 | `squad.json` | SQuAD 2.0 dev set, Rajpurkar et al. 2018 | CC BY-SA 4.0 |
 | `hotpotqa.json` | HotpotQA dev distractor set, Yang et al. 2018, fetched from the upstream url or from a [hub mirror](https://huggingface.co/datasets/namlh2004/hotpotqa) and not redistributed here | CC BY-SA 4.0, as the RULER card states |
+
+### Kernels prompt
+
+`data/prompts/gutenberg_300k.txt` is the opening 1,277,657 bytes of *History of the Conquest of Peru* by William H. Prescott, from the [Project Gutenberg](https://www.gutenberg.org/ebooks/1209) text of ebook 1209.
+The book is in the public domain in the United States, and the file keeps the credit line of its producer, Mark Rehorst.
+The file is shipped so the per-layer timings repeat the same text, and its sha256 is pinned beside it.
 
 ### Pre-training corpus
 

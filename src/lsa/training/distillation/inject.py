@@ -299,6 +299,10 @@ def inject(model: str, maps: list[Path], out: Path, force: bool = False) -> Inje
         FileNotFoundError: The source has no weight index.
         ValueError: A map does not belong to this checkpoint.
     """
+    # The training extra may be missing
+    # => fail before --out is created, so a rerun is not refused
+    from safetensors.torch import save_file
+
     source = checkpoint_directory(model)
     published = source / Snapshot.INDEX
     if not published.is_file():
@@ -320,8 +324,6 @@ def inject(model: str, maps: list[Path], out: Path, force: bool = False) -> Inje
     for layer, (query, key) in sorted(pairs.items()):
         flat[QUERY.format(layer=layer)] = query
         flat[KEY.format(layer=layer)] = key
-
-    from safetensors.torch import save_file
 
     save_file(flat, out / Inject.SHARD, metadata={"format": "pt"})
 
@@ -392,6 +394,10 @@ def inject_qsa(
     Raises:
         FileExistsError: The output exists and `force` was not given.
     """
+    # The training extra may be missing
+    # => fail before --out is created, so a rerun is not refused
+    from safetensors.torch import save_file
+
     published_config = read_json(source / Snapshot.CONFIG)
     text_config = published_config.get("text_config", published_config)
     dtype = getattr(torch, text_config.get("dtype") or text_config.get("torch_dtype") or "bfloat16")
@@ -402,8 +408,6 @@ def inject_qsa(
             raise FileExistsError(f"{out} exists - pass --force to replace it")
         shutil.rmtree(out)
     out.mkdir(parents=True)
-
-    from safetensors.torch import save_file
 
     save_file(weights, out / Inject.SHARD, metadata={"format": "pt"})
     weight_map = dict(index["weight_map"])
