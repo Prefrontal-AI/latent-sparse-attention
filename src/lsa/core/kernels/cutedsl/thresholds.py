@@ -35,29 +35,7 @@ from cutlass._mlir.extras import types as T
 from cutlass.cute.nvgpu import cpasync, warp
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream
 
-# Rows a CTA holds, samples a tile scores, and the CTA's threads - a warp's 16 rows a thread's two
-ROWS = 128
-COLUMNS = 64
-THREADS = 256
-WARPS = THREADS // 32
-INDEX_DIM = 64
-SWIZZLE_DIM = 64
-# Slots a thread tests together against its row's edge
-HIT_SLOTS = 4
-# CTAs an SM holds at once, which caps a thread's registers - the sums pass's, the histogram pass's
-MIN_BLOCKS = {False: 2, True: 3}
-# Samples a Triton program of the histogram adds as one block, and the tiles of it
-BLOCK = 4096
-TILES = BLOCK // COLUMNS
-BINS = 64
-# Disjoint groups of a row's samples, whose maxima's rank-th greatest bounds its rank-th best - each block of an
-# odd or even place in a set of groups of its own
-GROUPS = 128
-GROUP_SETS = 2
-# Triton's slack under a bin's edge, so a sampled bucket scored at it again still counts
-EDGE_SLACK = 2**-14
-# Steps an estimate of a bin's edge moves, in ulps, to meet it
-EDGE_STEPS = 8
+from lsa.core.kernels.constants import CuteThresholds, Index, ThresholdEstimate
 
 
 def accumulator_rows_by_columns(accumulator: cute.Tensor) -> cute.Tensor:
@@ -85,7 +63,7 @@ def supports(index_queries: torch.Tensor, bucket_centroids: torch.Tensor) -> boo
         bucket_centroids: Bucket centroids [N, index_dim].
     """
     return (
-        index_queries.shape[1] == INDEX_DIM
+        index_queries.shape[1] == Index.DIM
         and index_queries.dtype == torch.bfloat16
         and bucket_centroids.dtype == torch.bfloat16
         and bucket_centroids.shape[0] > 0
@@ -125,7 +103,8 @@ def row_mean_width(warp_sums: cute.Tensor, bests: cute.Tensor, row: Any, limit: 
         )
     mean = cute.math.div(total, cutlass.Float32(cutlass.max(limit, 1)), full=True)
     width = cutlass.max(
-        cute.math.div(bests[row] - mean, cutlass.Float32(BINS), full=True), cutlass.Float32(1e-30)
+        cute.math.div(bests[row] - mean, cutlass.Float32(ThresholdEstimate.BINS), full=True),
+        cutlass.Float32(1e-30),
     )
     return mean, width
 
@@ -141,7 +120,9 @@ def row_bin(score: Any, mean: Any, reciprocal: Any) -> Any:
     """
     # div.full is the dividend times the divisor's reciprocal, for a divisor as far from 0 and inf as a width,
     # and Triton's clamp at 0 only lifts what is under every counted bin
-    return cutlass.Int32(cutlass.min((score - mean) * reciprocal, cutlass.Float32(BINS - 1)))
+    return cutlass.Int32(
+        cutlass.min((score - mean) * reciprocal, cutlass.Float32(ThresholdEstimate.BINS - 1))
+    )
 
 
 def greatest_of(values: list[Any]) -> Any:
@@ -230,10 +211,10 @@ def bin_edge(lowest_bin: Any, mean: Any, reciprocal: Any, width: Any) -> Any:
     # => the scores binned at or above a bin are those from one edge, found from the estimate by whole steps
     target = cutlass.Float32(lowest_bin)
     key = float_key(cute.math.fma(target, width, mean))
-    for _ in range(EDGE_STEPS):
+    for _ in range(CuteThresholds.EDGE_STEPS):
         if (key_float(key - 1) - mean) * reciprocal >= target:
             key = key - 1
-    for _ in range(EDGE_STEPS):
+    for _ in range(CuteThresholds.EDGE_STEPS):
         if (key_float(key) - mean) * reciprocal < target:
             key = key + 1
     return key_float(key)
@@ -257,8 +238,8 @@ class SamplePass:
         # A Triton warp's columns are every other tile one at a time, every other pair of tiles four at a time
         # => a block splits by Triton warp into parts, each summed in Triton's order on its own
         self.parts = 4 if four_wide else 2
-        self.part_tiles = TILES // self.parts
-        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=THREADS)
+        self.part_tiles = CuteThresholds.TILES // self.parts
+        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=CuteThresholds.THREADS)
 
     def tile_of(self, block: Any, part: Any, i: Any) -> Any:
         """Return the i-th tile of a block's part.
@@ -269,8 +250,8 @@ class SamplePass:
             i: The tile's place in the part.
         """
         if self.four_wide:
-            return block * TILES + 8 * (i // 2) + 2 * part + i % 2
-        return block * TILES + 2 * i + part
+            return block * CuteThresholds.TILES + 8 * (i // 2) + 2 * part + i % 2
+        return block * CuteThresholds.TILES + 2 * i + part
 
     def slot_column(self, slot: int) -> int:
         """Return a slot's column in its tile, less its thread's own offset.
@@ -303,18 +284,19 @@ class SamplePass:
             stride: Buckets between two samples.
         """
         # The samples as one tensor from the centroids' first, so a tile's start keeps their alignment
-        sample_stride = cute.assume(stride * INDEX_DIM, divby=INDEX_DIM)
+        sample_stride = cute.assume(stride * Index.DIM, divby=Index.DIM)
         if cutlass.const_expr(self.four_wide):
             # MMA column 8 n + 2 q + e holds sample 16 (n // 2) + 4 q + 2 (n % 2) + e of its tile
             tile_rows = cute.make_layout(
                 (2, 4, 2, 4), stride=(sample_stride, 4 * sample_stride, 2 * sample_stride, 16 * sample_stride)
             )
         else:
-            tile_rows = cute.make_layout(COLUMNS, stride=sample_stride)
+            tile_rows = cute.make_layout(CuteThresholds.COLUMNS, stride=sample_stride)
         samples = cute.make_tensor(
             centroids.iterator,
             cute.make_layout(
-                ((tile_rows.shape, tiles), INDEX_DIM), stride=((tile_rows.stride, COLUMNS * sample_stride), 1)
+                ((tile_rows.shape, tiles), Index.DIM),
+                stride=((tile_rows.stride, CuteThresholds.COLUMNS * sample_stride), 1),
             ),
         )
         return samples[(None, tile), None]
@@ -351,11 +333,15 @@ class SamplePass:
         """
         dtype = queries.element_type
         swizzled = cute.make_composed_layout(
-            cute.make_swizzle(3, 3, 3), 0, cute.make_layout((8, SWIZZLE_DIM), stride=(SWIZZLE_DIM, 1))
+            cute.make_swizzle(3, 3, 3),
+            0,
+            cute.make_layout((8, CuteThresholds.SWIZZLE_DIM), stride=(CuteThresholds.SWIZZLE_DIM, 1)),
         )
-        query_layout = cute.tile_to_shape(swizzled, (ROWS, INDEX_DIM), (0, 1))
-        sample_layout = cute.tile_to_shape(swizzled, (COLUMNS, INDEX_DIM, self.stages), (0, 1, 2))
-        histogram_words = ROWS * BINS if self.histogram else 1
+        query_layout = cute.tile_to_shape(swizzled, (CuteThresholds.ROWS, Index.DIM), (0, 1))
+        sample_layout = cute.tile_to_shape(
+            swizzled, (CuteThresholds.COLUMNS, Index.DIM, self.stages), (0, 1, 2)
+        )
+        histogram_words = CuteThresholds.ROWS * ThresholdEstimate.BINS if self.histogram else 1
 
         @cute.struct
         class Storage:
@@ -364,21 +350,21 @@ class SamplePass:
             queries: cute.struct.Align[cute.struct.MemRange[dtype, cute.cosize(query_layout)], 1024]
             samples: cute.struct.Align[cute.struct.MemRange[dtype, cute.cosize(sample_layout)], 1024]
             histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, histogram_words], 16]
-            warp_limits: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, WARPS], 16]
+            warp_limits: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteThresholds.WARPS], 16]
 
         elements = 128 // dtype.width
-        per_row = SWIZZLE_DIM // elements
+        per_row = CuteThresholds.SWIZZLE_DIM // elements
         global_to_shared = cute.make_tiled_copy_tv(
             cute.make_copy_atom(
                 cpasync.CopyG2SOp(cache_mode=cpasync.LoadCacheMode.GLOBAL), dtype, num_bits_per_copy=128
             ),
-            cute.make_layout((THREADS // per_row, per_row), stride=(per_row, 1)),
+            cute.make_layout((CuteThresholds.THREADS // per_row, per_row), stride=(per_row, 1)),
             cute.make_layout((1, elements)),
         )
         tiled_mma = cute.make_tiled_mma(
             warp.MmaF16BF16Op(dtype, cutlass.Float32, (16, 8, 16)),
-            (WARPS, 1, 1),
-            permutation_mnk=(WARPS * 16, 16, 16),
+            (CuteThresholds.WARPS, 1, 1),
+            permutation_mnk=(CuteThresholds.WARPS * 16, 16, 16),
         )
         self.kernel(
             queries,
@@ -397,10 +383,10 @@ class SamplePass:
             tiled_mma,
             Storage,
         ).launch(
-            grid=(cute.ceil_div(queries.shape[0], ROWS), warp_sums.shape[1] * self.parts, 1),
-            block=[THREADS, 1, 1],
+            grid=(cute.ceil_div(queries.shape[0], CuteThresholds.ROWS), warp_sums.shape[1] * self.parts, 1),
+            block=[CuteThresholds.THREADS, 1, 1],
             stream=stream,
-            min_blocks_per_mp=MIN_BLOCKS[self.histogram],
+            min_blocks_per_mp=CuteThresholds.MIN_BLOCKS[self.histogram],
         )
 
     @cute.kernel
@@ -450,14 +436,20 @@ class SamplePass:
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
         shared_queries = storage.queries.get_tensor(query_layout)
         shared_samples = storage.samples.get_tensor(sample_layout)
-        histogram = storage.histogram.get_tensor(cute.make_layout(ROWS * BINS if self.histogram else 1))
-        warp_limits = storage.warp_limits.get_tensor(cute.make_layout(WARPS))
+        histogram = storage.histogram.get_tensor(
+            cute.make_layout(CuteThresholds.ROWS * ThresholdEstimate.BINS if self.histogram else 1)
+        )
+        warp_limits = storage.warp_limits.get_tensor(cute.make_layout(CuteThresholds.WARPS))
 
         # A row past the last is never read, and scores as a dead row
         copy_slice = global_to_shared.get_slice(thread)
-        tQgQ = copy_slice.partition_S(cute.local_tile(queries, (ROWS, INDEX_DIM), (row_block, 0)))
+        tQgQ = copy_slice.partition_S(
+            cute.local_tile(queries, (CuteThresholds.ROWS, Index.DIM), (row_block, 0))
+        )
         tQcQ = copy_slice.partition_S(
-            cute.local_tile(cute.make_identity_tensor(queries.shape), (ROWS, INDEX_DIM), (row_block, 0))
+            cute.local_tile(
+                cute.make_identity_tensor(queries.shape), (CuteThresholds.ROWS, Index.DIM), (row_block, 0)
+            )
         )
         query_rows = cute.make_rmem_tensor((1, *tQcQ.shape[1:]), cutlass.Boolean)
         for m in cutlass.range_constexpr(cute.size(tQcQ, mode=[1])):
@@ -466,8 +458,8 @@ class SamplePass:
         cute.copy(global_to_shared, tQgQ, copy_slice.partition_D(shared_queries), pred=query_rows)
         cute.arch.cp_async_commit_group()
         # A sample past the last is never read, and scores as a dead sample
-        tScS = copy_slice.partition_S(cute.make_identity_tensor((COLUMNS, INDEX_DIM)))
-        tiles = warp_sums.shape[1] * TILES
+        tScS = copy_slice.partition_S(cute.make_identity_tensor((CuteThresholds.COLUMNS, Index.DIM)))
+        tiles = warp_sums.shape[1] * CuteThresholds.TILES
         for first in cutlass.range_constexpr(self.unroll):
             self.load_tile(
                 centroids,
@@ -505,8 +497,13 @@ class SamplePass:
         coords = accumulator_rows_by_columns(
             mma_slice.partition_C(
                 cute.local_tile(
-                    cute.make_identity_tensor((cute.ceil_div(queries.shape[0], ROWS) * ROWS, COLUMNS)),
-                    (ROWS, COLUMNS),
+                    cute.make_identity_tensor(
+                        (
+                            cute.ceil_div(queries.shape[0], CuteThresholds.ROWS) * CuteThresholds.ROWS,
+                            CuteThresholds.COLUMNS,
+                        )
+                    ),
+                    (CuteThresholds.ROWS, CuteThresholds.COLUMNS),
                     (row_block, 0),
                 )
             )
@@ -533,7 +530,7 @@ class SamplePass:
         if lane == 0:
             warp_limits[thread // 32] = least
         if cutlass.const_expr(self.histogram):
-            for i in range(thread, ROWS * BINS, THREADS):
+            for i in range(thread, CuteThresholds.ROWS * ThresholdEstimate.BINS, CuteThresholds.THREADS):
                 histogram[i] = cutlass.Int32(0)
         # The running sums of the Triton threads whose columns this thread holds - a run of four's by tile parity
         # -0.0 adds as nothing, so a sum begun from it is Triton's begun from its first column
@@ -547,13 +544,13 @@ class SamplePass:
         cute.arch.cp_async_wait_group(1)
         self.barrier.arrive_and_wait()
         whole_limit = warp_limits[0]
-        for w in cutlass.range_constexpr(1, WARPS):
+        for w in cutlass.range_constexpr(1, CuteThresholds.WARPS):
             whole_limit = cutlass.min(whole_limit, warp_limits[w])
         tSsQ = load_queries.partition_S(shared_queries)
         for k in cutlass.range_constexpr(cute.size(tSsQ.shape[2])):
             cute.copy(load_queries, tSsQ[None, None, k], tSrQ_view[None, None, k])
 
-        accumulator_shape = mma_slice.partition_shape_C((ROWS, COLUMNS))
+        accumulator_shape = mma_slice.partition_shape_C((CuteThresholds.ROWS, CuteThresholds.COLUMNS))
         # Two tiles a step, so each tile's parity is known at compile time
         unroll = self.unroll
         steps = self.part_tiles // unroll
@@ -561,7 +558,7 @@ class SamplePass:
         # => they take a loop with no slot checks, the rest one that checks each slot
         whole_tiles = cutlass.Int32(0)
         for i in range(self.part_tiles):
-            if (self.tile_of(block, part, i) + 1) * COLUMNS <= whole_limit:
+            if (self.tile_of(block, part, i) + 1) * CuteThresholds.COLUMNS <= whole_limit:
                 whole_tiles = whole_tiles + 1
         whole_steps = whole_tiles // unroll
         for checked in (False, True):
@@ -603,7 +600,9 @@ class SamplePass:
                     live = cute.make_rmem_tensor((row_count, slots), cutlass.Boolean)
                     if cutlass.const_expr(checked):
                         # A dead sample scores zero, as in Triton, below every bin and no group's maximum
-                        first_column = tile * COLUMNS + (4 * quad if self.four_wide else 2 * quad)
+                        first_column = tile * CuteThresholds.COLUMNS + (
+                            4 * quad if self.four_wide else 2 * quad
+                        )
                         for r in cutlass.range_constexpr(row_count):
                             for c in cutlass.range_constexpr(slots):
                                 live[r, c] = first_column + self.slot_column(c) < row_limits[r]
@@ -637,10 +636,15 @@ class SamplePass:
 
         if cutlass.const_expr(self.histogram):
             self.barrier.arrive_and_wait()
-            for i in range(thread, ROWS * BINS, THREADS):
+            for i in range(thread, CuteThresholds.ROWS * ThresholdEstimate.BINS, CuteThresholds.THREADS):
                 count = histogram[i]
                 if count > 0:
-                    cute.arch.atomic_add((counts.iterator + (row_block * ROWS * BINS + i)).llvm_ptr, count)
+                    cute.arch.atomic_add(
+                        (
+                            counts.iterator + (row_block * CuteThresholds.ROWS * ThresholdEstimate.BINS + i)
+                        ).llvm_ptr,
+                        count,
+                    )
         else:
             self.write_part(
                 coords, block, part, quad, row_count, slots, partials, maxima, warp_sums, bests, group_maxima
@@ -677,7 +681,9 @@ class SamplePass:
         present = cute.make_rmem_tensor((1, *tScS.shape[1:]), cutlass.Boolean)
         for m in cutlass.range_constexpr(cute.size(tScS, mode=[1])):
             for k in cutlass.range_constexpr(cute.size(tScS, mode=[2])):
-                present[0, m, k] = tile * COLUMNS + self.tile_sample(tScS[0, m, k][0]) < sample_count
+                present[0, m, k] = (
+                    tile * CuteThresholds.COLUMNS + self.tile_sample(tScS[0, m, k][0]) < sample_count
+                )
         cute.copy(
             global_to_shared,
             copy_slice.partition_S(self.tile_source(centroids, tiles, tile, stride)),
@@ -741,24 +747,26 @@ class SamplePass:
         """
         # A score is counted rarely, so the greatest of a few slots says whether any of them counts
         for r in cutlass.range_constexpr(cute.size(scores, mode=[0])):
-            local_row = coords[r, 0][0] - row_block * ROWS
-            for first in cutlass.range_constexpr(0, cute.size(scores, mode=[1]), HIT_SLOTS):
+            local_row = coords[r, 0][0] - row_block * CuteThresholds.ROWS
+            for first in cutlass.range_constexpr(0, cute.size(scores, mode=[1]), CuteThresholds.HIT_SLOTS):
                 candidates = []
-                for c in cutlass.range_constexpr(first, first + HIT_SLOTS):
+                for c in cutlass.range_constexpr(first, first + CuteThresholds.HIT_SLOTS):
                     score = scores[r, c]
                     if cutlass.const_expr(checked):
                         score = cutlass.Float32(cutlass.select_(live[r, c], score, -cutlass.Float32.inf))
                     candidates.append(score)
                 greatest = greatest_of(candidates)
                 if greatest >= edges[r]:
-                    for c in cutlass.range_constexpr(first, first + HIT_SLOTS):
+                    for c in cutlass.range_constexpr(first, first + CuteThresholds.HIT_SLOTS):
                         counted = scores[r, c] >= edges[r]
                         if cutlass.const_expr(checked):
                             counted = counted & live[r, c]
                         if counted:
                             bin_index = row_bin(scores[r, c], means[r], reciprocals[r])
                             cute.arch.atomic_add(
-                                (histogram.iterator + (local_row * BINS + bin_index)).llvm_ptr,
+                                (
+                                    histogram.iterator + (local_row * ThresholdEstimate.BINS + bin_index)
+                                ).llvm_ptr,
                                 cutlass.Int32(1),
                                 scope="cta",
                             )
@@ -825,12 +833,15 @@ class SamplePass:
                     warp_sums[row, block, part] = folded
             # A group is one slot of one quad lane over every block and part - 64 disjoint groups a row
             groups = slots // self.parts
-            first_group = (block % GROUP_SETS) * (GROUPS // GROUP_SETS) + (part * 4 + quad) * groups
+            first_group = (block % CuteThresholds.GROUP_SETS) * (
+                CuteThresholds.GROUPS // CuteThresholds.GROUP_SETS
+            ) + (part * 4 + quad) * groups
             best = maxima[r, 0]
             for c in cutlass.range_constexpr(groups):
                 best = cute.arch.fmax(best, maxima[r, c])
                 cute.arch.atomic_fmax(
-                    (group_maxima.iterator + (row * GROUPS + first_group + c)).llvm_ptr, maxima[r, c]
+                    (group_maxima.iterator + (row * CuteThresholds.GROUPS + first_group + c)).llvm_ptr,
+                    maxima[r, c],
                 )
             for offset in cutlass.range_constexpr(2):
                 best = cute.arch.fmax(best, cute.arch.shuffle_sync_bfly(best, 1 << offset))
@@ -871,7 +882,11 @@ class Prepare:
         """
         self.kernel(
             warp_sums, bests, group_maxima, visible_counts, prepared, stride, sample_count, rank, floored
-        ).launch(grid=(cute.ceil_div(prepared.shape[0], WARPS), 1, 1), block=[THREADS, 1, 1], stream=stream)
+        ).launch(
+            grid=(cute.ceil_div(prepared.shape[0], CuteThresholds.WARPS), 1, 1),
+            block=[CuteThresholds.THREADS, 1, 1],
+            stream=stream,
+        )
 
     @cute.kernel
     def kernel(
@@ -902,14 +917,14 @@ class Prepare:
         thread, _, _ = cute.arch.thread_idx()
         block, _, _ = cute.arch.block_idx()
         lane = cute.arch.lane_idx()
-        row = block * WARPS + thread // 32
+        row = block * CuteThresholds.WARPS + thread // 32
         if row < prepared.shape[0]:
             mean, width = row_mean_width(
                 warp_sums, bests, row, row_limit(visible_counts, row, stride, sample_count)
             )
             reciprocal = cute.math.div(cutlass.Float32(1.0), width, full=True)
             keys = []
-            for j in cutlass.range_constexpr(GROUPS // 32):
+            for j in cutlass.range_constexpr(CuteThresholds.GROUPS // 32):
                 keys.append(float_key(group_maxima[row, lane + 32 * j]))
                 group_maxima[row, lane + 32 * j] = -cutlass.Float32.inf
             # The floor is a score of the row, and at most its rank-th best - binned the same way, its bin is at
@@ -953,7 +968,9 @@ class Threshold:
             stream: The stream to launch on.
         """
         self.kernel(bests, counts, prepared, norms, thresholds, rank).launch(
-            grid=(cute.ceil_div(thresholds.shape[0], WARPS), 1, 1), block=[THREADS, 1, 1], stream=stream
+            grid=(cute.ceil_div(thresholds.shape[0], CuteThresholds.WARPS), 1, 1),
+            block=[CuteThresholds.THREADS, 1, 1],
+            stream=stream,
         )
 
     @cute.kernel
@@ -979,10 +996,10 @@ class Threshold:
         thread, _, _ = cute.arch.thread_idx()
         block, _, _ = cute.arch.block_idx()
         lane = cute.arch.lane_idx()
-        row = block * WARPS + thread // 32
+        row = block * CuteThresholds.WARPS + thread // 32
         if row < thresholds.shape[0]:
             # Lane l holds bins 63 - 2 l and 62 - 2 l, so the lanes in order count down from the top bin
-            high_bin = BINS - 1 - 2 * lane
+            high_bin = ThresholdEstimate.BINS - 1 - 2 * lane
             high = counts[row, high_bin]
             low = counts[row, high_bin - 1]
             counts[row, high_bin] = cutlass.Int32(0)
@@ -999,14 +1016,14 @@ class Threshold:
             top = cutlass.Int32(0)
             if reached != 0:
                 first = cutlass.Int32(cute.arch.popc((reached & -reached) - 1))
-                top = BINS - 1 - 2 * first
+                top = ThresholdEstimate.BINS - 1 - 2 * first
                 if (cutlass.Int32(reached_high) >> first) & 1 == 0:
                     top = top - 1
             # -inf where no bin above the first reaches the rank
             threshold = -cutlass.Float32.inf
             if top > 0:
                 edge = cute.math.fma(prepared[row, 3], cutlass.Float32(top), prepared[row, 0])
-                threshold = cute.math.fma(norms[row], cutlass.Float32(-EDGE_SLACK), edge)
+                threshold = cute.math.fma(norms[row], cutlass.Float32(-ThresholdEstimate.EDGE_SLACK), edge)
             if lane == 0:
                 thresholds[row] = threshold
                 bests[row] = -cutlass.Float32.inf
@@ -1023,8 +1040,8 @@ class Workspace:
             device: The device.
         """
         self.bests = torch.full((rows,), -torch.inf, device=device)
-        self.group_maxima = torch.full((rows, GROUPS), -torch.inf, device=device)
-        self.counts = torch.zeros(rows, BINS, device=device, dtype=torch.int32)
+        self.group_maxima = torch.full((rows, CuteThresholds.GROUPS), -torch.inf, device=device)
+        self.counts = torch.zeros(rows, ThresholdEstimate.BINS, device=device, dtype=torch.int32)
 
 
 WORKSPACES: dict[torch.device, Workspace] = {}
@@ -1065,9 +1082,11 @@ def compiled(name: str, four_wide: bool) -> Any:
     )
     bests = make_fake_compact_tensor(cutlass.Float32, (padded,), assumed_align=4)
     group_maxima = make_fake_compact_tensor(
-        cutlass.Float32, (padded, GROUPS), stride_order=(1, 0), assumed_align=4
+        cutlass.Float32, (padded, CuteThresholds.GROUPS), stride_order=(1, 0), assumed_align=4
     )
-    counts = make_fake_compact_tensor(cutlass.Int32, (padded, BINS), stride_order=(1, 0), assumed_align=4)
+    counts = make_fake_compact_tensor(
+        cutlass.Int32, (padded, ThresholdEstimate.BINS), stride_order=(1, 0), assumed_align=4
+    )
     visible_counts = make_fake_compact_tensor(cutlass.Int32, (rows,), assumed_align=4)
     prepared = make_fake_compact_tensor(cutlass.Float32, (padded, 4), stride_order=(1, 0), assumed_align=16)
     scalars = (cutlass.Int32(1), cutlass.Int32(1), cutlass.Int32(1))
@@ -1092,10 +1111,10 @@ def compiled(name: str, four_wide: bool) -> Any:
         kernel = Prepare()
     else:
         queries = make_fake_compact_tensor(
-            cutlass.BFloat16, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            cutlass.BFloat16, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16
         )
         centroids = make_fake_compact_tensor(
-            cutlass.BFloat16, (centroid_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            cutlass.BFloat16, (centroid_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         )
         arguments = (
             queries,
@@ -1146,15 +1165,15 @@ def sample_thresholds(
     device = index_queries.device
     sample_count = -(-bucket_centroids.shape[0] // stride)
     four_wide = sample_count % 16 == 0
-    padded = -(-rows // ROWS) * ROWS
+    padded = -(-rows // CuteThresholds.ROWS) * CuteThresholds.ROWS
     words = workspace_for(padded, device)
     bests, group_maxima, counts = words.bests[:padded], words.group_maxima[:padded], words.counts[:padded]
-    warp_sums = torch.empty(padded, -(-sample_count // BLOCK), 4, device=device)
+    warp_sums = torch.empty(padded, -(-sample_count // ThresholdEstimate.BLOCK), 4, device=device)
     thresholds = torch.empty(rows, device=device)
     norms = index_queries.float().norm(dim=1)
     queries, centroids = index_queries.contiguous(), bucket_centroids.contiguous()
     # The rank-th greatest of the group maxima has rank scores at or above it, so it bounds no rank past the groups
-    floored = int(rank <= GROUPS)
+    floored = int(rank <= CuteThresholds.GROUPS)
     prepared = torch.empty(padded, 4, device=device)
     passes = (
         queries,

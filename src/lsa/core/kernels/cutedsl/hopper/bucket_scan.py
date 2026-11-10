@@ -44,29 +44,8 @@ from cutlass.cutlass_dsl import T, dsl_user_op
 from cutlass.utils import LayoutEnum
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch, HopperBucketScan, Index, SharedBucketScan
 from lsa.core.kernels.cutedsl.hopper.tile import accumulator_rows_by_columns
-
-# Index queries a CTA holds, a warpgroup's threads, buckets a tile scores, and rows an accumulator holds
-BLOCK_Q = 128
-BLOCK_N = 64
-MMA_ROWS = 64
-# Tiles a CTA scans before its rows reserve their place in the global listing, at most and at least - within
-# them a span is sized so the CTAs fill the GPU's slots about WAVES times over
-SPAN_TILES = (4, 64)
-WAVES = 64
-# Survivors a row holds in shared memory a span - some 11 arrive at 10M, so few rows ever append past it
-ROW_SLOTS = 32
-# Tiles of bucket centroids in flight, which is also the tiles of a pass, and CTAs an SM holds
-STAGES = 2
-MIN_BLOCKS = 4
-# Words of hits a thread queues in shared memory a pass, one for each of a pass's tiles and row halves
-QUEUE_SLOTS = 2 * STAGES
-# Tiles a span holds at most, which a queued word's tag in an int16 bounds
-MAX_SPAN_TILES = 2**14
-# Columns of a thread's accumulator fragment, the bits of a queued word a row
-FRAGMENT_COLUMNS = BLOCK_N // 4
-# Index dims the kernel takes - a row of 128 bytes, the widest swizzle
-INDEX_DIM = 64
 
 
 @dsl_user_op
@@ -97,8 +76,8 @@ class BucketScan:
 
     def __init__(self) -> None:
         """Fix the CTA's consumer threads, its producer warp and its barrier."""
-        self.threads = BLOCK_Q
-        self.cta_threads = BLOCK_Q + 32
+        self.threads = HopperBucketScan.BLOCK_Q
+        self.cta_threads = HopperBucketScan.BLOCK_Q + 32
         self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=self.threads)
 
     @cute.jit
@@ -126,9 +105,11 @@ class BucketScan:
             stream: The stream to launch on.
         """
         dtype = index_queries.element_type
-        mma_tile = (BLOCK_Q, BLOCK_N, INDEX_DIM)
+        mma_tile = (HopperBucketScan.BLOCK_Q, HopperBucketScan.BLOCK_N, Index.DIM)
         query_layout = hopper.make_smem_layout_a(LayoutEnum.ROW_MAJOR, mma_tile, dtype, 1)
-        centroid_layout = hopper.make_smem_layout_b(LayoutEnum.ROW_MAJOR, mma_tile, dtype, STAGES)
+        centroid_layout = hopper.make_smem_layout_b(
+            LayoutEnum.ROW_MAJOR, mma_tile, dtype, HopperBucketScan.STAGES
+        )
 
         @cute.struct
         class Storage:
@@ -136,14 +117,22 @@ class BucketScan:
 
             queries: cute.struct.Align[cute.struct.MemRange[dtype, cute.cosize(query_layout)], 1024]
             centroids: cute.struct.Align[cute.struct.MemRange[dtype, cute.cosize(centroid_layout)], 1024]
-            row_counts: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, BLOCK_Q], 16]
-            row_buckets: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, BLOCK_Q * ROW_SLOTS], 16]
-            queue_words: cute.struct.Align[cute.struct.MemRange[cutlass.Uint32, BLOCK_Q * QUEUE_SLOTS], 16]
-            queue_tags: cute.struct.Align[cute.struct.MemRange[cutlass.Int16, BLOCK_Q * QUEUE_SLOTS], 16]
-            full_empty: cute.struct.Align[cute.struct.MemRange[cutlass.Int64, 2 * STAGES], 8]
+            row_counts: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperBucketScan.BLOCK_Q], 16]
+            row_buckets: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Int32, HopperBucketScan.BLOCK_Q * SharedBucketScan.ROW_SLOTS], 16
+            ]
+            queue_words: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Uint32, HopperBucketScan.BLOCK_Q * HopperBucketScan.QUEUE_SLOTS],
+                16,
+            ]
+            queue_tags: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Int16, HopperBucketScan.BLOCK_Q * HopperBucketScan.QUEUE_SLOTS],
+                16,
+            ]
+            full_empty: cute.struct.Align[cute.struct.MemRange[cutlass.Int64, 2 * HopperBucketScan.STAGES], 8]
 
         elements = 128 // dtype.width
-        per_row = INDEX_DIM // elements
+        per_row = Index.DIM // elements
         global_to_shared = cute.make_tiled_copy_tv(
             cute.make_copy_atom(
                 cpasync.CopyG2SOp(cache_mode=cpasync.LoadCacheMode.GLOBAL), dtype, num_bits_per_copy=128
@@ -158,17 +147,17 @@ class BucketScan:
             cute.nvgpu.OperandMajorMode.K,
             cutlass.Float32,
             (1, 1, 1),
-            (MMA_ROWS, BLOCK_N),
+            (HopperBucketScan.MMA_ROWS, HopperBucketScan.BLOCK_N),
         )
         tma_atom, tma_centroids = cpasync.make_tiled_tma_atom(
             cpasync.CopyBulkTensorTileG2SOp(),
             bucket_centroids,
             cute.slice_(centroid_layout, (None, None, 0)),
-            (BLOCK_N, INDEX_DIM),
+            (HopperBucketScan.BLOCK_N, Index.DIM),
         )
         grid = (
-            cute.ceil_div(index_queries.shape[0], BLOCK_Q),
-            cute.ceil_div(cute.ceil_div(bucket_centroids.shape[0], BLOCK_N), span_tiles),
+            cute.ceil_div(index_queries.shape[0], HopperBucketScan.BLOCK_Q),
+            cute.ceil_div(cute.ceil_div(bucket_centroids.shape[0], HopperBucketScan.BLOCK_N), span_tiles),
             1,
         )
         self.kernel(
@@ -186,7 +175,12 @@ class BucketScan:
             tma_atom,
             tma_centroids,
             Storage,
-        ).launch(grid=grid, block=[self.cta_threads, 1, 1], stream=stream, min_blocks_per_mp=MIN_BLOCKS)
+        ).launch(
+            grid=grid,
+            block=[self.cta_threads, 1, 1],
+            stream=stream,
+            min_blocks_per_mp=HopperBucketScan.MIN_BLOCKS,
+        )
 
     @cute.kernel
     def kernel(
@@ -229,23 +223,30 @@ class BucketScan:
         query_block, span, _ = cute.arch.block_idx()
         rows = index_queries.shape[0]
         first_tile = span * span_tiles
-        tile_count = cute.ceil_div(bucket_count, BLOCK_N)
+        tile_count = cute.ceil_div(bucket_count, HopperBucketScan.BLOCK_N)
         # The span is padded to whole passes, so its last tiles may be past the buckets, but never a whole pass past
         # => a tile past the buckets arrives as zeros and the visible counts mask it
         stop_tile = first_tile + cutlass.min(
-            span_tiles, (tile_count - first_tile + STAGES - 1) // STAGES * STAGES
+            span_tiles,
+            (tile_count - first_tile + HopperBucketScan.STAGES - 1)
+            // HopperBucketScan.STAGES
+            * HopperBucketScan.STAGES,
         )
 
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
         shared_queries = storage.queries.get_tensor(query_layout.outer, swizzle=query_layout.inner)
         shared_centroids = storage.centroids.get_tensor(centroid_layout.outer, swizzle=centroid_layout.inner)
-        row_counts = storage.row_counts.get_tensor(cute.make_layout(BLOCK_Q))
+        row_counts = storage.row_counts.get_tensor(cute.make_layout(HopperBucketScan.BLOCK_Q))
         row_buckets = storage.row_buckets.get_tensor(
-            cute.make_layout((BLOCK_Q, ROW_SLOTS), stride=(ROW_SLOTS, 1))
+            cute.make_layout(
+                (HopperBucketScan.BLOCK_Q, SharedBucketScan.ROW_SLOTS), stride=(SharedBucketScan.ROW_SLOTS, 1)
+            )
         )
         # A slot's words are the threads' in a row
         # => a warp's stores fall in different banks
-        queue_layout = cute.make_layout((QUEUE_SLOTS, BLOCK_Q), stride=(BLOCK_Q, 1))
+        queue_layout = cute.make_layout(
+            (HopperBucketScan.QUEUE_SLOTS, HopperBucketScan.BLOCK_Q), stride=(HopperBucketScan.BLOCK_Q, 1)
+        )
         queue_words = storage.queue_words.get_tensor(queue_layout)
         queue_tags = storage.queue_tags.get_tensor(queue_layout)
         tile_bytes = cute.size_in_bytes(
@@ -253,14 +254,14 @@ class BucketScan:
         )
         centroid_pipeline = pipeline.PipelineTmaAsync.create(
             barrier_storage=storage.full_empty.data_ptr(),
-            num_stages=STAGES,
+            num_stages=HopperBucketScan.STAGES,
             producer_group=pipeline.CooperativeGroup(pipeline.Agent.Thread),
             consumer_group=pipeline.CooperativeGroup(pipeline.Agent.Thread, self.threads // 32),
             tx_count=tile_bytes,
             cta_layout_vmnk=cute.make_layout((1, 1, 1, 1)),
         )
 
-        centroid_tiles = cute.local_tile(tma_centroids, (BLOCK_N, INDEX_DIM), (None, 0))
+        centroid_tiles = cute.local_tile(tma_centroids, (HopperBucketScan.BLOCK_N, Index.DIM), (None, 0))
         tBsB, tBgB = cpasync.tma_partition(
             tma_atom,
             0,
@@ -273,9 +274,13 @@ class BucketScan:
         if warp_group == 0:
             row_counts[thread] = cutlass.Int32(0)
             copy_slice = global_to_shared.get_slice(thread)
-            query_tile = cute.local_tile(index_queries, (BLOCK_Q, INDEX_DIM), (query_block, 0))
+            query_tile = cute.local_tile(
+                index_queries, (HopperBucketScan.BLOCK_Q, Index.DIM), (query_block, 0)
+            )
             query_coords = cute.local_tile(
-                cute.make_identity_tensor(index_queries.shape), (BLOCK_Q, INDEX_DIM), (query_block, 0)
+                cute.make_identity_tensor(index_queries.shape),
+                (HopperBucketScan.BLOCK_Q, Index.DIM),
+                (query_block, 0),
             )
             tQgQ = copy_slice.partition_S(query_tile)
             tQsQ = copy_slice.partition_D(shared_queries[None, None, 0])
@@ -334,7 +339,7 @@ class BucketScan:
             first_tile: The first tile of the span.
             stop_tile: One past the last.
         """
-        state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, STAGES)
+        state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, HopperBucketScan.STAGES)
         for tile in range(first_tile, stop_tile, 1):
             centroid_pipeline.producer_acquire(state)
             cute.copy(
@@ -394,13 +399,15 @@ class BucketScan:
         tCrA = [
             tiled_mma.make_fragment_A(
                 mma_slice.partition_A(
-                    cute.local_tile(shared_queries[None, None, 0], (MMA_ROWS, INDEX_DIM), (row_half, 0))
+                    cute.local_tile(
+                        shared_queries[None, None, 0], (HopperBucketScan.MMA_ROWS, Index.DIM), (row_half, 0)
+                    )
                 )
             )
             for row_half in range(2)
         ]
         tCrB = tiled_mma.make_fragment_B(mma_slice.partition_B(shared_centroids))
-        accumulator_shape = mma_slice.partition_shape_C((MMA_ROWS, BLOCK_N))
+        accumulator_shape = mma_slice.partition_shape_C((HopperBucketScan.MMA_ROWS, HopperBucketScan.BLOCK_N))
         accumulators = [cute.make_rmem_tensor(accumulator_shape, cutlass.Float32) for _ in range(2)]
 
         # A thread's rows are the same on every tile
@@ -413,7 +420,7 @@ class BucketScan:
                 mma_slice.partition_C(
                     cute.local_tile(
                         cute.make_identity_tensor((rows, bucket_count)),
-                        (MMA_ROWS, BLOCK_N),
+                        (HopperBucketScan.MMA_ROWS, HopperBucketScan.BLOCK_N),
                         (2 * query_block + row_half, 0),
                     )
                 )
@@ -443,17 +450,17 @@ class BucketScan:
         # The last tile of the span issues no next MMA and waits with wait_group(0)
         # A stage is released only once A1 is done, because both halves of tile t read it
         # => the producer may refill it with tile t + STAGES only then
-        waited = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, STAGES)
-        released = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, STAGES)
+        waited = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, HopperBucketScan.STAGES)
+        released = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, HopperBucketScan.STAGES)
         centroid_pipeline.consumer_wait(waited)
         waited.advance()
         self.score_tile(accumulators[0], tCrA[0], tCrB, 0)
 
         # A pass takes STAGES tiles, so a tile's stage is known when the kernel is built
         # => the MMA's operands are addressed with constants
-        for first_of_pass in range(first_tile, stop_tile, STAGES):
+        for first_of_pass in range(first_tile, stop_tile, HopperBucketScan.STAGES):
             queued = cutlass.Int32(0)
-            for stage in cutlass.range_constexpr(STAGES):
+            for stage in cutlass.range_constexpr(HopperBucketScan.STAGES):
                 tile = first_of_pass + stage
                 self.score_tile(accumulators[1], tCrA[1], tCrB, stage)
                 warpgroup.wait_group(1)
@@ -474,13 +481,13 @@ class BucketScan:
                     queue_words,
                     queue_tags,
                 )
-                if stage + 1 < STAGES:
+                if stage + 1 < HopperBucketScan.STAGES:
                     centroid_pipeline.consumer_wait(waited)
                     waited.advance()
                     self.score_tile(accumulators[0], tCrA[0], tCrB, stage + 1)
                     warpgroup.wait_group(1)
                 else:
-                    if first_of_pass + STAGES < stop_tile:
+                    if first_of_pass + HopperBucketScan.STAGES < stop_tile:
                         centroid_pipeline.consumer_wait(waited)
                         waited.advance()
                         self.score_tile(accumulators[0], tCrA[0], tCrB, 0)
@@ -548,7 +555,7 @@ class BucketScan:
             cute.nvgpu.OperandMajorMode.K,
             cutlass.Float32,
             (1, 1, 1),
-            (MMA_ROWS, BLOCK_N),
+            (HopperBucketScan.MMA_ROWS, HopperBucketScan.BLOCK_N),
         )
         # The first product overwrites the accumulator
         # => no zeroing pass
@@ -605,7 +612,7 @@ class BucketScan:
             mma_slice.partition_C(
                 cute.local_tile(
                     cute.make_identity_tensor((rows, bucket_count)),
-                    (MMA_ROWS, BLOCK_N),
+                    (HopperBucketScan.MMA_ROWS, HopperBucketScan.BLOCK_N),
                     (2 * query_block + row_half, tile),
                 )
             )
@@ -615,7 +622,7 @@ class BucketScan:
         rows_held = cute.size(scores, mode=[0])
         columns = cute.size(scores, mode=[1])
         hits = cutlass.Uint32(0)
-        if (tile + 1) * BLOCK_N <= least_visible:
+        if (tile + 1) * HopperBucketScan.BLOCK_N <= least_visible:
             # A score at or above its threshold leaves a difference of sign 0, exactly, and the last pushed is bit 0
             # A NaN difference has sign 0, the sign of a hit
             # => scores and thresholds must be finite
@@ -671,14 +678,14 @@ class BucketScan:
         #   rows     16 w + l // 4, and the row 8 below it
         #   columns  2 (l % 4) and 2 (l % 4) + 1, then the same pair 8 further, for 8 pairs
         # => a lane quad shares its rows, and bit i of a word is row i // 16, column i % 16 of the fragment
-        lane_row = query_block * BLOCK_Q + thread // 32 * 16 + thread % 32 // 4
+        lane_row = query_block * HopperBucketScan.BLOCK_Q + thread // 32 * 16 + thread % 32 // 4
         lane_bucket = thread % 4 * 2
         for slot in range(queued):
             tag = cutlass.Int32(queue_tags[slot, thread])
             self.append(
                 queue_words[slot, thread],
-                lane_row + (tag & 1) * MMA_ROWS,
-                (first_tile + tag // 2) * BLOCK_N + lane_bucket,
+                lane_row + (tag & 1) * HopperBucketScan.MMA_ROWS,
+                (first_tile + tag // 2) * HopperBucketScan.BLOCK_N + lane_bucket,
                 row_counts,
                 row_buckets,
                 survivor_counts,
@@ -715,16 +722,16 @@ class BucketScan:
             hits = hits ^ (cutlass.Uint32(1) << top)
             # A bit is r * 16 + c, and c is 2 * pair + (c & 1)
             # => the row is 8 r more, the bucket (c & 1) + 8 * (c >> 1) more
-            r = top // FRAGMENT_COLUMNS
-            c = top % FRAGMENT_COLUMNS
+            r = top // HopperBucketScan.FRAGMENT_COLUMNS
+            c = top % HopperBucketScan.FRAGMENT_COLUMNS
             row = first_row + cutlass.Int32(r << 3)
             bucket = first_bucket + cutlass.Int32((c & 1) + ((c >> 1) << 3))
-            local = row - query_block * BLOCK_Q
+            local = row - query_block * HopperBucketScan.BLOCK_Q
             # A row's 32 slots never reset, so after ROW_SLOTS survivors in a span each is a GPU atomic
             # A reset needs the four lanes of a row to agree, and in this divergent loop they drain different words
             # => no flush-and-refill as Blackwell has, where a thread owns its row
             slot = cute.arch.atomic_add((row_counts.iterator + local).llvm_ptr, cutlass.Int32(1), scope="cta")
-            if slot < ROW_SLOTS:
+            if slot < SharedBucketScan.ROW_SLOTS:
                 row_buckets[local, slot] = bucket
             else:
                 at = cute.arch.atomic_add(
@@ -756,9 +763,9 @@ class BucketScan:
             buckets: The listing [R, capacity] int32.
         """
         self.barrier.arrive_and_wait()
-        row = query_block * BLOCK_Q + thread
+        row = query_block * HopperBucketScan.BLOCK_Q + thread
         if row < rows:
-            held = cutlass.min(row_counts[thread], ROW_SLOTS)
+            held = cutlass.min(row_counts[thread], SharedBucketScan.ROW_SLOTS)
             if held > 0:
                 base = cute.arch.atomic_add(
                     (survivor_counts.iterator + row).llvm_ptr, held, sem="relaxed", scope="gpu"
@@ -777,9 +784,9 @@ def compiled() -> Any:
     rows, bucket_count, capacity = (cute.sym_int32() for _ in range(3))
     bucket_stride = cute.sym_int64()
     arguments = (
-        make_fake_compact_tensor(cutlass.BFloat16, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16),
+        make_fake_compact_tensor(cutlass.BFloat16, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16),
         make_fake_compact_tensor(
-            cutlass.BFloat16, (bucket_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            cutlass.BFloat16, (bucket_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         ),
         make_fake_compact_tensor(cutlass.Int32, (rows,), assumed_align=4),
         make_fake_compact_tensor(cutlass.Float32, (rows,), assumed_align=4),
@@ -801,9 +808,9 @@ def supports(index_queries: torch.Tensor, bucket_centroids: torch.Tensor) -> boo
     """
     return (
         index_queries.is_cuda
-        and dispatch.capability(index_queries.device) == dispatch.HOPPER
+        and dispatch.capability(index_queries.device) == Arch.HOPPER
         and index_queries.dtype == bucket_centroids.dtype == torch.bfloat16
-        and index_queries.shape[1] == bucket_centroids.shape[1] == INDEX_DIM
+        and index_queries.shape[1] == bucket_centroids.shape[1] == Index.DIM
         and index_queries.is_contiguous()
         and bucket_centroids.is_contiguous()
         and index_queries.data_ptr() % 16 == 0
@@ -819,11 +826,11 @@ def span_for(rows: int, bucket_count: int, device: torch.device) -> int:
         bucket_count: Buckets there are.
         device: The GPU.
     """
-    tiles = -(-bucket_count // BLOCK_N)
-    query_blocks = -(-rows // BLOCK_Q)
-    slots = torch.cuda.get_device_properties(device).multi_processor_count * MIN_BLOCKS
-    shortest, longest = SPAN_TILES
-    return min(longest, max(shortest, -(-tiles * query_blocks // (WAVES * slots))))
+    tiles = -(-bucket_count // HopperBucketScan.BLOCK_N)
+    query_blocks = -(-rows // HopperBucketScan.BLOCK_Q)
+    slots = torch.cuda.get_device_properties(device).multi_processor_count * HopperBucketScan.MIN_BLOCKS
+    shortest, longest = SharedBucketScan.SPAN_TILES
+    return min(longest, max(shortest, -(-tiles * query_blocks // (HopperBucketScan.WAVES * slots))))
 
 
 def scan_buckets(
@@ -852,8 +859,10 @@ def scan_buckets(
     Raises:
         ValueError: The rows are not ones the kernel takes, or the span is not one it holds.
     """
-    if span_tiles is not None and not 1 <= span_tiles <= MAX_SPAN_TILES:
-        raise ValueError(f"the CuTeDSL listing scans 1 to {MAX_SPAN_TILES} tiles a span - got {span_tiles}")
+    if span_tiles is not None and not 1 <= span_tiles <= SharedBucketScan.MAX_SPAN_TILES:
+        raise ValueError(
+            f"the CuTeDSL listing scans 1 to {SharedBucketScan.MAX_SPAN_TILES} tiles a span - got {span_tiles}"
+        )
     if not supports(index_queries, bucket_centroids):
         raise ValueError(
             "the CuTeDSL listing takes contiguous, 16-byte aligned bf16 rows of 64 index dims on a Hopper GPU - got "
@@ -874,6 +883,6 @@ def scan_buckets(
         thresholds.float().contiguous(),
         survivor_counts,
         buckets,
-        -(-span_tiles // STAGES) * STAGES,
+        -(-span_tiles // HopperBucketScan.STAGES) * HopperBucketScan.STAGES,
     )
     return buckets, survivor_counts

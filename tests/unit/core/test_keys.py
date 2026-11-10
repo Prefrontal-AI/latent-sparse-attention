@@ -2,7 +2,8 @@
 
 import torch
 
-from lsa.core.kernels.triton.keys import EMPTY, ordered_int32, pack_keys, unpack_ids, unpack_scores
+from lsa.core.kernels.constants import PackedKey
+from lsa.core.kernels.triton.keys import ordered_int32, pack_keys, unpack_ids, unpack_scores
 
 
 def test_a_key_unpacks_to_its_score_and_id():
@@ -29,6 +30,6 @@ def test_the_ordered_bits_are_monotone_in_the_score():
 
 def test_no_id_is_the_empty_key():
     keys = pack_keys(torch.tensor([3.0, 4.0]), torch.tensor([-1, 5], dtype=torch.int32))
-    assert keys[0] == EMPTY
-    assert keys[1] > EMPTY
+    assert keys[0] == PackedKey.EMPTY
+    assert keys[1] > PackedKey.EMPTY
     assert unpack_ids(keys).tolist() == [-1, 5]

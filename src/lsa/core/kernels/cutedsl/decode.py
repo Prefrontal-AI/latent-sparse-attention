@@ -29,37 +29,9 @@ import cutlass.utils
 import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
-from lsa.core.kernels.cutedsl.scoring import EMPTY, pack_key
-from lsa.core.kernels.triton.top_k import RUN, SAMPLES, keep_plan
-
-INDEX_DIM = 64
-GROUP_LANES = 8
-DIMS_PER_LANE = INDEX_DIM // GROUP_LANES
-THREADS = 128
-GROUPS = THREADS // GROUP_LANES
-IN_FLIGHT = 8
-# Buckets a CTA of the scan takes
-SPAN = 256
-# Spans a request's listing is ordered from at most, their places held in shared memory - contexts to 16M
-MOST_SPANS = 8192
-SPAN_BITS = MOST_SPANS.bit_length() - 1
-# Threads of the threshold and of the ordering, and the bits of a word each pass of their search settles
-SELECT_THREADS = 1024
-SELECT_WARPS = SELECT_THREADS // 32
-# CTAs a request's ordering is split over, each taking every ORDER_PARTS-th run of a CTA's width of its keys
-ORDER_PARTS = 4
-DIGIT_BITS = 8
-BINS = 1 << DIGIT_BITS
-# Samples of a request a thread of the threshold holds, at most
-SAMPLES_PER_THREAD = -(-SAMPLES[-1] // SELECT_THREADS)
-# The threshold's search settles the top two digits of ten bits, a bin a thread - more than the word's kept bits
-SEARCH_BITS = 10
-SEARCH_BINS = 1 << SEARCH_BITS
-SEARCH_PASSES = 2
-# A histogram of the search holds its bins padded by one in every 32, so a lane's 32 bins sit in distinct banks
-HISTOGRAM_SIZE = SEARCH_BINS + SEARCH_BINS // 32
-# Low bits of the sampled threshold's word left clear - a granule of the scores far below the listing's slack
-THRESHOLD_LOW = 13
+from lsa.core.kernels.constants import CuteDecode, Index, PackedKey, ScoreGroups, TritonTopK
+from lsa.core.kernels.cutedsl.scoring import pack_key
+from lsa.core.kernels.triton.top_k import keep_plan
 
 
 class PagedScoring:
@@ -74,12 +46,13 @@ class PagedScoring:
             request: The request.
             member: This lane within its group of eight.
         """
-        query_bf16 = cute.make_rmem_tensor(DIMS_PER_LANE, index_queries.element_type)
+        query_bf16 = cute.make_rmem_tensor(ScoreGroups.DIMS_PER_LANE, index_queries.element_type)
         cute.autovec_copy(
-            cute.local_tile(index_queries, (1, DIMS_PER_LANE), (request, member))[0, None], query_bf16
+            cute.local_tile(index_queries, (1, ScoreGroups.DIMS_PER_LANE), (request, member))[0, None],
+            query_bf16,
         )
-        query = cute.make_rmem_tensor(DIMS_PER_LANE, cutlass.Float32)
-        for e in cutlass.range_constexpr(DIMS_PER_LANE):
+        query = cute.make_rmem_tensor(ScoreGroups.DIMS_PER_LANE, cutlass.Float32)
+        for e in cutlass.range_constexpr(ScoreGroups.DIMS_PER_LANE):
             query[e] = query_bf16[e].to(cutlass.Float32)
         return query
 
@@ -112,10 +85,10 @@ class PagedScoring:
             loaded: This lane's dims of the centroid in bf16.
         """
         score = query[0] * loaded[0].to(cutlass.Float32) + query[1] * loaded[1].to(cutlass.Float32)
-        for e in cutlass.range_constexpr(2, DIMS_PER_LANE):
+        for e in cutlass.range_constexpr(2, ScoreGroups.DIMS_PER_LANE):
             score = score + query[e] * loaded[e].to(cutlass.Float32)
         for offset in cutlass.range_constexpr(3):
-            score = score + cute.arch.shuffle_sync_bfly(score, GROUP_LANES // 2 >> offset)
+            score = score + cute.arch.shuffle_sync_bfly(score, ScoreGroups.GROUP_LANES // 2 >> offset)
         return cutlass.Float32(0.0) + score
 
 
@@ -150,7 +123,7 @@ def word_score(word: Any) -> Any:
 class WordSearch:
     """The k-th greatest of a row's words, a digit at a time from the top, by histograms in shared memory."""
 
-    def __init__(self, threads: int = SELECT_THREADS) -> None:
+    def __init__(self, threads: int = CuteDecode.SELECT_THREADS) -> None:
         """Fix the CTA's threads and its barrier.
 
         Args:
@@ -183,12 +156,12 @@ class WordSearch:
         """
         thread, _, _ = cute.arch.thread_idx()
         # Thread t holds the digit BINS - 1 - t, so the scan runs from the top digit down
-        digit = BINS - 1 - thread
+        digit = CuteDecode.BINS - 1 - thread
         held = cutlass.Int32(0)
-        if thread < BINS:
+        if thread < CuteDecode.BINS:
             held = histogram[digit]
         above, _ = self.exclusive_sum(held, warp_totals)
-        if thread < BINS and above < rank and above + held >= rank:
+        if thread < CuteDecode.BINS and above < rank and above + held >= rank:
             shared[0] = digit
             shared[1] = above
         self.barrier.arrive_and_wait()
@@ -225,8 +198,8 @@ class WordSearch:
         prefix = cutlass.Int32(0)
         above = cutlass.Int32(0)
         for p in cutlass.range_constexpr(passes):
-            shift = 32 - DIGIT_BITS * (p + 1)
-            if thread < BINS:
+            shift = 32 - CuteDecode.DIGIT_BITS * (p + 1)
+            if thread < CuteDecode.BINS:
                 histogram[thread] = cutlass.Int32(0)
             self.barrier.arrive_and_wait()
             for i in range(thread, length, self.threads):
@@ -237,11 +210,11 @@ class WordSearch:
                     word = cutlass.Uint32(words[i])
                 matches = True
                 if cutlass.const_expr(p > 0):
-                    matches = (word >> (shift + DIGIT_BITS)) == (
-                        cutlass.Uint32(prefix) >> (shift + DIGIT_BITS)
+                    matches = (word >> (shift + CuteDecode.DIGIT_BITS)) == (
+                        cutlass.Uint32(prefix) >> (shift + CuteDecode.DIGIT_BITS)
                     )
                 if matches:
-                    digit = cutlass.Int32((word >> shift) & cutlass.Uint32(BINS - 1))
+                    digit = cutlass.Int32((word >> shift) & cutlass.Uint32(CuteDecode.BINS - 1))
                     cute.arch.atomic_add((histogram.iterator + digit).llvm_ptr, cutlass.Int32(1), scope="cta")
             self.barrier.arrive_and_wait()
             digit, digit_above = self.find_digit(histogram, rank - above, warp_totals, shared)
@@ -272,7 +245,9 @@ class WordSearch:
             shared: Shared memory to hand an answer to every thread.
         """
         thread, _, _ = cute.arch.thread_idx()
-        kth_word, above = self.kth(row, length, want, 32 // DIGIT_BITS, True, histogram, warp_totals, shared)
+        kth_word, above = self.kth(
+            row, length, want, 32 // CuteDecode.DIGIT_BITS, True, histogram, warp_totals, shared
+        )
         # Every word above the want-th, and its ties lowest column first until the want is full, in column order
         placed = cutlass.Int32(0)
         ties_taken = cutlass.Int32(0)
@@ -331,8 +306,8 @@ class Sample(PagedScoring):
             stream: The stream to launch on.
         """
         self.kernel(index_queries, bucket_centroids, pages, counts, words, stride).launch(
-            grid=(cute.ceil_div(words.shape[1], THREADS), index_queries.shape[0], 1),
-            block=[THREADS, 1, 1],
+            grid=(cute.ceil_div(words.shape[1], ScoreGroups.THREADS), index_queries.shape[0], 1),
+            block=[ScoreGroups.THREADS, 1, 1],
             stream=stream,
             use_pdl=True,
         )
@@ -363,30 +338,32 @@ class Sample(PagedScoring):
         cute.arch.griddepcontrol_launch_dependents()
         thread, _, _ = cute.arch.thread_idx()
         part, request, _ = cute.arch.block_idx()
-        group = thread // GROUP_LANES
-        member = thread % GROUP_LANES
+        group = thread // ScoreGroups.GROUP_LANES
+        member = thread % ScoreGroups.GROUP_LANES
         count = counts[request]
         query = self.load_query(index_queries, request, member)
         loaded = cute.make_rmem_tensor(
-            cute.make_layout((IN_FLIGHT, DIMS_PER_LANE), stride=(DIMS_PER_LANE, 1)),
+            cute.make_layout(
+                (ScoreGroups.IN_FLIGHT, ScoreGroups.DIMS_PER_LANE), stride=(ScoreGroups.DIMS_PER_LANE, 1)
+            ),
             bucket_centroids.element_type,
         )
-        rows = cute.make_rmem_tensor(IN_FLIGHT, cutlass.Int32)
-        for f in cutlass.range_constexpr(IN_FLIGHT):
-            sample = part * THREADS + f * GROUPS + group
-            column = (sample // RUN) * stride + sample % RUN
+        rows = cute.make_rmem_tensor(ScoreGroups.IN_FLIGHT, cutlass.Int32)
+        for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
+            sample = part * ScoreGroups.THREADS + f * ScoreGroups.GROUPS + group
+            column = (sample // TritonTopK.RUN) * stride + sample % TritonTopK.RUN
             rows[f] = self.cache_row(pages, request, column, count, self.page_rows)
-        for f in cutlass.range_constexpr(IN_FLIGHT):
+        for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
             cute.autovec_copy(
-                cute.local_tile(bucket_centroids, (1, DIMS_PER_LANE), (cutlass.max(rows[f], 0), member))[
-                    0, None
-                ],
+                cute.local_tile(
+                    bucket_centroids, (1, ScoreGroups.DIMS_PER_LANE), (cutlass.max(rows[f], 0), member)
+                )[0, None],
                 loaded[f, None],
             )
-        for f in cutlass.range_constexpr(IN_FLIGHT):
+        for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
             score = self.dot(query, loaded[f, None])
-            sample = part * THREADS + f * GROUPS + group
-            column = (sample // RUN) * stride + sample % RUN
+            sample = part * ScoreGroups.THREADS + f * ScoreGroups.GROUPS + group
+            column = (sample // TritonTopK.RUN) * stride + sample % TritonTopK.RUN
             if member == 0 and sample < words.shape[1]:
                 word = cutlass.Int32(0)
                 if column < count:
@@ -401,7 +378,7 @@ class Threshold:
 
     def __init__(self) -> None:
         """Fix the CTA's barrier."""
-        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=SELECT_THREADS)
+        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=CuteDecode.SELECT_THREADS)
 
     @cute.jit
     def __call__(
@@ -435,12 +412,12 @@ class Threshold:
             """Shared memory of a block: the search passes' histograms and the block's scalars."""
 
             histograms: cute.struct.Align[
-                cute.struct.MemRange[cutlass.Int32, SEARCH_PASSES * HISTOGRAM_SIZE], 16
+                cute.struct.MemRange[cutlass.Int32, CuteDecode.SEARCH_PASSES * CuteDecode.HISTOGRAM_SIZE], 16
             ]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
 
         self.kernel(counts, words, thresholds, listed, stride, top_p, target, capacity, Storage).launch(
-            grid=(words.shape[0], 1, 1), block=[SELECT_THREADS, 1, 1], stream=stream, use_pdl=True
+            grid=(words.shape[0], 1, 1), block=[CuteDecode.SELECT_THREADS, 1, 1], stream=stream, use_pdl=True
         )
 
     @cute.kernel
@@ -475,46 +452,54 @@ class Threshold:
         thread, _, _ = cute.arch.thread_idx()
         request, _, _ = cute.arch.block_idx()
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        histograms = storage.histograms.get_tensor(cute.make_layout(SEARCH_PASSES * HISTOGRAM_SIZE))
+        histograms = storage.histograms.get_tensor(
+            cute.make_layout(CuteDecode.SEARCH_PASSES * CuteDecode.HISTOGRAM_SIZE)
+        )
         shared = storage.shared.get_tensor(cute.make_layout(4))
         count = counts[request]
         samples = words.shape[1]
         # The samples a request sees are the first of its runs that start below its count
         whole_runs = count // stride
-        seen = cutlass.min(samples, whole_runs * RUN + cutlass.min(count - whole_runs * stride, RUN))
+        seen = cutlass.min(
+            samples, whole_runs * TritonTopK.RUN + cutlass.min(count - whole_runs * stride, TritonTopK.RUN)
+        )
         wanted = target * cutlass.Float32(top_p)
         threshold = -cutlass.Float32.inf
         # Both passes' histograms are cleared while the sample is still being scored
-        for k in cutlass.range_constexpr(-(-SEARCH_PASSES * HISTOGRAM_SIZE // SELECT_THREADS)):
-            i = k * SELECT_THREADS + thread
-            if i < SEARCH_PASSES * HISTOGRAM_SIZE:
+        for k in cutlass.range_constexpr(
+            -(-CuteDecode.SEARCH_PASSES * CuteDecode.HISTOGRAM_SIZE // CuteDecode.SELECT_THREADS)
+        ):
+            i = k * CuteDecode.SELECT_THREADS + thread
+            if i < CuteDecode.SEARCH_PASSES * CuteDecode.HISTOGRAM_SIZE:
                 histograms[i] = cutlass.Int32(0)
         self.barrier.arrive_and_wait()
         cute.arch.griddepcontrol_wait()
         # A thread holds its samples' words in registers, the passes run over them
-        mine = cute.make_rmem_tensor(SAMPLES_PER_THREAD, cutlass.Int32)
-        for w in cutlass.range_constexpr(SAMPLES_PER_THREAD):
-            mine[w] = words[request, cutlass.min(w * SELECT_THREADS + thread, samples - 1)]
+        mine = cute.make_rmem_tensor(CuteDecode.SAMPLES_PER_THREAD, cutlass.Int32)
+        for w in cutlass.range_constexpr(CuteDecode.SAMPLES_PER_THREAD):
+            mine[w] = words[request, cutlass.min(w * CuteDecode.SELECT_THREADS + thread, samples - 1)]
         if count > capacity and wanted < cutlass.Float32(count) and seen > 0:
             rank = cutlass.Int32(wanted * cutlass.Float32(seen) / cutlass.Float32(count)) + 1
             rank = cutlass.min(cutlass.max(rank, 1), seen)
             prefix = cutlass.Int32(0)
             above = cutlass.Int32(0)
             lane = thread % 32
-            for p in cutlass.range_constexpr(SEARCH_PASSES):
-                shift = 32 - SEARCH_BITS * (p + 1)
-                base = p * HISTOGRAM_SIZE
-                for w in cutlass.range_constexpr(SAMPLES_PER_THREAD):
+            for p in cutlass.range_constexpr(CuteDecode.SEARCH_PASSES):
+                shift = 32 - CuteDecode.SEARCH_BITS * (p + 1)
+                base = p * CuteDecode.HISTOGRAM_SIZE
+                for w in cutlass.range_constexpr(CuteDecode.SAMPLES_PER_THREAD):
                     # A run of the CTA's samples all past the ones seen is skipped by every thread
-                    if w * SELECT_THREADS < seen:
+                    if w * CuteDecode.SELECT_THREADS < seen:
                         word = cutlass.Uint32(mine[w])
-                        counted = w * SELECT_THREADS + thread < seen
+                        counted = w * CuteDecode.SELECT_THREADS + thread < seen
                         if cutlass.const_expr(p > 0):
-                            counted = counted and (word >> (shift + SEARCH_BITS)) == (
-                                cutlass.Uint32(prefix) >> (shift + SEARCH_BITS)
+                            counted = counted and (word >> (shift + CuteDecode.SEARCH_BITS)) == (
+                                cutlass.Uint32(prefix) >> (shift + CuteDecode.SEARCH_BITS)
                             )
                         if counted:
-                            digit = cutlass.Int32((word >> shift) & cutlass.Uint32(SEARCH_BINS - 1))
+                            digit = cutlass.Int32(
+                                (word >> shift) & cutlass.Uint32(CuteDecode.SEARCH_BINS - 1)
+                            )
                             cute.arch.atomic_add(
                                 (histograms.iterator + base + digit + (digit >> 5)).llvm_ptr,
                                 cutlass.Int32(1),
@@ -523,7 +508,7 @@ class Threshold:
                 self.barrier.arrive_and_wait()
                 # One warp finds the digit - a lane takes 32 digits from the top, the lanes' sums are scanned
                 if thread < 32:
-                    top = SEARCH_BINS - 1 - 32 * lane
+                    top = CuteDecode.SEARCH_BINS - 1 - 32 * lane
                     counts_here = cute.make_rmem_tensor(32, cutlass.Int32)
                     total = cutlass.Int32(0)
                     for j in cutlass.range_constexpr(32):
@@ -545,7 +530,7 @@ class Threshold:
                 self.barrier.arrive_and_wait()
                 prefix = prefix | (shared[1] << shift)
                 above = above + shared[2]
-            level = prefix & cutlass.Int32(~((1 << THRESHOLD_LOW) - 1))
+            level = prefix & cutlass.Int32(~((1 << CuteDecode.THRESHOLD_LOW) - 1))
             if level != 0:
                 threshold = word_score(level)
         if thread == 0:
@@ -563,7 +548,7 @@ class Scan(PagedScoring):
             page_rows: Cache rows a page holds.
         """
         self.page_rows = page_rows
-        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=THREADS)
+        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=ScoreGroups.THREADS)
 
     @cute.jit
     def __call__(
@@ -600,8 +585,8 @@ class Scan(PagedScoring):
         class Storage:
             """Shared memory of a block: one span's scores, the per-warp totals and the block's scalars."""
 
-            span_scores: cute.struct.Align[cute.struct.MemRange[cutlass.Float32, SPAN], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, THREADS // 32], 16]
+            span_scores: cute.struct.Align[cute.struct.MemRange[cutlass.Float32, CuteDecode.SPAN], 16]
+            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, ScoreGroups.THREADS // 32], 16]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
 
         self.kernel(
@@ -617,8 +602,8 @@ class Scan(PagedScoring):
             listed,
             Storage,
         ).launch(
-            grid=(cute.ceil_div(scores.shape[1], SPAN), index_queries.shape[0], 1),
-            block=[THREADS, 1, 1],
+            grid=(cute.ceil_div(scores.shape[1], CuteDecode.SPAN), index_queries.shape[0], 1),
+            block=[ScoreGroups.THREADS, 1, 1],
             stream=stream,
             use_pdl=True,
         )
@@ -656,36 +641,40 @@ class Scan(PagedScoring):
         cute.arch.griddepcontrol_launch_dependents()
         thread, _, _ = cute.arch.thread_idx()
         span, request, _ = cute.arch.block_idx()
-        group = thread // GROUP_LANES
-        member = thread % GROUP_LANES
-        begin = span * SPAN
-        end = cutlass.min(begin + SPAN, scores.shape[1])
+        group = thread // ScoreGroups.GROUP_LANES
+        member = thread % ScoreGroups.GROUP_LANES
+        begin = span * CuteDecode.SPAN
+        end = cutlass.min(begin + CuteDecode.SPAN, scores.shape[1])
         count = counts[request]
         capacity = staged.shape[1]
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        span_scores = storage.span_scores.get_tensor(cute.make_layout(SPAN))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(THREADS // 32))
+        span_scores = storage.span_scores.get_tensor(cute.make_layout(CuteDecode.SPAN))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(ScoreGroups.THREADS // 32))
         shared = storage.shared.get_tensor(cute.make_layout(4))
         query = self.load_query(index_queries, request, member)
         loaded = cute.make_rmem_tensor(
-            cute.make_layout((IN_FLIGHT, DIMS_PER_LANE), stride=(DIMS_PER_LANE, 1)),
+            cute.make_layout(
+                (ScoreGroups.IN_FLIGHT, ScoreGroups.DIMS_PER_LANE), stride=(ScoreGroups.DIMS_PER_LANE, 1)
+            ),
             bucket_centroids.element_type,
         )
-        rows = cute.make_rmem_tensor(IN_FLIGHT, cutlass.Int32)
+        rows = cute.make_rmem_tensor(ScoreGroups.IN_FLIGHT, cutlass.Int32)
         # The span is scored before the threshold is waited for, so the scoring runs beside the threshold's search
-        for first in range(begin, end, GROUPS * IN_FLIGHT):
-            for f in cutlass.range_constexpr(IN_FLIGHT):
-                rows[f] = self.cache_row(pages, request, first + f * GROUPS + group, count, self.page_rows)
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+        for first in range(begin, end, ScoreGroups.GROUPS * ScoreGroups.IN_FLIGHT):
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
+                rows[f] = self.cache_row(
+                    pages, request, first + f * ScoreGroups.GROUPS + group, count, self.page_rows
+                )
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
                 cute.autovec_copy(
-                    cute.local_tile(bucket_centroids, (1, DIMS_PER_LANE), (cutlass.max(rows[f], 0), member))[
-                        0, None
-                    ],
+                    cute.local_tile(
+                        bucket_centroids, (1, ScoreGroups.DIMS_PER_LANE), (cutlass.max(rows[f], 0), member)
+                    )[0, None],
                     loaded[f, None],
                 )
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
                 score = self.dot(query, loaded[f, None])
-                bucket = first + f * GROUPS + group
+                bucket = first + f * ScoreGroups.GROUPS + group
                 if member == 0 and bucket < end:
                     if rows[f] < 0:
                         score = -cutlass.Float32.inf
@@ -697,7 +686,7 @@ class Scan(PagedScoring):
         self.barrier.arrive_and_wait()
 
         # The span's keys staged in bucket order, its place in the staging taken with one atomic
-        per_thread = SPAN // THREADS
+        per_thread = CuteDecode.SPAN // ScoreGroups.THREADS
         kept = cute.make_rmem_tensor(per_thread, cutlass.Int32)
         mine = cutlass.Int32(0)
         for j in cutlass.range_constexpr(per_thread):
@@ -706,7 +695,7 @@ class Scan(PagedScoring):
             if bucket < end and bucket < count and span_scores[thread * per_thread + j] >= threshold:
                 kept[j] = cutlass.Int32(1)
             mine = mine + kept[j]
-        before, total = block_exclusive_sum(mine, warp_totals, THREADS // 32, self.barrier)
+        before, total = block_exclusive_sum(mine, warp_totals, ScoreGroups.THREADS // 32, self.barrier)
         if thread == 0:
             offset = cutlass.Int32(0)
             if total > 0:
@@ -758,13 +747,16 @@ class Order(WordSearch):
         class Storage:
             """Shared memory of a block: the score histogram, per-warp totals, scalars and span places."""
 
-            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, BINS], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, SELECT_WARPS], 16]
+            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteDecode.BINS], 16]
+            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteDecode.SELECT_WARPS], 16]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
-            places: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, MOST_SPANS], 16]
+            places: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteDecode.MOST_SPANS], 16]
 
         self.kernel(scores, counts, staged, span_counts, span_offsets, keys, listed, top_p, Storage).launch(
-            grid=(ORDER_PARTS, scores.shape[0], 1), block=[SELECT_THREADS, 1, 1], stream=stream, use_pdl=True
+            grid=(CuteDecode.ORDER_PARTS, scores.shape[0], 1),
+            block=[CuteDecode.SELECT_THREADS, 1, 1],
+            stream=stream,
+            use_pdl=True,
         )
 
     @cute.kernel
@@ -797,16 +789,16 @@ class Order(WordSearch):
         thread, _, _ = cute.arch.thread_idx()
         part, request, _ = cute.arch.block_idx()
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        histogram = storage.histogram.get_tensor(cute.make_layout(BINS))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(SELECT_WARPS))
+        histogram = storage.histogram.get_tensor(cute.make_layout(CuteDecode.BINS))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(CuteDecode.SELECT_WARPS))
         shared = storage.shared.get_tensor(cute.make_layout(4))
         cute.arch.griddepcontrol_wait()
-        places = storage.places.get_tensor(cute.make_layout(MOST_SPANS))
+        places = storage.places.get_tensor(cute.make_layout(CuteDecode.MOST_SPANS))
         length = cutlass.min(counts[request], scores.shape[1])
         want = cutlass.min(top_p, length)
         # A thread sums a run of spans, so one scan places them all - and holds what the spans staged
         spans = span_counts.shape[1]
-        run = cute.ceil_div(spans, SELECT_THREADS)
+        run = cute.ceil_div(spans, CuteDecode.SELECT_THREADS)
         first = thread * run
         last = cutlass.min(first + run, spans)
         mine = cutlass.Int32(0)
@@ -820,10 +812,14 @@ class Order(WordSearch):
             self.barrier.arrive_and_wait()
             # The best buckets cluster, so one span may hold most of the listing
             # => a thread takes every CTA-width-th key and finds its span by the last place at or before it
-            for key in range(part * SELECT_THREADS + thread, held, ORDER_PARTS * SELECT_THREADS):
+            for key in range(
+                part * CuteDecode.SELECT_THREADS + thread,
+                held,
+                CuteDecode.ORDER_PARTS * CuteDecode.SELECT_THREADS,
+            ):
                 span = cutlass.Int32(0)
-                for bit in cutlass.range_constexpr(SPAN_BITS):
-                    step = 1 << (SPAN_BITS - 1 - bit)
+                for bit in cutlass.range_constexpr(CuteDecode.SPAN_BITS):
+                    step = 1 << (CuteDecode.SPAN_BITS - 1 - bit)
                     if span + step < spans:
                         if places[span + step] <= key:
                             span = span + step
@@ -885,10 +881,10 @@ def compiled(kind: str, page_rows: int) -> Any:
     batch, cache_rows, max_pages, samples, columns, capacity, spans = (cute.sym_int32() for _ in range(7))
     page_stride, score_stride, key_stride, word_stride, staged_stride = (cute.sym_int64() for _ in range(5))
     queries = make_fake_compact_tensor(
-        cutlass.BFloat16, (batch, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+        cutlass.BFloat16, (batch, Index.DIM), stride_order=(1, 0), assumed_align=16
     )
     centroids = make_fake_compact_tensor(
-        cutlass.BFloat16, (cache_rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+        cutlass.BFloat16, (cache_rows, Index.DIM), stride_order=(1, 0), assumed_align=16
     )
     pages = make_fake_tensor(cutlass.Int32, (batch, max_pages), stride=(page_stride, 1), assumed_align=4)
     counts = make_fake_compact_tensor(cutlass.Int32, (batch,), assumed_align=4)
@@ -962,9 +958,9 @@ def supports(index_queries: torch.Tensor, bucket_centroids: torch.Tensor, max_ro
         max_rows: Buckets a request may see, at most `MOST_SPANS` spans of them.
     """
     return (
-        -(-max_rows // SPAN) <= MOST_SPANS
+        -(-max_rows // CuteDecode.SPAN) <= CuteDecode.MOST_SPANS
         and index_queries.dtype == bucket_centroids.dtype == torch.bfloat16
-        and index_queries.shape[1] == bucket_centroids.shape[1] == INDEX_DIM
+        and index_queries.shape[1] == bucket_centroids.shape[1] == Index.DIM
         and index_queries.is_contiguous()
         and bucket_centroids.is_contiguous()
         and index_queries.data_ptr() % 16 == 0
@@ -1002,7 +998,7 @@ def decode_listing(
     if not supports(index_queries, bucket_centroids, max_rows):
         raise ValueError(
             "the CuTeDSL decode select takes contiguous, 16-byte aligned bf16 rows of 64 index dims and at most "
-            f"{MOST_SPANS * SPAN} buckets a request - got {index_queries.dtype} {tuple(index_queries.shape)} and "
+            f"{CuteDecode.MOST_SPANS * CuteDecode.SPAN} buckets a request - got {index_queries.dtype} {tuple(index_queries.shape)} and "
             f"{bucket_centroids.dtype} {tuple(bucket_centroids.shape)} for {max_rows} buckets"
         )
     batch = index_queries.shape[0]
@@ -1015,7 +1011,7 @@ def decode_listing(
     scores = torch.empty(batch, max_rows, device=device, dtype=torch.float32)
     keys = torch.empty(batch, capacity, device=device, dtype=torch.int64)
     staged = torch.empty(batch, capacity, device=device, dtype=torch.int64)
-    spans = -(-max_rows // SPAN)
+    spans = -(-max_rows // CuteDecode.SPAN)
     span_counts = torch.empty(batch, spans, device=device, dtype=torch.int32)
     span_offsets = torch.empty(batch, spans, device=device, dtype=torch.int32)
     compiled("sample", page_rows)(index_queries, bucket_centroids, pages, counts, words, stride)
@@ -1083,8 +1079,8 @@ class DecodeSelect:
         keys, listed = listing
         width = keys.shape[1]
         held = torch.arange(width, device=keys.device)[None] < listed[:, None]
-        best = keys.masked_fill(~held, EMPTY).topk(min(self.top_p, width), dim=1).values
+        best = keys.masked_fill(~held, PackedKey.EMPTY).topk(min(self.top_p, width), dim=1).values
         buckets = (0x7FFFFFFF - (best & 0xFFFFFFFF)).int()
         picked = torch.full((keys.shape[0], self.top_p), -1, device=keys.device, dtype=torch.int32)
-        picked[:, : best.shape[1]] = torch.where(best == EMPTY, -1, buckets)
+        picked[:, : best.shape[1]] = torch.where(best == PackedKey.EMPTY, -1, buckets)
         return picked

@@ -35,43 +35,8 @@ from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, mak
 from cutlass.cutlass_dsl import T, dsl_user_op
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch, BlackwellBucketScan, Index, SharedBucketScan
 from lsa.core.kernels.cutedsl.hopper.bucket_scan import push_sign
-
-# Index queries a CTA holds - a tensor-memory lane each - and buckets a tile scores
-# BLOCK_N is tuned on B300
-BLOCK_Q = 128
-BLOCK_N = 128
-# Scores a thread reads from tensor memory at a time and tests by their maximum
-CHUNK = 32
-# Index dims the kernel takes - a row of 128 bytes, the widest swizzle
-INDEX_DIM = 64
-# Tiles a CTA scans before its rows reserve their place in the global listing, at most and at least - within
-# them a span is sized so the CTAs fill the GPU's slots about WAVES times over
-SPAN_TILES = (4, 64)
-# WAVES is tuned on B300 (Hopper's is 64)
-WAVES = 16
-# Survivors a row holds in shared memory before they move to the global listing
-ROW_SLOTS = 32
-# Tiles a span holds at most - the Hopper listing's bound, so a caller's span suits either GPU
-MAX_SPAN_TILES = 2**14
-# The warps - groups of four that test a tile in turn, one that scores, one that copies
-# TEST_GROUPS and STAGES are tuned on B300
-TEST_GROUPS = 2
-TEST_WARPS = 4 * TEST_GROUPS
-MMA_WARP = TEST_WARPS
-COPY_WARP = TEST_WARPS + 1
-THREADS = 32 * (TEST_WARPS + 2)
-TESTERS = 32 * TEST_WARPS
-# Tiles of bucket centroids in flight, accumulators in tensor memory - two a group, so a group tests one while the
-# other is scored - and CTAs an SM holds
-# ACCUMULATORS * BLOCK_N = 512 columns, all of an SM's tensor memory
-# => one CTA an SM (MIN_BLOCKS = 1), which frees its columns for the next CTA at the FREE_BARRIER
-STAGES = 4
-ACCUMULATORS = 2 * TEST_GROUPS
-MIN_BLOCKS = 1
-# Named barriers - 0 is the CTA's own
-TMEM_BARRIER = 1
-FREE_BARRIER = 2
 
 
 @dsl_user_op
@@ -123,7 +88,7 @@ class BucketScan:
             stream: The stream to launch on.
         """
         dtype = index_queries.element_type
-        mma_tiler = (BLOCK_Q, BLOCK_N, INDEX_DIM)
+        mma_tiler = (BlackwellBucketScan.BLOCK_Q, BlackwellBucketScan.BLOCK_N, Index.DIM)
         tiled_mma = blackwell.make_trivial_tiled_mma(
             dtype,
             dtype,
@@ -134,7 +99,9 @@ class BucketScan:
             mma_tiler[:2],
         )
         query_layout = blackwell.make_smem_layout_a(tiled_mma, mma_tiler, dtype, 1)
-        centroid_layout = blackwell.make_smem_layout_b(tiled_mma, mma_tiler, dtype, STAGES)
+        centroid_layout = blackwell.make_smem_layout_b(
+            tiled_mma, mma_tiler, dtype, BlackwellBucketScan.STAGES
+        )
         cluster = cute.make_layout((1, 1, 1, 1))
         self.query_bytes = cute.size_in_bytes(dtype, cute.slice_(query_layout, (None, None, None, 0)))
         self.tile_bytes = cute.size_in_bytes(dtype, cute.slice_(centroid_layout, (None, None, None, 0)))
@@ -160,11 +127,17 @@ class BucketScan:
             """Shared memory of a block: barriers, tensor memory address, row buckets, operand tiles."""
 
             query_barriers: cute.struct.MemRange[cutlass.Int64, 2]
-            centroid_barriers: cute.struct.MemRange[cutlass.Int64, 2 * STAGES]
-            score_barriers: cute.struct.MemRange[cutlass.Int64, 2 * ACCUMULATORS]
+            centroid_barriers: cute.struct.MemRange[cutlass.Int64, 2 * BlackwellBucketScan.STAGES]
+            score_barriers: cute.struct.MemRange[cutlass.Int64, 2 * BlackwellBucketScan.ACCUMULATORS]
             tmem_address: cutlass.Int32
             row_buckets: cute.struct.Align[
-                cute.struct.MemRange[cutlass.Int32, TEST_GROUPS * BLOCK_Q * ROW_SLOTS], 16
+                cute.struct.MemRange[
+                    cutlass.Int32,
+                    BlackwellBucketScan.TEST_GROUPS
+                    * BlackwellBucketScan.BLOCK_Q
+                    * SharedBucketScan.ROW_SLOTS,
+                ],
+                16,
             ]
             queries: cute.struct.Align[cute.struct.MemRange[dtype, cute.cosize(query_layout.outer)], 1024]
             centroids: cute.struct.Align[
@@ -172,8 +145,8 @@ class BucketScan:
             ]
 
         grid = (
-            cute.ceil_div(index_queries.shape[0], BLOCK_Q),
-            cute.ceil_div(cute.ceil_div(bucket_centroids.shape[0], BLOCK_N), span_tiles),
+            cute.ceil_div(index_queries.shape[0], BlackwellBucketScan.BLOCK_Q),
+            cute.ceil_div(cute.ceil_div(bucket_centroids.shape[0], BlackwellBucketScan.BLOCK_N), span_tiles),
             1,
         )
         self.kernel(
@@ -192,7 +165,12 @@ class BucketScan:
             centroid_layout,
             cluster,
             Storage,
-        ).launch(grid=grid, block=[THREADS, 1, 1], stream=stream, min_blocks_per_mp=MIN_BLOCKS)
+        ).launch(
+            grid=grid,
+            block=[BlackwellBucketScan.THREADS, 1, 1],
+            stream=stream,
+            min_blocks_per_mp=BlackwellBucketScan.MIN_BLOCKS,
+        )
 
     @cute.kernel
     def kernel(
@@ -237,9 +215,11 @@ class BucketScan:
         query_block, span, _ = cute.arch.block_idx()
         rows = visible_counts.shape[0]
         first_tile = span * span_tiles
-        stop_tile = cutlass.min(first_tile + span_tiles, cute.ceil_div(bucket_count, BLOCK_N))
+        stop_tile = cutlass.min(
+            first_tile + span_tiles, cute.ceil_div(bucket_count, BlackwellBucketScan.BLOCK_N)
+        )
 
-        if warp == COPY_WARP:
+        if warp == BlackwellBucketScan.COPY_WARP:
             cpasync.prefetch_descriptor(query_copy)
             cpasync.prefetch_descriptor(centroid_copy)
 
@@ -248,7 +228,14 @@ class BucketScan:
         shared_centroids = storage.centroids.get_tensor(centroid_layout.outer, swizzle=centroid_layout.inner)
         row_buckets = storage.row_buckets.get_tensor(
             # A slot's rows side by side, so a warp's threads append to and flush from distinct banks
-            cute.make_layout((BLOCK_Q, ROW_SLOTS, TEST_GROUPS), stride=(1, BLOCK_Q, BLOCK_Q * ROW_SLOTS))
+            cute.make_layout(
+                (BlackwellBucketScan.BLOCK_Q, SharedBucketScan.ROW_SLOTS, BlackwellBucketScan.TEST_GROUPS),
+                stride=(
+                    1,
+                    BlackwellBucketScan.BLOCK_Q,
+                    BlackwellBucketScan.BLOCK_Q * SharedBucketScan.ROW_SLOTS,
+                ),
+            )
         )
 
         single = pipeline.CooperativeGroup(pipeline.Agent.Thread)
@@ -263,7 +250,7 @@ class BucketScan:
         )
         centroid_pipeline = pipeline.PipelineTmaUmma.create(
             barrier_storage=storage.centroid_barriers.data_ptr(),
-            num_stages=STAGES,
+            num_stages=BlackwellBucketScan.STAGES,
             producer_group=single,
             consumer_group=single,
             tx_count=self.tile_bytes,
@@ -272,15 +259,17 @@ class BucketScan:
         )
         score_pipeline = pipeline.PipelineUmmaAsync.create(
             barrier_storage=storage.score_barriers.data_ptr(),
-            num_stages=ACCUMULATORS,
+            num_stages=BlackwellBucketScan.ACCUMULATORS,
             producer_group=single,
-            consumer_group=pipeline.CooperativeGroup(pipeline.Agent.Thread, BLOCK_Q),
+            consumer_group=pipeline.CooperativeGroup(pipeline.Agent.Thread, BlackwellBucketScan.BLOCK_Q),
             cta_layout_vmnk=cluster,
             defer_sync=True,
         )
         tmem = cutlass.utils.TmemAllocator(
             storage.tmem_address.ptr,
-            barrier_for_retrieve=pipeline.NamedBarrier(barrier_id=TMEM_BARRIER, num_threads=TESTERS + 32),
+            barrier_for_retrieve=pipeline.NamedBarrier(
+                barrier_id=BlackwellBucketScan.TMEM_BARRIER, num_threads=BlackwellBucketScan.TESTERS + 32
+            ),
             allocator_warp_id=0,
         )
         pipeline.pipeline_init_arrive(cluster_shape_mn=cluster, is_relaxed=True)
@@ -289,12 +278,16 @@ class BucketScan:
         mma_slice = tiled_mma.get_slice(0)
         tCrA = tiled_mma.make_fragment_A(shared_queries)
         tCrB = tiled_mma.make_fragment_B(shared_centroids)
-        accumulator_shape = tiled_mma.partition_shape_C((BLOCK_Q, BLOCK_N))
-        fake_accumulators = tiled_mma.make_fragment_C(cute.append(accumulator_shape, ACCUMULATORS))
+        accumulator_shape = tiled_mma.partition_shape_C(
+            (BlackwellBucketScan.BLOCK_Q, BlackwellBucketScan.BLOCK_N)
+        )
+        fake_accumulators = tiled_mma.make_fragment_C(
+            cute.append(accumulator_shape, BlackwellBucketScan.ACCUMULATORS)
+        )
 
         pipeline.pipeline_init_wait(cluster_shape_mn=cluster)
 
-        if warp == COPY_WARP:
+        if warp == BlackwellBucketScan.COPY_WARP:
             self.produce(
                 query_pipeline,
                 centroid_pipeline,
@@ -310,7 +303,7 @@ class BucketScan:
                 stop_tile,
             )
 
-        if warp == MMA_WARP:
+        if warp == BlackwellBucketScan.MMA_WARP:
             tmem.wait_for_alloc()
             accumulators = cute.make_tensor(tmem.retrieve_ptr(cutlass.Float32), fake_accumulators.layout)
             self.score(
@@ -325,14 +318,14 @@ class BucketScan:
                 stop_tile,
             )
 
-        if warp < TEST_WARPS:
-            tmem.allocate(ACCUMULATORS * BLOCK_N)
+        if warp < BlackwellBucketScan.TEST_WARPS:
+            tmem.allocate(BlackwellBucketScan.ACCUMULATORS * BlackwellBucketScan.BLOCK_N)
             tmem.wait_for_alloc()
             tmem_pointer = tmem.retrieve_ptr(cutlass.Float32)
             accumulators = cute.make_tensor(tmem_pointer, fake_accumulators.layout)
             self.consume(
                 score_pipeline,
-                thread % BLOCK_Q,
+                thread % BlackwellBucketScan.BLOCK_Q,
                 warp // 4,
                 query_block,
                 rows,
@@ -347,7 +340,9 @@ class BucketScan:
             )
             # Another CTA on the SM may take the columns once they are freed
             # => every tester is past its last read first
-            pipeline.NamedBarrier(barrier_id=FREE_BARRIER, num_threads=TESTERS).arrive_and_wait()
+            pipeline.NamedBarrier(
+                barrier_id=BlackwellBucketScan.FREE_BARRIER, num_threads=BlackwellBucketScan.TESTERS
+            ).arrive_and_wait()
             tmem.relinquish_alloc_permit()
             tmem.free(tmem_pointer)
 
@@ -383,8 +378,10 @@ class BucketScan:
             first_tile: The first tile of the span.
             stop_tile: One past the last.
         """
-        query_tiles = cute.local_tile(index_queries, (BLOCK_Q, INDEX_DIM), (None, None))
-        centroid_tiles = cute.local_tile(bucket_centroids, (BLOCK_N, INDEX_DIM), (None, None))
+        query_tiles = cute.local_tile(index_queries, (BlackwellBucketScan.BLOCK_Q, Index.DIM), (None, None))
+        centroid_tiles = cute.local_tile(
+            bucket_centroids, (BlackwellBucketScan.BLOCK_N, Index.DIM), (None, None)
+        )
         tAsA, tAgA = cpasync.tma_partition(
             query_copy,
             0,
@@ -407,7 +404,9 @@ class BucketScan:
             tAsA[(None, 0)],
             tma_bar_ptr=query_pipeline.producer_get_barrier(query_state),
         )
-        centroid_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, STAGES)
+        centroid_state = pipeline.make_pipeline_state(
+            pipeline.PipelineUserType.Producer, BlackwellBucketScan.STAGES
+        )
         for tile in cutlass.range(first_tile, stop_tile, 1, unroll=1):
             centroid_pipeline.producer_acquire(centroid_state)
             cute.copy(
@@ -446,8 +445,12 @@ class BucketScan:
             stop_tile: One past the last.
         """
         query_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, 1)
-        centroid_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, STAGES)
-        score_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, ACCUMULATORS)
+        centroid_state = pipeline.make_pipeline_state(
+            pipeline.PipelineUserType.Consumer, BlackwellBucketScan.STAGES
+        )
+        score_state = pipeline.make_pipeline_state(
+            pipeline.PipelineUserType.Producer, BlackwellBucketScan.ACCUMULATORS
+        )
         query_pipeline.consumer_wait(query_state)
         for _ in cutlass.range(first_tile, stop_tile, 1, unroll=1):
             score_pipeline.producer_acquire(score_state)
@@ -526,7 +529,7 @@ class BucketScan:
             buckets: The listing [R, capacity] int32.
             row_buckets: The group's lists of its rows in shared memory.
         """
-        row = query_block * BLOCK_Q + thread
+        row = query_block * BlackwellBucketScan.BLOCK_Q + thread
         threshold = cutlass.Float32.inf
         visible_count = cutlass.Int32(0)
         if row < rows:
@@ -534,23 +537,30 @@ class BucketScan:
             visible_count = visible_counts[row]
 
         load = cute.make_copy_atom(
-            tcgen05.Ld32x32bOp(getattr(tcgen05.Repetition, f"x{CHUNK}")), cutlass.Float32
+            tcgen05.Ld32x32bOp(getattr(tcgen05.Repetition, f"x{BlackwellBucketScan.CHUNK}")), cutlass.Float32
         )
-        chunks = cute.flat_divide(accumulators[((None, None), 0, 0, None)], (BLOCK_Q, CHUNK))
+        chunks = cute.flat_divide(
+            accumulators[((None, None), 0, 0, None)], (BlackwellBucketScan.BLOCK_Q, BlackwellBucketScan.CHUNK)
+        )
         tiled_load = tcgen05.make_tmem_copy(load, chunks[(None, None, 0, 0, 0)])
         load_slice = tiled_load.get_slice(thread)
         tTR_tAcc = load_slice.partition_S(chunks)
         # A thread's chunk is CHUNK consecutive buckets of its row, the first at bit 0
-        coordinates = cute.flat_divide(cute.make_identity_tensor((BLOCK_Q, BLOCK_N)), (BLOCK_Q, CHUNK))
-        chunk_count = BLOCK_N // CHUNK
+        coordinates = cute.flat_divide(
+            cute.make_identity_tensor((BlackwellBucketScan.BLOCK_Q, BlackwellBucketScan.BLOCK_N)),
+            (BlackwellBucketScan.BLOCK_Q, BlackwellBucketScan.CHUNK),
+        )
+        chunk_count = BlackwellBucketScan.BLOCK_N // BlackwellBucketScan.CHUNK
         chunk_shape = load_slice.partition_D(coordinates)[(None, None, None, 0, 0)].shape
         tile_scores = [cute.make_rmem_tensor(chunk_shape, cutlass.Float32) for _ in range(chunk_count)]
 
         held = cutlass.Int32(0)
         # Group g tests tiles g, g + 2, ... and the MMA scores tile t into accumulator t % ACCUMULATORS
         # => group g reads accumulators g and g + 2, and its state starts at g and advances by TEST_GROUPS
-        score_state = pipeline.PipelineState(ACCUMULATORS, cutlass.Int32(0), group, cutlass.Int32(0))
-        for tile in cutlass.range(first_tile + group, stop_tile, TEST_GROUPS, unroll=1):
+        score_state = pipeline.PipelineState(
+            BlackwellBucketScan.ACCUMULATORS, cutlass.Int32(0), group, cutlass.Int32(0)
+        )
+        for tile in cutlass.range(first_tile + group, stop_tile, BlackwellBucketScan.TEST_GROUPS, unroll=1):
             score_pipeline.consumer_wait(score_state)
             for chunk in cutlass.range_constexpr(chunk_count):
                 cute.copy(
@@ -559,13 +569,13 @@ class BucketScan:
             # A load from tensor memory lands in its registers only at the wait
             cute.arch.fence_view_async_tmem_load()
             score_pipeline.consumer_release(score_state)
-            for _ in cutlass.range_constexpr(TEST_GROUPS):
+            for _ in cutlass.range_constexpr(BlackwellBucketScan.TEST_GROUPS):
                 score_state.advance()
 
             for chunk in cutlass.range_constexpr(chunk_count):
                 held = self.test_scores(
                     tile_scores[chunk],
-                    tile * BLOCK_N + chunk * CHUNK,
+                    tile * BlackwellBucketScan.BLOCK_N + chunk * BlackwellBucketScan.CHUNK,
                     held,
                     thread,
                     row,
@@ -620,7 +630,7 @@ class BucketScan:
                 misses = push_sign(push_sign(misses, high), low)
             hits = ~misses
             # Past a row's visible buckets a score cannot list
-            if start + CHUNK > visible_count:
+            if start + BlackwellBucketScan.CHUNK > visible_count:
                 visible = cutlass.Uint32(cutlass.max(visible_count - start, 0))
                 hits = hits & ((cutlass.Uint32(1) << visible) - cutlass.Uint32(1))
             if hits != 0:
@@ -655,7 +665,7 @@ class BucketScan:
             Buckets the row's list holds.
         """
         # A list too full for the chunk's survivors moves to the global listing whole, with one atomic
-        if held + cutlass.Int32(cute.arch.popc(hits)) > ROW_SLOTS:
+        if held + cutlass.Int32(cute.arch.popc(hits)) > SharedBucketScan.ROW_SLOTS:
             self.flush(thread, row, held, row_buckets, survivor_counts, buckets)
             held = cutlass.Int32(0)
         while hits != 0:
@@ -691,8 +701,10 @@ class BucketScan:
             (survivor_counts.iterator + row).llvm_ptr, held, sem="relaxed", scope="gpu"
         )
         count = cutlass.min(held, buckets.shape[1] - base)
-        listed = cute.make_tensor(buckets[row, None].iterator + base, cute.make_layout(ROW_SLOTS))
-        for i in cutlass.range_constexpr(ROW_SLOTS):
+        listed = cute.make_tensor(
+            buckets[row, None].iterator + base, cute.make_layout(SharedBucketScan.ROW_SLOTS)
+        )
+        for i in cutlass.range_constexpr(SharedBucketScan.ROW_SLOTS):
             if i < count:
                 listed[i] = row_buckets[thread, i]
 
@@ -722,9 +734,9 @@ def compiled() -> Any:
     rows, bucket_count, capacity = (cute.sym_int32() for _ in range(3))
     bucket_stride = cute.sym_int64()
     arguments = (
-        make_fake_compact_tensor(cutlass.BFloat16, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16),
+        make_fake_compact_tensor(cutlass.BFloat16, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16),
         make_fake_compact_tensor(
-            cutlass.BFloat16, (bucket_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            cutlass.BFloat16, (bucket_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         ),
         make_fake_compact_tensor(cutlass.Int32, (rows,), assumed_align=4),
         make_fake_compact_tensor(cutlass.Float32, (rows,), assumed_align=4),
@@ -746,9 +758,9 @@ def supports(index_queries: torch.Tensor, bucket_centroids: torch.Tensor) -> boo
     """
     return (
         index_queries.is_cuda
-        and dispatch.capability(index_queries.device) in dispatch.BLACKWELL
+        and dispatch.capability(index_queries.device) in Arch.BLACKWELL
         and index_queries.dtype == bucket_centroids.dtype == torch.bfloat16
-        and index_queries.shape[1] == bucket_centroids.shape[1] == INDEX_DIM
+        and index_queries.shape[1] == bucket_centroids.shape[1] == Index.DIM
         and index_queries.is_contiguous()
         and bucket_centroids.is_contiguous()
         and index_queries.data_ptr() % 16 == 0
@@ -764,11 +776,11 @@ def span_for(rows: int, bucket_count: int, device: torch.device) -> int:
         bucket_count: Buckets there are.
         device: The GPU.
     """
-    tiles = -(-bucket_count // BLOCK_N)
-    query_blocks = -(-rows // BLOCK_Q)
-    slots = torch.cuda.get_device_properties(device).multi_processor_count * MIN_BLOCKS
-    shortest, longest = SPAN_TILES
-    return min(longest, max(shortest, -(-tiles * query_blocks // (WAVES * slots))))
+    tiles = -(-bucket_count // BlackwellBucketScan.BLOCK_N)
+    query_blocks = -(-rows // BlackwellBucketScan.BLOCK_Q)
+    slots = torch.cuda.get_device_properties(device).multi_processor_count * BlackwellBucketScan.MIN_BLOCKS
+    shortest, longest = SharedBucketScan.SPAN_TILES
+    return min(longest, max(shortest, -(-tiles * query_blocks // (BlackwellBucketScan.WAVES * slots))))
 
 
 def scan_buckets(
@@ -796,8 +808,10 @@ def scan_buckets(
     Raises:
         ValueError: The rows are not ones the kernel takes, or the span is not one it holds.
     """
-    if span_tiles is not None and not 1 <= span_tiles <= MAX_SPAN_TILES:
-        raise ValueError(f"the CuTeDSL listing scans 1 to {MAX_SPAN_TILES} tiles a span - got {span_tiles}")
+    if span_tiles is not None and not 1 <= span_tiles <= SharedBucketScan.MAX_SPAN_TILES:
+        raise ValueError(
+            f"the CuTeDSL listing scans 1 to {SharedBucketScan.MAX_SPAN_TILES} tiles a span - got {span_tiles}"
+        )
     if not supports(index_queries, bucket_centroids):
         raise ValueError(
             "the CuTeDSL listing takes contiguous, 16-byte aligned bf16 rows of 64 index dims on a Blackwell GPU - "

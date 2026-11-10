@@ -22,34 +22,8 @@ from cutlass._mlir.dialects import llvm
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 from cutlass.cutlass_dsl import T, dsl_user_op
 
+from lsa.core.kernels.constants import CuteBeam, CuteSpread, PackedKey, Radix
 from lsa.core.kernels.cutedsl import beam
-
-# A cluster larger than 8 needs an opt-in and ran slower
-# => 8 CTAs
-CLUSTER = 8
-# More threads or fewer ran slower, and below this many columns the single CTA is as fast
-# => 512 threads, spread from 4,096 columns
-SPREAD_THREADS = 512
-SPREAD_FROM = 4096
-# Past this many rows the clusters of 8 queue for SMs
-# => clusters of 4
-FEW_ROWS = 8
-# A word is 4 bytes
-# => 4 passes of a byte each
-PASSES = 4
-# Two passes leave a few words under the digits found on a row of scores without heavy ties
-# => at most this many are listed and ranked, one barrier in place of two passes
-GATHER_MAX = 256
-# The slice follows a histogram a pass, their sum, each warp's two counts, the state and the words listed and gathered
-# => these fixed words, to 16 bytes
-STATE_WORDS = 16
-FIXED_WORDS = (
-    (PASSES * beam.BINS + beam.BINS + 2 * beam.MOST_WARPS + STATE_WORDS + 2 * GATHER_MAX + 3) // 4 * 4
-)
-# The state's words - the prefix and the rank left at it before each pass and after the last, then the slice's columns
-# above the level and at it, the words under the digits found by the second pass and this CTA's share of them
-# => four words from index 2 * PASSES + 2
-SLICE_ABOVE, SLICE_TIED, BIN_COUNT, LISTED = (2 * PASSES + i for i in range(2, 6))
 
 
 @dsl_user_op
@@ -104,11 +78,11 @@ class SpreadStep(beam.BeamStep):
             p: The pass.
         """
         thread, _, _ = cute.arch.thread_idx()
-        if thread < beam.BINS:
+        if thread < Radix.BINS:
             # The loads are all in flight before the first add
             peers = cute.make_rmem_tensor(self.cluster, cutlass.Int32)
             for c in cutlass.range_constexpr(self.cluster):
-                peers[c] = load_peer(histograms.iterator + p * beam.BINS + thread, c)
+                peers[c] = load_peer(histograms.iterator + p * Radix.BINS + thread, c)
             total = cutlass.Int32(0)
             for c in cutlass.range_constexpr(self.cluster):
                 total = total + peers[c]
@@ -131,8 +105,8 @@ class SpreadStep(beam.BeamStep):
         """
         remaining = state[2 * p + 1]
         lane_total = cutlass.Int32(0)
-        for b in cutlass.range_constexpr(beam.BINS_PER_LANE):
-            lane_total = lane_total + summed[beam.BINS - 1 - (lane * beam.BINS_PER_LANE + b)]
+        for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+            lane_total = lane_total + summed[Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)]
         before = lane_total
         for i in cutlass.range_constexpr(5):
             # A shuffle up clamps at lane 0, which cutlass-dsl 4.6.2 does not default to
@@ -145,8 +119,8 @@ class SpreadStep(beam.BeamStep):
             digit = cutlass.Int32(0)
             found = cutlass.Int32(0)
             in_digit = cutlass.Int32(0)
-            for b in cutlass.range_constexpr(beam.BINS_PER_LANE):
-                bin_index = beam.BINS - 1 - (lane * beam.BINS_PER_LANE + b)
+            for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+                bin_index = Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)
                 count = summed[bin_index]
                 if found == 0 and above + count >= remaining:
                     digit = bin_index
@@ -154,7 +128,7 @@ class SpreadStep(beam.BeamStep):
                     found = 1
                 if found == 0:
                     above = above + count
-            state[BIN_COUNT] = in_digit
+            state[CuteSpread.BIN_COUNT] = in_digit
             state[2 * p + 2] = cutlass.Int32(prefix | (cutlass.Uint32(digit) << (24 - 8 * p)))
             state[2 * p + 3] = remaining - above
 
@@ -177,14 +151,14 @@ class SpreadStep(beam.BeamStep):
             words: The slice's words [mine] in shared memory.
         """
         thread, _, _ = cute.arch.thread_idx()
-        loaded_scores = cute.make_rmem_tensor(beam.COPY_IN_FLIGHT, cutlass.Float32)
-        for base in range(0, mine, self.threads * beam.COPY_IN_FLIGHT):
-            for f in cutlass.range_constexpr(beam.COPY_IN_FLIGHT):
+        loaded_scores = cute.make_rmem_tensor(CuteBeam.COPY_IN_FLIGHT, cutlass.Float32)
+        for base in range(0, mine, self.threads * CuteBeam.COPY_IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.COPY_IN_FLIGHT):
                 i = base + f * self.threads + thread
                 loaded_scores[f] = cutlass.Float32(0)
                 if i < mine:
                     loaded_scores[f] = scores[row, start + i]
-            for f in cutlass.range_constexpr(beam.COPY_IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.COPY_IN_FLIGHT):
                 i = base + f * self.threads + thread
                 if i < mine:
                     words[i] = self.word_of(loaded_scores[f])
@@ -220,7 +194,7 @@ class SpreadStep(beam.BeamStep):
             word = cutlass.Uint32(words[i])
             if (word & high) == (prefix & high):
                 cute.arch.atomic_add(
-                    (histograms.iterator + p * beam.BINS + cutlass.Int32((word >> shift) & 255)).llvm_ptr,
+                    (histograms.iterator + p * Radix.BINS + cutlass.Int32((word >> shift) & 255)).llvm_ptr,
                     cutlass.Int32(1),
                     scope="cta",
                 )
@@ -267,7 +241,9 @@ class SpreadStep(beam.BeamStep):
             base = cutlass.Int32(0)
             if lane == 0 and mask != 0:
                 base = cute.arch.atomic_add(
-                    (state.iterator + LISTED).llvm_ptr, cutlass.Int32(cute.arch.popc(mask)), scope="cta"
+                    (state.iterator + CuteSpread.LISTED).llvm_ptr,
+                    cutlass.Int32(cute.arch.popc(mask)),
+                    scope="cta",
                 )
             base = cute.arch.shuffle_sync(base, 0)
             if under:
@@ -275,12 +251,12 @@ class SpreadStep(beam.BeamStep):
         cute.arch.cluster_arrive()
         cute.arch.cluster_wait()
 
-        total = state[BIN_COUNT]
+        total = state[CuteSpread.BIN_COUNT]
         if thread < total:
             # Word `thread` of the lists end to end, the CTAs' in order
             listed = cute.make_rmem_tensor(self.cluster, cutlass.Int32)
             for c in cutlass.range_constexpr(self.cluster):
-                listed[c] = load_peer(state.iterator + LISTED, c)
+                listed[c] = load_peer(state.iterator + CuteSpread.LISTED, c)
             place = cutlass.Int32(thread)
             owner = cutlass.Int32(0)
             offset = cutlass.Int32(0)
@@ -304,8 +280,8 @@ class SpreadStep(beam.BeamStep):
                 equal = equal + cutlass.Int32(other == word)
             remaining = state[2 * 2 + 1]
             if greater < remaining and remaining <= greater + equal:
-                state[2 * PASSES] = cutlass.Int32(word)
-                state[2 * PASSES + 1] = remaining - greater
+                state[2 * CuteSpread.PASSES] = cutlass.Int32(word)
+                state[2 * CuteSpread.PASSES + 1] = remaining - greater
         self.barrier.arrive_and_wait()
 
     @cute.jit
@@ -333,29 +309,41 @@ class SpreadStep(beam.BeamStep):
         mine = cutlass.min(slice_size, count - start)
 
         counts = cute.arch.get_dyn_smem(cutlass.Int32, 16)
-        histograms = cute.make_tensor(counts, cute.make_layout(PASSES * beam.BINS))
-        summed = cute.make_tensor(counts + PASSES * beam.BINS, cute.make_layout(beam.BINS))
-        warp_above = cute.make_tensor(summed.iterator + beam.BINS, cute.make_layout(beam.MOST_WARPS))
-        warp_tied = cute.make_tensor(warp_above.iterator + beam.MOST_WARPS, cute.make_layout(beam.MOST_WARPS))
-        state = cute.make_tensor(warp_tied.iterator + beam.MOST_WARPS, cute.make_layout(STATE_WORDS))
+        histograms = cute.make_tensor(counts, cute.make_layout(CuteSpread.PASSES * Radix.BINS))
+        summed = cute.make_tensor(counts + CuteSpread.PASSES * Radix.BINS, cute.make_layout(Radix.BINS))
+        warp_above = cute.make_tensor(summed.iterator + Radix.BINS, cute.make_layout(CuteBeam.MOST_WARPS))
+        warp_tied = cute.make_tensor(
+            warp_above.iterator + CuteBeam.MOST_WARPS, cute.make_layout(CuteBeam.MOST_WARPS)
+        )
+        state = cute.make_tensor(
+            warp_tied.iterator + CuteBeam.MOST_WARPS, cute.make_layout(CuteSpread.STATE_WORDS)
+        )
         listing = cute.recast_tensor(
-            cute.make_tensor(state.iterator + STATE_WORDS, cute.make_layout(GATHER_MAX)), cutlass.Uint32
+            cute.make_tensor(
+                state.iterator + CuteSpread.STATE_WORDS, cute.make_layout(CuteSpread.GATHER_MAX)
+            ),
+            cutlass.Uint32,
         )
         candidates = cute.recast_tensor(
-            cute.make_tensor(listing.iterator + GATHER_MAX, cute.make_layout(GATHER_MAX)), cutlass.Uint32
+            cute.make_tensor(
+                listing.iterator + CuteSpread.GATHER_MAX, cute.make_layout(CuteSpread.GATHER_MAX)
+            ),
+            cutlass.Uint32,
         )
         words = cute.recast_tensor(
-            cute.make_tensor(counts + FIXED_WORDS, cute.make_layout(slice_size)), cutlass.Uint32
+            cute.make_tensor(counts + CuteSpread.FIXED_WORDS, cute.make_layout(slice_size)), cutlass.Uint32
         )
         kept = cute.recast_tensor(
-            cute.make_tensor(counts + FIXED_WORDS + slice_size, cute.make_layout(beam.kept_words(keep))),
+            cute.make_tensor(
+                counts + CuteSpread.FIXED_WORDS + slice_size, cute.make_layout(beam.kept_words(keep))
+            ),
             cutlass.Uint16,
         )
 
-        for i in range(thread, PASSES * beam.BINS, self.threads):
+        for i in range(thread, CuteSpread.PASSES * Radix.BINS, self.threads):
             histograms[i] = cutlass.Int32(0)
         want = cutlass.min(count, keep)
-        if thread < STATE_WORDS:
+        if thread < CuteSpread.STATE_WORDS:
             state[thread] = cutlass.Int32(0)
             if thread == 1:
                 state[thread] = want
@@ -365,13 +353,13 @@ class SpreadStep(beam.BeamStep):
         for p in cutlass.range_constexpr(2):
             self.count_pass(p, words, mine, histograms, summed, state)
         # A few words left under the digits found are ranked, else the last two passes search them
-        if state[BIN_COUNT] <= GATHER_MAX:
+        if state[CuteSpread.BIN_COUNT] <= CuteSpread.GATHER_MAX:
             self.rank_candidates(words, mine, state, listing, candidates)
         else:
-            for p in cutlass.range_constexpr(2, PASSES):
+            for p in cutlass.range_constexpr(2, CuteSpread.PASSES):
                 self.count_pass(p, words, mine, histograms, summed, state)
-        level = cutlass.Uint32(state[2 * PASSES])
-        ties = state[2 * PASSES + 1]
+        level = cutlass.Uint32(state[2 * CuteSpread.PASSES])
+        ties = state[2 * CuteSpread.PASSES + 1]
 
         # Each warp walks its own run of the slice; one count of every run places them all
         run = ((mine + self.warps - 1) // self.warps + 31) // 32 * 32
@@ -397,8 +385,8 @@ class SpreadStep(beam.BeamStep):
             slice_above = slice_above + warp_above[w]
             slice_tied = slice_tied + warp_tied[w]
         if thread == 0:
-            state[SLICE_ABOVE] = slice_above
-            state[SLICE_TIED] = slice_tied
+            state[CuteSpread.SLICE_ABOVE] = slice_above
+            state[CuteSpread.SLICE_TIED] = slice_tied
         cute.arch.cluster_arrive()
         cute.arch.cluster_wait()
         # What the CTAs before this one keep: their columns above the level, and the ties the keep still takes
@@ -407,8 +395,8 @@ class SpreadStep(beam.BeamStep):
             peer_counts[2 * c] = cutlass.Int32(0)
             peer_counts[2 * c + 1] = cutlass.Int32(0)
             if c < rank:
-                peer_counts[2 * c] = load_peer(state.iterator + SLICE_ABOVE, c)
-                peer_counts[2 * c + 1] = load_peer(state.iterator + SLICE_TIED, c)
+                peer_counts[2 * c] = load_peer(state.iterator + CuteSpread.SLICE_ABOVE, c)
+                peer_counts[2 * c + 1] = load_peer(state.iterator + CuteSpread.SLICE_TIED, c)
         tied_before_slice = cutlass.Int32(0)
         kept_before = cutlass.Int32(0)
         for c in cutlass.range_constexpr(self.cluster):
@@ -514,7 +502,7 @@ class SpreadKeep(SpreadStep):
         for slot in range(thread, mine_kept, self.threads):
             column = start + cutlass.Int32(kept[slot])
             node = cutlass.Int32(-1)
-            if cutlass.Uint32(words[column - start]) > cutlass.Uint32(beam.NEG_INF_WORD):
+            if cutlass.Uint32(words[column - start]) > cutlass.Uint32(CuteBeam.NEG_INF_WORD):
                 node = candidates[row, column]
             # The loads are all in flight before the first store
             for c in cutlass.range_constexpr(self.node_bucket_size):
@@ -601,14 +589,14 @@ class SpreadPick(SpreadStep):
             column = start + cutlass.Int32(kept[slot])
             word = cutlass.Uint32(words[column - start])
             cache_row = candidates[row, column]
-            key = cutlass.Int64(beam.EMPTY_KEY)
-            if word > cutlass.Uint32(beam.NEG_INF_WORD) and cache_row >= 0:
+            key = cutlass.Int64(PackedKey.EMPTY)
+            if word > cutlass.Uint32(CuteBeam.NEG_INF_WORD) and cache_row >= 0:
                 ordered = cutlass.Int32(word ^ cutlass.Uint32(0x80000000))
                 key = (cutlass.Int64(ordered) << 32) | cutlass.Int64(0x7FFFFFFF - cache_row)
             out[row, kept_before + slot] = key
         want = cutlass.min(count, keep)
         for slot in range(want + rank * self.threads + thread, keep, self.cluster * self.threads):
-            out[row, slot] = cutlass.Int64(beam.EMPTY_KEY)
+            out[row, slot] = cutlass.Int64(PackedKey.EMPTY)
         if block % self.cluster == 0 and thread == 0:
             listed[row] = keep
         cute.arch.cluster_wait()
@@ -632,13 +620,13 @@ def layout(rows: int, width: int, keep: int) -> tuple[int, int] | None:
     Returns:
         The threads of a CTA and the CTAs of a cluster, or None for a single CTA a row.
     """
-    cluster = CLUSTER if rows <= FEW_ROWS else CLUSTER // 2
-    if width < SPREAD_FROM or not supports(width, keep, cluster):
+    cluster = CuteSpread.CLUSTER if rows <= CuteSpread.FEW_ROWS else CuteSpread.CLUSTER // 2
+    if width < CuteSpread.SPREAD_FROM or not supports(width, keep, cluster):
         return None
-    return SPREAD_THREADS, cluster
+    return CuteSpread.SPREAD_THREADS, cluster
 
 
-def shared_bytes(width: int, keep: int, cluster: int = CLUSTER) -> int:
+def shared_bytes(width: int, keep: int, cluster: int = CuteSpread.CLUSTER) -> int:
     """Return the shared memory a CTA takes - the fixed words, its slice of the row and its kept columns.
 
     Args:
@@ -650,10 +638,10 @@ def shared_bytes(width: int, keep: int, cluster: int = CLUSTER) -> int:
         Bytes of dynamic shared memory.
     """
     slice_size = -(-width // cluster)
-    return (FIXED_WORDS + slice_size + beam.kept_words(keep)) * 4
+    return (CuteSpread.FIXED_WORDS + slice_size + beam.kept_words(keep)) * 4
 
 
-def supports(width: int, keep: int, cluster: int = CLUSTER) -> bool:
+def supports(width: int, keep: int, cluster: int = CuteSpread.CLUSTER) -> bool:
     """Tell whether a cluster takes rows of this width - a slice and the kept columns fit a CTA's shared memory.
 
     Args:
@@ -664,7 +652,7 @@ def supports(width: int, keep: int, cluster: int = CLUSTER) -> bool:
     Returns:
         Whether a slice and the kept columns fit.
     """
-    return shared_bytes(width, keep, cluster) <= beam.SHARED_BYTES and -(-width // cluster) < 2**16
+    return shared_bytes(width, keep, cluster) <= CuteBeam.SHARED_BYTES and -(-width // cluster) < 2**16
 
 
 def compiled_keep(element_bytes: int, node_bucket_size: int, threads: int, cluster: int) -> Any:
@@ -736,8 +724,8 @@ def keep_scored(
     closed_children: torch.Tensor,
     keep: int,
     lengths: torch.Tensor,
-    threads: int = beam.SCORED_THREADS,
-    cluster: int = CLUSTER,
+    threads: int = CuteBeam.SCORED_THREADS,
+    cluster: int = CuteSpread.CLUSTER,
 ) -> torch.Tensor:
     """Keep each query's best `keep` columns of a row already scored, and name their children, over a cluster.
 
@@ -785,8 +773,8 @@ def pick_scored(
     candidates: torch.Tensor,
     lengths: torch.Tensor,
     top_p: int,
-    threads: int = beam.SCORED_THREADS,
-    cluster: int = CLUSTER,
+    threads: int = CuteBeam.SCORED_THREADS,
+    cluster: int = CuteSpread.CLUSTER,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Pick each query's best `top_p` columns of a scored row, keyed by their cache rows, over a cluster.
 

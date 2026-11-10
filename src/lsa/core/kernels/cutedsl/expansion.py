@@ -27,26 +27,7 @@ import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
 from lsa.budget import EarlyBudget
-
-# Threads of the CTA a row takes: 1,024 read a listing faster while rows leave SMs idle, 512 once rows fill the GPU
-# => 1,024 for few rows, 512 for many
-FEW_ROWS_THREADS = 1024
-MANY_ROWS_THREADS = 512
-# Rows an SM holds before a launch fills the GPU
-ROWS_PER_SM = 1
-# Bins of a radix pass, and the bins each lane of the warp that finds a pass's digit holds
-BINS = 256
-BINS_PER_LANE = BINS // 32
-# The empty key, and the bit that orders a signed key as an unsigned one
-EMPTY = -(2**63)
-SIGN = 2**63
-# A bucket above the last key counts once in the walk and its members in the read, packed in one word
-WALKED = 1 << 16
-# Rounds of buckets a warp copies the members of with all their loads in flight
-WALK_IN_FLIGHT = 4
-# The search's state words
-PREFIX_HIGH, PREFIX_LOW, ABOVE_MEMBERS, ABOVE_BUCKETS, NONE_REACHES, TIED, CUT_ROW, TAKEN = range(8)
-STATE_WORDS = 8
+from lsa.core.kernels.constants import CuteExpansion, PackedKey, Radix
 
 
 class ExpansionByThreshold:
@@ -139,10 +120,10 @@ class ExpansionByThreshold:
         class Storage:
             """Shared memory of a block: digit histograms, per-warp totals, and the walk's state and picks."""
 
-            members_by_digit: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 2 * BINS], 16]
-            buckets_by_digit: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 2 * BINS], 16]
+            members_by_digit: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 2 * Radix.BINS], 16]
+            buckets_by_digit: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 2 * Radix.BINS], 16]
             warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, warps], 16]
-            state: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, STATE_WORDS], 16]
+            state: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteExpansion.STATE_WORDS], 16]
             walk_rows: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, top_p], 16]
             walk_entries: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, top_p], 16]
 
@@ -201,16 +182,16 @@ class ExpansionByThreshold:
         lane = cute.arch.lane_idx()
         warp = thread // 32
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        members_by_digit = storage.members_by_digit.get_tensor(cute.make_layout(2 * BINS))
-        buckets_by_digit = storage.buckets_by_digit.get_tensor(cute.make_layout(2 * BINS))
+        members_by_digit = storage.members_by_digit.get_tensor(cute.make_layout(2 * Radix.BINS))
+        buckets_by_digit = storage.buckets_by_digit.get_tensor(cute.make_layout(2 * Radix.BINS))
         warp_totals = storage.warp_totals.get_tensor(cute.make_layout(self.warps))
-        state = storage.state.get_tensor(cute.make_layout(STATE_WORDS))
+        state = storage.state.get_tensor(cute.make_layout(CuteExpansion.STATE_WORDS))
         walk_rows = storage.walk_rows.get_tensor(cute.make_layout(self.top_p))
         walk_entries = storage.walk_entries.get_tensor(cute.make_layout(self.top_p))
 
-        if thread < STATE_WORDS:
+        if thread < CuteExpansion.STATE_WORDS:
             state[thread] = cutlass.Int32(0)
-        if thread < BINS:
+        if thread < Radix.BINS:
             members_by_digit[thread] = cutlass.Int32(0)
             buckets_by_digit[thread] = cutlass.Int32(0)
         position = positions[row]
@@ -226,11 +207,11 @@ class ExpansionByThreshold:
         members = cute.make_rmem_tensor(self.per_thread, cutlass.Int32)
         for j in cutlass.range_constexpr(self.per_thread):
             index = thread * self.per_thread + j
-            key = cutlass.Int64(EMPTY)
+            key = cutlass.Int64(PackedKey.EMPTY)
             if index < count:
                 key = keys[row, index]
             # The key's unsigned order - 0 for the empty key
-            order = cutlass.Uint64(key) ^ cutlass.Uint64(SIGN)
+            order = cutlass.Uint64(key) ^ cutlass.Uint64(CuteExpansion.SIGN)
             high_words[j] = cutlass.Uint32(order >> 32)
             low_words[j] = cutlass.Uint32(order & cutlass.Uint64(0xFFFFFFFF))
             cache_row, first_position = self.cache_row_of(
@@ -262,19 +243,19 @@ class ExpansionByThreshold:
         for j in cutlass.range_constexpr(self.per_thread):
             packed[j] = run_total
             if self.above(high_words[j], low_words[j], last_high, last_low) and cache_rows[j] >= 0:
-                run_total = run_total + WALKED + members[j]
+                run_total = run_total + CuteExpansion.WALKED + members[j]
         before = self.exclusive_sum(run_total, lane, warp, warp_totals)
         walked_total = warp_totals[self.warps - 1]
         for j in cutlass.range_constexpr(self.per_thread):
             if self.above(high_words[j], low_words[j], last_high, last_low) and cache_rows[j] >= 0:
                 place = before + packed[j]
-                walk_rows[place // WALKED] = cache_rows[j]
-                walk_entries[place // WALKED] = place % WALKED
+                walk_rows[place // CuteExpansion.WALKED] = cache_rows[j]
+                walk_entries[place // CuteExpansion.WALKED] = place % CuteExpansion.WALKED
             if high_words[j] == last_high and low_words[j] == last_low and cache_rows[j] >= 0:
-                state[CUT_ROW] = cache_rows[j] + 1
+                state[CuteExpansion.CUT_ROW] = cache_rows[j] + 1
         self.barrier.arrive_and_wait()
-        walked = walked_total // WALKED
-        filled = walked_total % WALKED
+        walked = walked_total // CuteExpansion.WALKED
+        filled = walked_total % CuteExpansion.WALKED
         group = lane // self.bucket_cap
         slot = lane % self.bucket_cap
         self.copy_walk(
@@ -294,7 +275,7 @@ class ExpansionByThreshold:
         )
         # The bucket at the last key, cut to the room the top-k has left
         if warp == 0:
-            cut_row = state[CUT_ROW] - 1
+            cut_row = state[CuteExpansion.CUT_ROW] - 1
             if group > 0:
                 cut_row = cutlass.Int32(-1)
             taken = self.copy_members(
@@ -311,9 +292,9 @@ class ExpansionByThreshold:
                 out,
             )
             if lane == 0:
-                state[TAKEN] = taken
+                state[CuteExpansion.TAKEN] = taken
         self.barrier.arrive_and_wait()
-        filled = filled + state[TAKEN]
+        filled = filled + state[CuteExpansion.TAKEN]
         # The window's positions then the sinks before it
         window_count = cutlass.min(self.window_size, position + 1)
         sink_count = cutlass.min(self.sink_size, window_start)
@@ -472,7 +453,7 @@ class ExpansionByThreshold:
                 top_p,
             )
         # The low word decides only between keys that tie on the high - one such key is the last itself
-        if state[NONE_REACHES] == 0 and state[TIED] > 1:
+        if state[CuteExpansion.NONE_REACHES] == 0 and state[CuteExpansion.TIED] > 1:
             for shift in cutlass.range_constexpr(24, -1, -8):
                 self.radix_pass(
                     high_words,
@@ -490,13 +471,15 @@ class ExpansionByThreshold:
                     top_p,
                 )
         else:
-            if state[NONE_REACHES] == 0:
-                prefix_high = cutlass.Uint32(state[PREFIX_HIGH])
+            if state[CuteExpansion.NONE_REACHES] == 0:
+                prefix_high = cutlass.Uint32(state[CuteExpansion.PREFIX_HIGH])
                 for j in cutlass.range_constexpr(self.per_thread):
                     if high_words[j] == prefix_high:
-                        state[PREFIX_LOW] = cutlass.Int32(low_words[j])
+                        state[CuteExpansion.PREFIX_LOW] = cutlass.Int32(low_words[j])
             self.barrier.arrive_and_wait()
-        return cutlass.Uint32(state[PREFIX_HIGH]), cutlass.Uint32(state[PREFIX_LOW])
+        return cutlass.Uint32(state[CuteExpansion.PREFIX_HIGH]), cutlass.Uint32(
+            state[CuteExpansion.PREFIX_LOW]
+        )
 
     @cute.jit
     def radix_pass(
@@ -532,14 +515,14 @@ class ExpansionByThreshold:
             top_k: The row's top-k.
             top_p: The row's top-p.
         """
-        counted = (word * 4 + (24 - shift) // 8) % 2 * BINS
-        cleared = BINS - counted
-        prefix_high = cutlass.Uint32(state[PREFIX_HIGH])
-        prefix_low = cutlass.Uint32(state[PREFIX_LOW])
+        counted = (word * 4 + (24 - shift) // 8) % 2 * Radix.BINS
+        cleared = Radix.BINS - counted
+        prefix_high = cutlass.Uint32(state[CuteExpansion.PREFIX_HIGH])
+        prefix_low = cutlass.Uint32(state[CuteExpansion.PREFIX_LOW])
         kept = cutlass.Uint32(0)
         if cutlass.const_expr(shift < 24):
             kept = cutlass.Uint32(0xFFFFFFFF) << (shift + 8)
-        if state[NONE_REACHES] == 0:
+        if state[CuteExpansion.NONE_REACHES] == 0:
             for j in cutlass.range_constexpr(self.per_thread):
                 high = high_words[j]
                 low = low_words[j]
@@ -560,11 +543,11 @@ class ExpansionByThreshold:
                     )
         self.barrier.arrive_and_wait()
         if warp == 0:
-            if state[NONE_REACHES] == 0:
+            if state[CuteExpansion.NONE_REACHES] == 0:
                 self.find_digit(
                     lane, members_by_digit, buckets_by_digit, counted, state, word, shift, top_k, top_p
                 )
-        elif thread - 32 < BINS:
+        elif thread - 32 < Radix.BINS:
             members_by_digit[cleared + thread - 32] = cutlass.Int32(0)
             buckets_by_digit[cleared + thread - 32] = cutlass.Int32(0)
         self.barrier.arrive_and_wait()
@@ -595,14 +578,18 @@ class ExpansionByThreshold:
             top_k: The row's top-k.
             top_p: The row's top-p.
         """
-        above_members = state[ABOVE_MEMBERS]
-        above_buckets = state[ABOVE_BUCKETS]
+        above_members = state[CuteExpansion.ABOVE_MEMBERS]
+        above_buckets = state[CuteExpansion.ABOVE_BUCKETS]
         # Lane l holds the bins 8l to 8l + 7 counted from the top
         lane_members = cutlass.Int32(0)
         lane_buckets = cutlass.Int32(0)
-        for b in cutlass.range_constexpr(BINS_PER_LANE):
-            lane_members = lane_members + members_by_digit[counted + BINS - 1 - (lane * BINS_PER_LANE + b)]
-            lane_buckets = lane_buckets + buckets_by_digit[counted + BINS - 1 - (lane * BINS_PER_LANE + b)]
+        for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+            lane_members = (
+                lane_members + members_by_digit[counted + Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)]
+            )
+            lane_buckets = (
+                lane_buckets + buckets_by_digit[counted + Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)]
+            )
         members_before = lane_members
         buckets_before = lane_buckets
         for i in cutlass.range_constexpr(5):
@@ -626,8 +613,8 @@ class ExpansionByThreshold:
             digit = cutlass.Int32(0)
             tied = cutlass.Int32(0)
             found = cutlass.Int32(0)
-            for b in cutlass.range_constexpr(BINS_PER_LANE):
-                bin_index = BINS - 1 - (lane * BINS_PER_LANE + b)
+            for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+                bin_index = Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)
                 bin_members = members_by_digit[counted + bin_index]
                 bin_buckets = buckets_by_digit[counted + bin_index]
                 reaches = members_above + bin_members >= top_k or buckets_above + bin_buckets >= top_p
@@ -638,14 +625,16 @@ class ExpansionByThreshold:
                 if found == 0:
                     members_above = members_above + bin_members
                     buckets_above = buckets_above + bin_buckets
-            prefix = cutlass.Uint32(state[PREFIX_HIGH + word]) | (cutlass.Uint32(digit) << shift)
-            state[PREFIX_HIGH + word] = cutlass.Int32(prefix)
-            state[ABOVE_MEMBERS] = members_above
-            state[ABOVE_BUCKETS] = buckets_above
-            state[TIED] = tied
+            prefix = cutlass.Uint32(state[CuteExpansion.PREFIX_HIGH + word]) | (
+                cutlass.Uint32(digit) << shift
+            )
+            state[CuteExpansion.PREFIX_HIGH + word] = cutlass.Int32(prefix)
+            state[CuteExpansion.ABOVE_MEMBERS] = members_above
+            state[CuteExpansion.ABOVE_BUCKETS] = buckets_above
+            state[CuteExpansion.TIED] = tied
         # No digit reaches only when no key does - the walk then reads every bucket
         if cute.arch.vote_any_sync(crossing) == 0 and lane == 0:
-            state[NONE_REACHES] = cutlass.Int32(1)
+            state[CuteExpansion.NONE_REACHES] = cutlass.Int32(1)
 
     @cute.jit
     def exclusive_sum(self, value: Any, lane: Any, warp: Any, warp_totals: cute.Tensor) -> Any:
@@ -720,14 +709,16 @@ class ExpansionByThreshold:
         group = lane // self.bucket_cap
         slot = lane % self.bucket_cap
         group_mask = cutlass.Uint32((1 << self.bucket_cap) - 1) << (group * self.bucket_cap)
-        caches = cute.make_rmem_tensor(WALK_IN_FLIGHT, cutlass.Int32)
-        places = cute.make_rmem_tensor(WALK_IN_FLIGHT, cutlass.Int32)
-        members = cute.make_rmem_tensor(WALK_IN_FLIGHT, cutlass.Int32)
-        reads = cute.make_rmem_tensor(WALK_IN_FLIGHT, cutlass.Int32)
-        taken = cute.make_rmem_tensor(WALK_IN_FLIGHT, cutlass.Boolean)
+        caches = cute.make_rmem_tensor(CuteExpansion.WALK_IN_FLIGHT, cutlass.Int32)
+        places = cute.make_rmem_tensor(CuteExpansion.WALK_IN_FLIGHT, cutlass.Int32)
+        members = cute.make_rmem_tensor(CuteExpansion.WALK_IN_FLIGHT, cutlass.Int32)
+        reads = cute.make_rmem_tensor(CuteExpansion.WALK_IN_FLIGHT, cutlass.Int32)
+        taken = cute.make_rmem_tensor(CuteExpansion.WALK_IN_FLIGHT, cutlass.Boolean)
         round_buckets = self.warps * self.buckets_per_warp
-        for first in range(warp * self.buckets_per_warp, walked, round_buckets * WALK_IN_FLIGHT):
-            for r in cutlass.range_constexpr(WALK_IN_FLIGHT):
+        for first in range(
+            warp * self.buckets_per_warp, walked, round_buckets * CuteExpansion.WALK_IN_FLIGHT
+        ):
+            for r in cutlass.range_constexpr(CuteExpansion.WALK_IN_FLIGHT):
                 walk = first + r * round_buckets + group
                 caches[r] = cutlass.Int32(-1)
                 places[r] = idle_at
@@ -737,7 +728,7 @@ class ExpansionByThreshold:
                     places[r] = walk_entries[walk]
                 if caches[r] >= 0:
                     members[r] = bucket_members[caches[r], slot]
-            for r in cutlass.range_constexpr(WALK_IN_FLIGHT):
+            for r in cutlass.range_constexpr(CuteExpansion.WALK_IN_FLIGHT):
                 valid = members[r] >= self.sink_size and members[r] < window_start
                 valid_mask = cute.arch.vote_ballot_sync(valid)
                 rank = cutlass.Int32(cute.arch.popc(valid_mask & group_mask & cute.arch.lanemask_lt()))
@@ -750,7 +741,7 @@ class ExpansionByThreshold:
                 if taken[r]:
                     if cutlass.const_expr(self.map_slots):
                         reads[r] = slot_table[request, members[r]]
-            for r in cutlass.range_constexpr(WALK_IN_FLIGHT):
+            for r in cutlass.range_constexpr(CuteExpansion.WALK_IN_FLIGHT):
                 if taken[r]:
                     out[row, places[r]] = reads[r]
 
@@ -935,20 +926,22 @@ class ExpansionInRankOrder(ExpansionByThreshold):
             givens[j] = given
             packed[j] = run_total
             if given > 0:
-                run_total = run_total + WALKED + given
+                run_total = run_total + CuteExpansion.WALKED + given
         before = self.exclusive_sum(run_total, lane, warp, warp_totals)
         walked_total = warp_totals[self.warps - 1]
         for j in cutlass.range_constexpr(self.per_thread):
             if givens[j] > 0:
                 place = before + packed[j]
-                walk_rows[place // WALKED] = cache_rows[j]
-                walk_entries[place // WALKED] = place % WALKED
+                walk_rows[place // CuteExpansion.WALKED] = cache_rows[j]
+                walk_entries[place // CuteExpansion.WALKED] = place % CuteExpansion.WALKED
                 # The first pick that starts past the top-k ends the walk
-                if place % WALKED >= top_k:
-                    cute.arch.atomic_min((walk_stop.iterator).llvm_ptr, place // WALKED, scope="cta")
+                if place % CuteExpansion.WALKED >= top_k:
+                    cute.arch.atomic_min(
+                        (walk_stop.iterator).llvm_ptr, place // CuteExpansion.WALKED, scope="cta"
+                    )
         self.barrier.arrive_and_wait()
-        walked = cutlass.min(walked_total // WALKED, walk_stop[0])
-        filled = cutlass.min(walked_total % WALKED, top_k)
+        walked = cutlass.min(walked_total // CuteExpansion.WALKED, walk_stop[0])
+        filled = cutlass.min(walked_total % CuteExpansion.WALKED, top_k)
         self.copy_walk(
             walked,
             top_k,
@@ -1090,7 +1083,11 @@ def threads_for(rows: int, device: torch.device) -> int:
     Returns:
         FEW_ROWS_THREADS when the rows leave SMs idle, MANY_ROWS_THREADS otherwise.
     """
-    return FEW_ROWS_THREADS if rows <= ROWS_PER_SM * multiprocessors(device) else MANY_ROWS_THREADS
+    return (
+        CuteExpansion.FEW_ROWS_THREADS
+        if rows <= CuteExpansion.ROWS_PER_SM * multiprocessors(device)
+        else CuteExpansion.MANY_ROWS_THREADS
+    )
 
 
 def stand_in(device: torch.device) -> torch.Tensor:
@@ -1273,7 +1270,7 @@ def supports_rank_order(selected: torch.Tensor, bucket_members: torch.Tensor) ->
         and bucket_members.dtype == torch.int32
         and bucket_members.is_contiguous()
         # A pick's place and its first entry share one word
-        and selected.shape[1] * bucket_members.shape[1] < WALKED
+        and selected.shape[1] * bucket_members.shape[1] < CuteExpansion.WALKED
     )
 
 
@@ -1314,7 +1311,7 @@ def expand_in_order(
     if not supports_rank_order(selected, bucket_members):
         raise ValueError(
             "the CuTeDSL expansion in rank order takes int32 picks and members with contiguous rows, a bucket cap of a power "
-            f"of two up to 32 and fewer than {WALKED} members a row - got picks {selected.dtype} "
+            f"of two up to 32 and fewer than {CuteExpansion.WALKED} members a row - got picks {selected.dtype} "
             f"{tuple(selected.shape)} strides {selected.stride()} and members {bucket_members.dtype} "
             f"{tuple(bucket_members.shape)}"
         )

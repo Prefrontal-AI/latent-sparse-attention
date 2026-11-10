@@ -30,9 +30,15 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
-from lsa.core.kernels.triton.keys import EMPTY, pack_key, unpack_scores
+from lsa.core.kernels.constants import (
+    DenseScoring,
+    PackedKey,
+    ShapedRead,
+    ThresholdEstimate,
+    TritonScanSelect,
+)
+from lsa.core.kernels.triton.keys import pack_key, unpack_scores
 from lsa.core.kernels.triton.shape import (
-    QUERY_BITS,
     ShapeTable,
     SignQuery,
     _spread,
@@ -42,33 +48,10 @@ from lsa.core.kernels.triton.shape import (
     sign_query,
 )
 
-# Visible buckets from which flat's prefill read takes the fused select - under it a dense product and a top-k are
-# cheaper
-SCAN_SELECT_BUCKETS = 32768
-# Columns of a beam step's score row from which the level takes the fused select - under it a top-k over the
-# materialized scores is cheaper
-SCAN_SELECT_BEAM_WIDTH = 196608
-# Survivors a row aims for and holds, in top-p
-TARGET = 1.5
-CAPACITY = 3
-# Sampled buckets a row's threshold rests on - its relative spread is about one over the root
-SAMPLE_RANK = 64
-# Below a bin edge the threshold sits, as a share of the query's norm - more than a sample's tensor-core score
-# and the per-query score differ by
-EDGE_SLACK: tl.constexpr = tl.constexpr(2**-14)
-# Below the threshold the scan still keeps, as a share of the query's norm - over unit bf16 bucket_centroids of 64
-# the tensor-core and the per-query fp32 dot differ by under 1e-5 of it
-MARGIN = 1e-4
-# A shaped score the scan widens by this share of its spread, past the fp32 rounding of the planes' variance
-SPREAD_SLACK: tl.constexpr = tl.constexpr(1 + 2**-10)
-# Buckets a row's scoring reads at a time - one layout for listed and dense rows keeps their scores equal
-SCORE_BLOCK = 128
-# Buckets one program of a dense row scores, and rows scored densely at once
-DENSE_SPAN = 8192
-DENSE_ROWS = 256
-# Widest a row lists again, in top-p, before it is scored in full, and entries one wide listing holds
-WIDE = 64
-WIDE_ENTRIES = 2**26
+# A jit body reads a global only as a constexpr, never a class attribute
+# => the values it reads are bound here
+SPREAD_SLACK: tl.constexpr = tl.constexpr(TritonScanSelect.SPREAD_SLACK)
+EDGE_SLACK: tl.constexpr = tl.constexpr(ThresholdEstimate.EDGE_SLACK)
 
 
 @triton.jit
@@ -360,10 +343,10 @@ def shape_arguments(
             totals=unread,
             deviations=0.0,
             SHAPED=False,
-            DKC=min(128, d),
+            DKC=min(TritonScanSelect.DIM_CHUNK, d),
             RHO=0,
             RHOP=1,
-            PLANES=QUERY_BITS,
+            PLANES=ShapedRead.QUERY_BITS,
         )
     planes = query_planes or sign_query(index_queries)
     rank = shapes.variances.shape[1]
@@ -376,10 +359,10 @@ def shape_arguments(
         totals=planes.totals,
         deviations=shapes.deviations,
         SHAPED=True,
-        DKC=min(128, d),
+        DKC=min(TritonScanSelect.DIM_CHUNK, d),
         RHO=rank,
         RHOP=triton.next_power_of_2(max(rank, 1)),
-        PLANES=QUERY_BITS,
+        PLANES=ShapedRead.QUERY_BITS,
     )
 
 
@@ -441,10 +424,13 @@ def dense_keys(
     """
     rows, d = index_queries.shape
     keys = torch.full(
-        (rows, width or bucket_centroids.shape[0]), EMPTY, device=index_queries.device, dtype=torch.int64
+        (rows, width or bucket_centroids.shape[0]),
+        PackedKey.EMPTY,
+        device=index_queries.device,
+        dtype=torch.int64,
     )
     unread = torch.zeros(rows, device=index_queries.device, dtype=torch.int32)
-    _score_buckets[(rows, triton.cdiv(bucket_centroids.shape[0], DENSE_SPAN))](
+    _score_buckets[(rows, triton.cdiv(bucket_centroids.shape[0], DenseScoring.SPAN))](
         index_queries,
         bucket_centroids,
         unread,
@@ -454,8 +440,8 @@ def dense_keys(
         unread,
         keys.stride(0),
         D=d,
-        BLOCK=SCORE_BLOCK,
-        SPAN=DENSE_SPAN,
+        BLOCK=TritonScanSelect.SCORE_BLOCK,
+        SPAN=DenseScoring.SPAN,
         DENSE=True,
         num_warps=4,
         **shape_arguments(index_queries, shapes, query_planes),
@@ -481,9 +467,9 @@ def dense_scores(
         Scores [R, N] fp32, -inf past a row's length.
     """
     scores = torch.empty(index_queries.shape[0], bucket_centroids.shape[0], device=index_queries.device)
-    for rows in torch.arange(index_queries.shape[0], device=index_queries.device).split(DENSE_ROWS):
+    for rows in torch.arange(index_queries.shape[0], device=index_queries.device).split(DenseScoring.ROWS):
         keys = dense_keys(index_queries[rows], bucket_centroids, visible_counts[rows], shapes=shapes)
-        scores[rows] = unpack_scores(keys).masked_fill(keys == EMPTY, -torch.inf)
+        scores[rows] = unpack_scores(keys).masked_fill(keys == PackedKey.EMPTY, -torch.inf)
     return scores
 
 
@@ -539,7 +525,7 @@ def word_listing(
         **scan_arguments(index_queries, shapes),
     )
     _survivor_buckets[(rows,)](
-        word_counts, listed_words, listed_bits, buckets, capacity, EXPAND=128, num_warps=4
+        word_counts, listed_words, listed_bits, buckets, capacity, EXPAND=TritonScanSelect.EXPAND, num_warps=4
     )
     return buckets, survivor_counts
 
@@ -571,11 +557,11 @@ def listed_keys(
     """
     rows, d = index_queries.shape
     device = index_queries.device
-    shifted = thresholds - MARGIN * index_queries.float().norm(dim=1)
+    shifted = thresholds - TritonScanSelect.MARGIN * index_queries.float().norm(dim=1)
     buckets, survivor_counts = word_listing(
         index_queries, bucket_centroids, visible_counts, shifted, capacity, shapes
     )
-    keys = torch.full((rows, capacity), EMPTY, device=device, dtype=torch.int64)
+    keys = torch.full((rows, capacity), PackedKey.EMPTY, device=device, dtype=torch.int64)
     reached = torch.empty(rows, device=device, dtype=torch.int32)
     _score_buckets[(rows,)](
         index_queries,
@@ -587,7 +573,7 @@ def listed_keys(
         reached,
         capacity,
         D=d,
-        BLOCK=SCORE_BLOCK,
+        BLOCK=TritonScanSelect.SCORE_BLOCK,
         SPAN=0,
         DENSE=False,
         num_warps=4,
@@ -708,8 +694,8 @@ def sample_plan(top_p: int) -> tuple[int, int]:
         Buckets between two sampled ones.
         Rank in the sample of the score the threshold is estimated from.
     """
-    stride = max(1, round(TARGET * top_p / SAMPLE_RANK))
-    return stride, max(1, round(TARGET * top_p / stride))
+    stride = max(1, round(TritonScanSelect.TARGET * top_p / TritonScanSelect.SAMPLE_RANK))
+    return stride, max(1, round(TritonScanSelect.TARGET * top_p / stride))
 
 
 def sample_thresholds(
@@ -765,8 +751,8 @@ def sample_thresholds(
         sample_count,
         stride,
         rank,
-        BINS=64,
-        BLOCK=4096,
+        BINS=ThresholdEstimate.BINS,
+        BLOCK=ThresholdEstimate.BLOCK,
         num_warps=4,
     )
     return thresholds

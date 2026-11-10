@@ -12,7 +12,7 @@ import torch
 import triton
 import triton.language as tl
 
-EMPTY = torch.iinfo(torch.int64).min
+from lsa.core.kernels.constants import PackedKey
 
 
 @triton.jit
@@ -58,7 +58,7 @@ def pack_keys(scores: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
         Packed keys [...] int64, the empty key where an id is -1.
     """
     keys = (ordered_int32(scores).to(torch.int64) << 32) | (0x7FFFFFFF - ids.to(torch.int64))
-    return torch.where(ids >= 0, keys, EMPTY)
+    return torch.where(ids >= 0, keys, PackedKey.EMPTY)
 
 
 def unpack_scores(keys: torch.Tensor) -> torch.Tensor:
@@ -85,4 +85,4 @@ def unpack_ids(keys: torch.Tensor) -> torch.Tensor:
         Their ids [...] int32, -1 for the empty key.
     """
     ids = (0x7FFFFFFF - (keys & 0xFFFFFFFF)).to(torch.int32)
-    return torch.where(keys == EMPTY, -1, ids)
+    return torch.where(keys == PackedKey.EMPTY, -1, ids)

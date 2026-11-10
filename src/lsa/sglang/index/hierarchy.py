@@ -26,11 +26,10 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import TritonBeam, TritonScanSelect
 from lsa.core.kernels.cutedsl import beam as cutedsl_beam
 from lsa.core.kernels.scan_select import ScanSelect
 from lsa.core.kernels.triton import beam
-from lsa.core.kernels.triton.beam import NODE_CENTROID_SCALE
-from lsa.core.kernels.triton.scan_select import SCAN_SELECT_BEAM_WIDTH
 from lsa.core.kernels.triton.shape import add_planes_spread, add_spread, build_shapes, score_shaped_rows
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.core.kernels.ward import cluster_node_buckets
@@ -458,7 +457,7 @@ class Hierarchy:
             self.closed_node_buckets.append(Rows())
         node_centroids = F.normalize(key_sums, dim=-1)
         stored = (
-            (node_centroids * NODE_CENTROID_SCALE).to(torch.float8_e4m3fn)
+            (node_centroids * TritonBeam.NODE_CENTROID_SCALE).to(torch.float8_e4m3fn)
             if self.fp8
             else node_centroids.to(torch.bfloat16)
         )
@@ -546,7 +545,12 @@ class Hierarchy:
             beam_width = self.config.at("beam_width", level)
             # A shaped level adds its spread to every score, which the fused select does not
             unshaped = self.node_shape is None
-            if beam_select is not None and unshaped and carried is None and width >= SCAN_SELECT_BEAM_WIDTH:
+            if (
+                beam_select is not None
+                and unshaped
+                and carried is None
+                and width >= TritonScanSelect.SCAN_SELECT_BEAM_WIDTH
+            ):
                 names = ("node_centroids", "children")
                 level_node_buckets = (
                     {name: torch.cat([open_node_buckets[name], closed_node_buckets[name]]) for name in names}
@@ -587,7 +591,7 @@ class Hierarchy:
                         closed_node_buckets["node_centroids"],
                         closed_node_buckets["children"],
                         beam_width,
-                        NODE_CENTROID_SCALE if self.fp8 else 1.0,
+                        TritonBeam.NODE_CENTROID_SCALE if self.fp8 else 1.0,
                         None
                         if self.node_shape is None
                         else (
@@ -710,7 +714,7 @@ class Hierarchy:
             select: The fused select, as wide as the level's beam.
         """
         if node_centroids.dtype != torch.bfloat16:
-            node_centroids = node_centroids.to(torch.bfloat16) * (1 / NODE_CENTROID_SCALE)
+            node_centroids = node_centroids.to(torch.bfloat16) * (1 / TritonBeam.NODE_CENTROID_SCALE)
         counts = torch.full(
             (len(index_queries),), len(node_centroids), device=index_queries.device, dtype=torch.int32
         )
@@ -723,7 +727,7 @@ class Hierarchy:
         node_centroids = node_buckets["node_centroids"]
         if node_centroids.dtype != torch.bfloat16:
             # A power of two - exact in bf16
-            node_centroids = node_centroids.to(torch.bfloat16) * (1 / NODE_CENTROID_SCALE)
+            node_centroids = node_centroids.to(torch.bfloat16) * (1 / TritonBeam.NODE_CENTROID_SCALE)
         scores = torch.mm(index_queries, node_centroids.t(), out_dtype=torch.float32)
         if self.node_shape is not None:
             add_spread(
@@ -740,7 +744,7 @@ class Hierarchy:
         self, index_queries: torch.Tensor, closed_node_buckets: Rows, carried: torch.Tensor, out: torch.Tensor
     ) -> None:
         """Every query's score of the children of the node buckets it kept a level up, into `out` [S, carried]."""
-        scale = NODE_CENTROID_SCALE if self.fp8 else 1.0
+        scale = TritonBeam.NODE_CENTROID_SCALE if self.fp8 else 1.0
         if self.node_shape is None:
             beam.score_children(
                 index_queries, closed_node_buckets["node_centroids"], carried, out=out, centroid_scale=scale

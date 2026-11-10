@@ -13,11 +13,11 @@ from typing import NamedTuple
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import DenseScoring, TritonScanSelect
 from lsa.core.kernels.cutedsl import bucket_scan, scoring
 from lsa.core.kernels.cutedsl import thresholds as cutedsl_thresholds
 from lsa.core.kernels.triton import scan_select as triton_scan_select
 from lsa.core.kernels.triton.keys import unpack_ids
-from lsa.core.kernels.triton.scan_select import CAPACITY, DENSE_ROWS, MARGIN, WIDE, WIDE_ENTRIES
 from lsa.core.kernels.triton.shape import ShapeTable, SignQuery, sign_query
 
 
@@ -93,7 +93,7 @@ def listed_keys(
         and shapes is None
         and bucket_scan.supports(index_queries, bucket_centroids)
     ):
-        shifted = thresholds - MARGIN * index_queries.float().norm(dim=1)
+        shifted = thresholds - TritonScanSelect.MARGIN * index_queries.float().norm(dim=1)
         buckets, survivor_counts = bucket_scan.scan_buckets(
             index_queries, bucket_centroids, visible_counts, shifted, capacity
         )
@@ -253,7 +253,7 @@ class ScanSelect:
             bucket_centroids,
             visible_counts,
             thresholds,
-            round(CAPACITY * self.top_p),
+            round(TritonScanSelect.CAPACITY * self.top_p),
             shapes,
             planes,
             self.kernels,
@@ -332,7 +332,7 @@ class ScanSelect:
             short = rows_where(starved, short_count)
         # A row with fewer than top_p at its threshold may have its best below it
         # => score it in full
-        for batch in short.split(DENSE_ROWS):
+        for batch in short.split(DenseScoring.ROWS):
             width = max(bucket_centroids.shape[0], self.top_p)
             if shapes is None or planes is None:
                 full = dense_keys(
@@ -366,11 +366,11 @@ class ScanSelect:
             best: Best packed keys [R, top_p] int64, written for the rows.
             reached: Listed buckets at or above each threshold [R] int32, written for the rows.
         """
-        if width > WIDE * self.top_p:
+        if width > TritonScanSelect.WIDE * self.top_p:
             reached[rows] = 0
             return
         planes = listing.query_planes
-        for batch in rows.split(max(1, WIDE_ENTRIES // width)):
+        for batch in rows.split(max(1, TritonScanSelect.WIDE_ENTRIES // width)):
             wide, _, wide_reached = listed_keys(
                 listing.index_queries[batch],
                 listing.bucket_centroids,

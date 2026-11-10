@@ -9,6 +9,7 @@ that differs is allowed only where its bucket's score sits within `ROUNDING` of 
 import pytest
 import torch
 
+from lsa.core.kernels.constants import CuteExpansion, CuteSpread
 from lsa.core.kernels.cutedsl import beam as cutedsl_beam
 from lsa.core.kernels.cutedsl import expansion as cutedsl_expansion
 from lsa.core.kernels.cutedsl import spread as cutedsl_spread
@@ -175,16 +176,16 @@ def test_the_widths_and_kernels_of_each_level():
         assert cutedsl_spread.layout(1, plan.width, plan.keep) is None
     wide = graph_descend.LevelPlan(32768, 4095, 2048, 32768)
     assert cutedsl_spread.layout(1, wide.width, wide.keep) == (
-        cutedsl_spread.SPREAD_THREADS,
-        cutedsl_spread.CLUSTER,
+        CuteSpread.SPREAD_THREADS,
+        CuteSpread.CLUSTER,
     )
-    assert cutedsl_spread.layout(cutedsl_spread.FEW_ROWS, wide.width, wide.keep) == (
-        cutedsl_spread.SPREAD_THREADS,
-        cutedsl_spread.CLUSTER,
+    assert cutedsl_spread.layout(CuteSpread.FEW_ROWS, wide.width, wide.keep) == (
+        CuteSpread.SPREAD_THREADS,
+        CuteSpread.CLUSTER,
     )
-    assert cutedsl_spread.layout(cutedsl_spread.FEW_ROWS + 1, wide.width, wide.keep) == (
-        cutedsl_spread.SPREAD_THREADS,
-        cutedsl_spread.CLUSTER // 2,
+    assert cutedsl_spread.layout(CuteSpread.FEW_ROWS + 1, wide.width, wide.keep) == (
+        CuteSpread.SPREAD_THREADS,
+        CuteSpread.CLUSTER // 2,
     )
     tree_start = tree.start
     for level, plan in enumerate(plans, 1):
@@ -213,7 +214,7 @@ def test_the_scored_keep_and_the_scored_pick_run_in_a_graph_and_read_what_they_r
     # The trees here are too small for a level past the single CTA's columns, so every level is made to be scored apart
     # => and none is spread over a cluster
     monkeypatch.setattr(graph_descend, "SINGLE_CTA_WIDTH", 0)
-    monkeypatch.setattr(cutedsl_spread, "SPREAD_FROM", 2**31)
+    monkeypatch.setattr(CuteSpread, "SPREAD_FROM", 2**31)
     store = make_store(DESIGNS[name], ENDS, "cutedsl", seed=1)
     tree = store.cache.graph_tree
     plans = graph_descend.plan_levels(store.settings, tree)
@@ -250,7 +251,7 @@ def test_a_capture_compiles_nothing_at_batch_sizes_either_side_of_the_threads_th
 ):
     monkeypatch.setattr(graph_descend, "SINGLE_CTA_WIDTH", single_cta_width)
     # The scored kernels are the ones held here, so none is spread over a cluster
-    monkeypatch.setattr(cutedsl_spread, "SPREAD_FROM", 2**31)
+    monkeypatch.setattr(CuteSpread, "SPREAD_FROM", 2**31)
     # Nothing is compiled yet, so the warm-up is what compiles
     for module, name in (
         (cutedsl_beam, "COMPILED"),
@@ -263,7 +264,7 @@ def test_a_capture_compiles_nothing_at_batch_sizes_either_side_of_the_threads_th
     compiles = spy(monkeypatch, cutedsl_beam.cute, "compile")
     ends = ENDS[1:]
     store = make_store(TOP_START, ends, "cutedsl", requests=2, seed=6)
-    limit = cutedsl_expansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
+    limit = CuteExpansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
     for count in (limit, limit + 1):
         queries, positions, rows = batch(store, ends, rows=[i % 2 for i in range(count)])
         before = len(compiles)
@@ -282,7 +283,7 @@ def test_a_capture_compiles_nothing_at_batch_sizes_either_side_of_the_threads_th
         assert torch.equal(lists, eager)
         print(f"{count} rows, single CTA width {single_cta_width}: {warmed - before} compiles in the warm-up")
     threads = {key[-2] for key in cutedsl_expansion.COMPILED}
-    assert threads == {cutedsl_expansion.FEW_ROWS_THREADS, cutedsl_expansion.MANY_ROWS_THREADS}
+    assert threads == {CuteExpansion.FEW_ROWS_THREADS, CuteExpansion.MANY_ROWS_THREADS}
     assert cutedsl_beam.COMPILED_SCORED_PICKS
     assert any(key[-1] for key in cutedsl_beam.COMPILED)
 
@@ -293,7 +294,7 @@ def test_the_spread_keep_and_the_spread_pick_run_in_a_graph_and_read_what_they_r
 ):
     # The trees here are too narrow for a cluster, so every level is made wide enough to be spread
     monkeypatch.setattr(graph_descend, "SINGLE_CTA_WIDTH", 0)
-    monkeypatch.setattr(cutedsl_spread, "SPREAD_FROM", 0)
+    monkeypatch.setattr(CuteSpread, "SPREAD_FROM", 0)
     store = make_store(DESIGNS[name], ENDS, "cutedsl", seed=1)
     plans = graph_descend.plan_levels(store.settings, store.cache.graph_tree)
     spread_levels = [level for level, plan in enumerate(plans, 1) if plan.keep < plan.width]
@@ -317,14 +318,14 @@ def test_the_spread_keep_and_the_spread_pick_run_in_a_graph_and_read_what_they_r
 
 def test_a_capture_compiles_nothing_at_batch_sizes_either_side_of_the_cluster_threshold(monkeypatch):
     monkeypatch.setattr(graph_descend, "SINGLE_CTA_WIDTH", 0)
-    monkeypatch.setattr(cutedsl_spread, "SPREAD_FROM", 0)
+    monkeypatch.setattr(CuteSpread, "SPREAD_FROM", 0)
     # Nothing is compiled yet, so the warm-up is what compiles
     for name in ("COMPILED_KEEPS", "COMPILED_PICKS"):
         monkeypatch.setattr(cutedsl_spread, name, {})
     compiles = spy(monkeypatch, cutedsl_beam.cute, "compile")
     ends = ENDS[1:]
     store = make_store(TOP_START, ends, "cutedsl", requests=2, seed=6)
-    for count in (cutedsl_spread.FEW_ROWS, cutedsl_spread.FEW_ROWS + 1):
+    for count in (CuteSpread.FEW_ROWS, CuteSpread.FEW_ROWS + 1):
         queries, positions, rows = batch(store, ends, rows=[i % 2 for i in range(count)])
         before = len(compiles)
         with torch.cuda.stream(torch.cuda.Stream()):
@@ -341,7 +342,7 @@ def test_a_capture_compiles_nothing_at_batch_sizes_either_side_of_the_cluster_th
         torch.cuda.synchronize()
         assert torch.equal(lists, eager)
     clusters = {key[-1] for key in cutedsl_spread.COMPILED_KEEPS}
-    assert clusters == {cutedsl_spread.CLUSTER, cutedsl_spread.CLUSTER // 2}
+    assert clusters == {CuteSpread.CLUSTER, CuteSpread.CLUSTER // 2}
     assert {key[-1] for key in cutedsl_spread.COMPILED_PICKS} == clusters
 
 

@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 from lsa.core import Buckets, Shapes, build_hierarchy, read, read_hierarchy
 from lsa.core import hierarchy as core_hierarchy
+from lsa.core.kernels.constants import TritonScanSelect
 from lsa.core.kernels.triton.keys import unpack_ids
 from lsa.core.shape import build_shapes as reference_build_shapes
 from lsa.core.shape import unpack_shape_basis
@@ -203,14 +204,14 @@ def test_the_fused_select_reads_what_the_dense_product_reads():
     dense.catch_up(2 * PAGE_SIZE)
     want = dense.prefill(2 * PAGE_SIZE, 2 * PAGE_SIZE + 64)
     fused = Store(FLAT, 2 * PAGE_SIZE + 64, seed=4)
-    original = selector_module.SCAN_SELECT_BUCKETS
-    selector_module.SCAN_SELECT_BUCKETS = 0
+    original = TritonScanSelect.SCAN_SELECT_BUCKETS
+    TritonScanSelect.SCAN_SELECT_BUCKETS = 0
     try:
         early = fused.prefill(0, 300)
         fused.catch_up(2 * PAGE_SIZE)
         got = fused.prefill(2 * PAGE_SIZE, 2 * PAGE_SIZE + 64)
     finally:
-        selector_module.SCAN_SELECT_BUCKETS = original
+        TritonScanSelect.SCAN_SELECT_BUCKETS = original
     assert sets(got) == sets(want)
     assert early.shape == (300, WIDTH)
 
@@ -711,12 +712,12 @@ def test_a_fused_beam_keeps_the_nodes_the_top_k_keeps():
     want = plain.prefill(end, end + 64)
     fused = Store(TOP_START, end + 64, seed=21)
     fused.catch_up(end)
-    original = hierarchy_module.SCAN_SELECT_BEAM_WIDTH
-    hierarchy_module.SCAN_SELECT_BEAM_WIDTH = 0
+    original = TritonScanSelect.SCAN_SELECT_BEAM_WIDTH
+    TritonScanSelect.SCAN_SELECT_BEAM_WIDTH = 0
     try:
         got = fused.prefill(end, end + 64)
     finally:
-        hierarchy_module.SCAN_SELECT_BEAM_WIDTH = original
+        TritonScanSelect.SCAN_SELECT_BEAM_WIDTH = original
     assert sets(got) == sets(want)
 
 
@@ -883,13 +884,13 @@ def test_the_shaped_fused_select_reads_what_the_shaped_dense_product_reads():
     dense.catch_up(2 * PAGE_SIZE)
     want = dense.prefill(2 * PAGE_SIZE, 2 * PAGE_SIZE + 64)
     fused = Store(SHAPED_FLAT, 2 * PAGE_SIZE + 64, seed=23)
-    original = selector_module.SCAN_SELECT_BUCKETS
-    selector_module.SCAN_SELECT_BUCKETS = 0
+    original = TritonScanSelect.SCAN_SELECT_BUCKETS
+    TritonScanSelect.SCAN_SELECT_BUCKETS = 0
     try:
         fused.catch_up(2 * PAGE_SIZE)
         got = fused.prefill(2 * PAGE_SIZE, 2 * PAGE_SIZE + 64)
     finally:
-        selector_module.SCAN_SELECT_BUCKETS = original
+        TritonScanSelect.SCAN_SELECT_BUCKETS = original
     assert sets(got) == sets(want)
 
 

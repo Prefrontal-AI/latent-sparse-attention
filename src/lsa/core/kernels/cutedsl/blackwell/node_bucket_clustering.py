@@ -7,6 +7,7 @@ Every round, check and leftover is [the Hopper node-bucket clustering](../hopper
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.core.kernels.cutedsl.blackwell.tile import BlackwellTile
 from lsa.core.kernels.cutedsl.hopper import node_bucket_clustering as hopper_clustering
 
@@ -24,7 +25,7 @@ def supports(key_sums: torch.Tensor, precision: str) -> bool:
     """
     return (
         key_sums.is_cuda
-        and dispatch.capability(key_sums.device) in dispatch.BLACKWELL
+        and dispatch.capability(key_sums.device) in Arch.BLACKWELL
         and hopper_clustering.takes_blocks(key_sums, precision)
     )
 

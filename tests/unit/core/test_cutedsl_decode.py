@@ -8,10 +8,11 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from lsa.core.kernels.constants import CuteDecode, TritonTopK
 from lsa.core.kernels.cutedsl import decode
 from lsa.core.kernels.triton.keys import unpack_scores
 from lsa.core.kernels.triton.paged import scan_paged
-from lsa.core.kernels.triton.top_k import RUN, TopK, keep_plan
+from lsa.core.kernels.triton.top_k import TopK, keep_plan
 
 pytestmark = pytest.mark.gpu
 
@@ -94,7 +95,7 @@ def test_a_row_its_sample_overrates_lists_too_few_and_is_listed_exactly():
     buckets = 20000
     samples, stride, _, _ = keep_plan(1024, buckets)
     sample = torch.arange(samples, device=DEVICE)
-    sampled = (sample // RUN) * stride + sample % RUN
+    sampled = (sample // TritonTopK.RUN) * stride + sample % TritonTopK.RUN
     sampled = sampled[sampled < buckets]
     level = torch.full((buckets,), -0.9, device=DEVICE)
     level[sampled] = torch.linspace(0.95, 0.1, len(sampled), device=DEVICE)
@@ -167,7 +168,7 @@ def test_a_captured_listing_replays_the_same_and_follows_its_inputs():
 def test_rows_the_kernel_does_not_take_are_refused():
     index_queries, centroids, pages, counts = paged(1, 4096)
     assert not decode.supports(index_queries.float(), centroids, 4096)
-    assert not decode.supports(index_queries, centroids, decode.MOST_SPANS * decode.SPAN + 1)
+    assert not decode.supports(index_queries, centroids, CuteDecode.MOST_SPANS * CuteDecode.SPAN + 1)
     with pytest.raises(ValueError, match="64 index dims"):
         decode.decode_listing(
             index_queries[:, :48].contiguous(),

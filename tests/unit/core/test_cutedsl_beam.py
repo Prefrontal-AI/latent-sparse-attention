@@ -9,10 +9,9 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from lsa.core.kernels.constants import CuteBeam, PackedKey, ShapedRead, TritonBeam
 from lsa.core.kernels.cutedsl import beam as cutedsl_beam
 from lsa.core.kernels.triton import beam
-from lsa.core.kernels.triton.beam import NODE_CENTROID_SCALE
-from lsa.core.kernels.triton.keys import EMPTY
 from lsa.core.kernels.triton.shape import score_shaped_rows
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.core.shape import pack_shape_basis
@@ -23,12 +22,12 @@ DEVICE = "cuda"
 NODE_BUCKET_SIZE = 4
 PAGE_ROWS = 64
 # The widest row a 2048-wide keep leaves room for
-WIDEST = cutedsl_beam.SHARED_WORDS - cutedsl_beam.room(cutedsl_beam.SHARED_WORDS, 2048)[1]
+WIDEST = CuteBeam.SHARED_WORDS - cutedsl_beam.room(CuteBeam.SHARED_WORDS, 2048)[1]
 
 
 def level(rows, open_count, carried_width, node_buckets, dtype, seed, tied=False, holes=0.05):
     generator = torch.Generator(device=DEVICE).manual_seed(seed)
-    scale = NODE_CENTROID_SCALE if dtype == torch.float8_e4m3fn else 1.0
+    scale = TritonBeam.NODE_CENTROID_SCALE if dtype == torch.float8_e4m3fn else 1.0
     index_queries = F.normalize(torch.randn(rows, 64, device=DEVICE, generator=generator), dim=1).bfloat16()
     centroids = F.normalize(torch.randn(node_buckets, 64, device=DEVICE, generator=generator), dim=1)
     if tied:
@@ -128,7 +127,7 @@ def test_a_shaped_level_keeps_the_children_the_triton_chain_keeps(
 ):
     inputs = level(rows, open_count, carried_width, 200000, dtype, seed=rows + keep)
     index_queries, open_scores, open_children, carried, centroids, closed_children, scale = inputs
-    shapes = shapes_of(200000, cutedsl_beam.SHAPE_RANK, seed=rows)
+    shapes = shapes_of(200000, ShapedRead.RANK, seed=rows)
     width = open_count + carried_width
     scores = torch.empty(rows, width, device=DEVICE)
     scores[:, :open_count] = open_scores
@@ -174,7 +173,7 @@ def test_rows_the_kernel_does_not_take_are_refused():
 
 
 def test_a_row_wider_than_shared_memory_is_refused():
-    inputs = level(4, 1, cutedsl_beam.SHARED_WORDS, 100, torch.float8_e4m3fn, seed=1)
+    inputs = level(4, 1, CuteBeam.SHARED_WORDS, 100, torch.float8_e4m3fn, seed=1)
     index_queries, open_scores, open_children, carried, centroids, closed_children, scale = inputs
     assert not cutedsl_beam.supports(index_queries, centroids, carried, open_scores.shape[1], 16)
     with pytest.raises(ValueError, match="within"):
@@ -327,7 +326,7 @@ def test_a_row_its_sample_overrates_is_searched_whole():
     rows, width, keep = 4, 16384, 1024
     index_queries, scores, children = top_scores(rows, width, seed=3, lost=0)
     scores.fill_(-1)
-    sampled = torch.arange(cutedsl_beam.SAMPLES, device=DEVICE) * width // cutedsl_beam.SAMPLES
+    sampled = torch.arange(CuteBeam.SAMPLES, device=DEVICE) * width // CuteBeam.SAMPLES
     scores[:, sampled] = torch.linspace(1, 0.5, len(sampled), device=DEVICE)
     scores[:, 1::2] += torch.rand(rows, width // 2, device=DEVICE) * 1e-3
     kept = TopK(keep)(scores, torch.full((rows,), width, device=DEVICE, dtype=torch.int32))
@@ -395,7 +394,7 @@ def test_the_pick_names_the_buckets_the_triton_pick_names(rows, open_count, carr
         top_p,
     )
     assert torch.equal(picked, expected)
-    assert bool((picked == EMPTY).any()) == bool((expected == EMPTY).any())
+    assert bool((picked == PackedKey.EMPTY).any()) == bool((expected == PackedKey.EMPTY).any())
 
 
 PAGE_SIZE = 8
@@ -413,7 +412,7 @@ def whole_level(dtype, seed=9):
     rows = torch.tensor([2, 0, 1, 3, 4], device=DEVICE)
     carried = torch.randint(-1, 30, (5, 200), device=DEVICE, generator=generator).int()
     carried[3] = -1
-    scale = NODE_CENTROID_SCALE if dtype == torch.float8_e4m3fn else 1.0
+    scale = TritonBeam.NODE_CENTROID_SCALE if dtype == torch.float8_e4m3fn else 1.0
     centroids = (
         F.normalize(torch.randn(node_buckets, 64, device=DEVICE, generator=generator), dim=1) * scale
     ).to(dtype)

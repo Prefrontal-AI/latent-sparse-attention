@@ -8,8 +8,9 @@ import pytest
 import torch
 import triton
 
+from lsa.core.kernels.constants import PackedKey, TritonTopK
 from lsa.core.kernels.triton import top_k as top_k_module
-from lsa.core.kernels.triton.keys import EMPTY, unpack_ids
+from lsa.core.kernels.triton.keys import unpack_ids
 from lsa.core.kernels.triton.top_k import TopK, keep_plan, listing_plan, top_keys
 
 pytestmark = pytest.mark.gpu
@@ -70,8 +71,8 @@ def test_fewer_columns_than_k_leave_the_empty_key_last():
     lengths = torch.tensor([10, 4, 0], dtype=torch.int32, device=DEVICE)
     keys = top_keys(scores, lengths, 16)
     assert keys.shape == (3, 16)
-    assert (keys[:, 10:] == EMPTY).all()
-    assert (keys == EMPTY).sum(1).tolist() == [6, 12, 16]
+    assert (keys[:, 10:] == PackedKey.EMPTY).all()
+    assert (keys == PackedKey.EMPTY).sum(1).tolist() == [6, 12, 16]
     assert torch.equal(picked(scores, lengths, 16).cpu(), oracle(scores, lengths, 16))
 
 
@@ -106,7 +107,7 @@ def test_a_listing_holds_the_best_k_of_each_row_and_counts_what_it_lists():
     keys, counts = pick.listed(scores, lengths)
     assert keys.shape[1] == listing_plan(256, 50000)[2]
     listed = torch.arange(keys.shape[1], device=DEVICE)[None] < counts[:, None]
-    assert (keys[listed] != EMPTY).all()
+    assert (keys[listed] != PackedKey.EMPTY).all()
     assert (counts >= torch.minimum(lengths, torch.tensor(256, device=DEVICE))).all()
     best = pick.best()
     assert torch.equal(unpack_ids(best).cpu(), oracle(scores, lengths, 256))
@@ -129,8 +130,8 @@ def test_an_exact_listing_is_the_best_k_of_each_row_in_column_order():
     assert keys.shape == (6, 256)
     assert torch.equal(counts.cpu(), torch.minimum(lengths, torch.tensor(256, device=DEVICE)).cpu())
     listed = torch.arange(256, device=DEVICE)[None] < counts[:, None]
-    assert (keys[listed] != EMPTY).all()
-    assert (keys[~listed] == EMPTY).all()
+    assert (keys[listed] != PackedKey.EMPTY).all()
+    assert (keys[~listed] == PackedKey.EMPTY).all()
     assert torch.equal(unpack_ids(keys).cpu(), ascending(oracle(scores, lengths, 256)))
 
 
@@ -228,10 +229,10 @@ def test_a_keep_split_across_programs_picks_what_one_program_does(monkeypatch, r
     scores[1 % rows, : columns // 2] = -torch.inf
     lengths = torch.full((rows,), columns, dtype=torch.int32, device=DEVICE)
     lengths[-1] = 20000
-    monkeypatch.setattr(top_k_module, "SPLIT_BELOW", 1)
+    monkeypatch.setattr(TritonTopK, "SPLIT_BELOW", 1)
     whole = TopK(1000)
     alone = whole(scores, lengths)
-    monkeypatch.setattr(top_k_module, "SPLIT_BELOW", 10**6)
+    monkeypatch.setattr(TritonTopK, "SPLIT_BELOW", 10**6)
     split = TopK(1000)
     assert torch.equal(alone, split(scores, lengths))
     assert torch.equal(alone.cpu(), ascending(oracle(scores, lengths, 1000)))
@@ -288,7 +289,7 @@ def keep_listing_totals(scores, k):
         stride,
         target,
         SAMPLES=samples,
-        RUN=top_k_module.RUN,
+        RUN=TritonTopK.RUN,
         K=k,
     )
     listing = torch.empty(rows, capacity, dtype=torch.int64, device=DEVICE)
@@ -304,9 +305,9 @@ def keep_listing_totals(scores, k):
         scores.stride(0),
         listing.stride(0),
         columns,
-        triton.cdiv(columns, top_k_module.BLOCK) * top_k_module.BLOCK,
+        triton.cdiv(columns, TritonTopK.BLOCK) * TritonTopK.BLOCK,
         CAPACITY=capacity,
-        BLOCK=top_k_module.BLOCK,
+        BLOCK=TritonTopK.BLOCK,
         PARTS=1,
         COUNTING=False,
         STAGES=1,

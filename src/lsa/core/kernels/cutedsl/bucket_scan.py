@@ -13,13 +13,9 @@ from types import ModuleType
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.core.kernels.cutedsl.blackwell import bucket_scan as blackwell_bucket_scan
 from lsa.core.kernels.cutedsl.hopper import bucket_scan as hopper_bucket_scan
-
-# Survivors a row holds in shared memory before they move to the global listing, and tiles a span holds at most -
-# the same on either GPU
-ROW_SLOTS = hopper_bucket_scan.ROW_SLOTS
-MAX_SPAN_TILES = hopper_bucket_scan.MAX_SPAN_TILES
 
 
 def kernel_for(device: torch.device) -> ModuleType:
@@ -28,7 +24,7 @@ def kernel_for(device: torch.device) -> ModuleType:
     Args:
         device: The device the rows are on.
     """
-    if device.type == "cuda" and dispatch.capability(device) in dispatch.BLACKWELL:
+    if device.type == "cuda" and dispatch.capability(device) in Arch.BLACKWELL:
         return blackwell_bucket_scan
     return hopper_bucket_scan
 

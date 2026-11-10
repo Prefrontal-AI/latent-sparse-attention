@@ -22,6 +22,7 @@ import torch.nn.functional as F
 from lsa.core.kernels import dispatch, scan_select
 from lsa.core.kernels import expansion as front_expansion
 from lsa.core.kernels import ward as front_ward
+from lsa.core.kernels.constants import PackedKey, TritonBeam, TritonScanSelect
 from lsa.core.kernels.cutedsl import (
     beam,
     bucket_scan,
@@ -35,8 +36,6 @@ from lsa.core.kernels.cutedsl import (
 )
 from lsa.core.kernels.triton import beam as triton_beam
 from lsa.core.kernels.triton import scan_select as triton_scan_select
-from lsa.core.kernels.triton.beam import NODE_CENTROID_SCALE
-from lsa.core.kernels.triton.keys import EMPTY
 from lsa.core.kernels.triton.paged import scan_paged
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.core.ward import pool_keys
@@ -65,7 +64,7 @@ DENSE_ROWS = 256
 # Buckets a growth pairs in one group - the tree's node cluster block
 PAIRED_BUCKETS = 4096
 # Below this many visible buckets a chunk lists through the short-context listing
-SHORT_BUCKETS = triton_scan_select.SCAN_SELECT_BUCKETS
+SHORT_BUCKETS = TritonScanSelect.SCAN_SELECT_BUCKETS
 # Rows and columns of the anchoring GEMM
 GEMM_DIM = 8192
 QUERY_NORM = 30.0
@@ -196,8 +195,8 @@ def logical_centroids(context: int) -> torch.Tensor:
 
 def sample_plan() -> tuple[int, int]:
     """Return the sample stride and the rank a threshold is read at, as the served select sets them."""
-    stride = max(1, round(triton_scan_select.TARGET * TOP_P / triton_scan_select.SAMPLE_RANK))
-    return stride, max(1, round(triton_scan_select.TARGET * TOP_P / stride))
+    stride = max(1, round(TritonScanSelect.TARGET * TOP_P / TritonScanSelect.SAMPLE_RANK))
+    return stride, max(1, round(TritonScanSelect.TARGET * TOP_P / stride))
 
 
 @cache
@@ -212,13 +211,13 @@ def flat_listing(context: int) -> Listing:
     found = thresholds.sample_thresholds(
         request.index_queries, centroids, request.visible_counts, *sample_plan()
     )
-    shifted = found - triton_scan_select.MARGIN * request.index_queries.float().norm(dim=1)
+    shifted = found - TritonScanSelect.MARGIN * request.index_queries.float().norm(dim=1)
     buckets, survivor_counts = bucket_scan.scan_buckets(
         request.index_queries,
         centroids,
         request.visible_counts,
         shifted,
-        triton_scan_select.CAPACITY * TOP_P,
+        TritonScanSelect.CAPACITY * TOP_P,
     )
     keys, _ = scoring.score_candidates(request.index_queries, centroids, buckets, survivor_counts, found)
     return Listing(found, shifted, buckets, survivor_counts, keys)
@@ -239,7 +238,7 @@ def score_candidates_triton(
         Listed buckets each row scored at or above its threshold [R] int32.
     """
     rows, capacity = state.buckets.shape
-    keys = torch.full((rows, capacity), EMPTY, device="cuda", dtype=torch.int64)
+    keys = torch.full((rows, capacity), PackedKey.EMPTY, device="cuda", dtype=torch.int64)
     reached = torch.empty(rows, device="cuda", dtype=torch.int32)
     triton_scan_select._score_buckets[(rows,)](
         index_queries,
@@ -251,7 +250,7 @@ def score_candidates_triton(
         reached,
         capacity,
         D=INDEX_DIM,
-        BLOCK=triton_scan_select.SCORE_BLOCK,
+        BLOCK=TritonScanSelect.SCORE_BLOCK,
         SPAN=0,
         DENSE=False,
         num_warps=4,
@@ -286,7 +285,11 @@ def triton_beam_step(
     scores = torch.empty(rows, width, device="cuda")
     scores[:, :open_count] = open_scores
     triton_beam.score_children(
-        index_queries, centroids, carried, out=scores[:, open_count:], centroid_scale=NODE_CENTROID_SCALE
+        index_queries,
+        centroids,
+        carried,
+        out=scores[:, open_count:],
+        centroid_scale=TritonBeam.NODE_CENTROID_SCALE,
     )
     kept = TopK(BEAM_WIDTH)(scores, torch.full((rows,), width, device="cuda", dtype=torch.int32))
     return triton_beam.kept_children(
@@ -398,7 +401,7 @@ def launch_bucket_scan(context: int, kernels: str) -> Launch | None:
     request = bucket_cache(context)
     centroids = logical_centroids(context)
     shifted = flat_listing(context).shifted
-    capacity = triton_scan_select.CAPACITY * TOP_P
+    capacity = TritonScanSelect.CAPACITY * TOP_P
     if kernels == "triton":
         return lambda: triton_scan_select.word_listing(
             request.index_queries, centroids, request.visible_counts, shifted, capacity
@@ -529,7 +532,9 @@ def launch_beam_step(context: int, kernels: str) -> Launch:
     rows_generator = generator()
     request = bucket_cache(context)
     node_buckets = bucket_count(context) // NODE_BUCKET_SIZE
-    centroids = (unit_rows(node_buckets, rows_generator) * NODE_CENTROID_SCALE).to(torch.float8_e4m3fn)
+    centroids = (unit_rows(node_buckets, rows_generator) * TritonBeam.NODE_CENTROID_SCALE).to(
+        torch.float8_e4m3fn
+    )
     open_centroids = unit_rows(OPEN_NODES, rows_generator).bfloat16()
     open_scores = torch.mm(request.index_queries, open_centroids.t(), out_dtype=torch.float32)
     open_children = torch.randint(
@@ -553,7 +558,7 @@ def launch_beam_step(context: int, kernels: str) -> Launch:
         centroids,
         closed_children,
         BEAM_WIDTH,
-        NODE_CENTROID_SCALE,
+        TritonBeam.NODE_CENTROID_SCALE,
     )
 
 

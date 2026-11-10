@@ -7,6 +7,7 @@ on [Blackwell's MMA](tile.py), so every round merges the same pools as the Trito
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch, HopperTileSize, HopperWard
 from lsa.core.kernels.cutedsl.blackwell.tile import BlackwellTile
 from lsa.core.kernels.cutedsl.hopper import ward as hopper_ward
 
@@ -24,7 +25,7 @@ def supports(pool_keys: torch.Tensor, precision: str) -> bool:
     """
     return (
         pool_keys.is_cuda
-        and dispatch.capability(pool_keys.device) in dispatch.BLACKWELL
+        and dispatch.capability(pool_keys.device) in Arch.BLACKWELL
         and hopper_ward.takes_blocks(pool_keys, precision)
     )
 
@@ -50,7 +51,7 @@ def cluster_ward(
     hopper_ward.check_sizes(pool_keys, pool_sizes)
     if not supports(pool_keys, "tf32x3"):
         raise ValueError(
-            f"the CuTeDSL Ward merge takes tf32x3 blocks of {hopper_ward.TILE} to {hopper_ward.MOST_POOLS} pools, a power of two, "
+            f"the CuTeDSL Ward merge takes tf32x3 blocks of {HopperTileSize.TILE} to {HopperWard.MOST_POOLS} pools, a power of two, "
             f"of 64 index dims, at most one block an SM, on a Blackwell GPU - got {tuple(pool_keys.shape)} on "
             f"{pool_keys.device}"
         )

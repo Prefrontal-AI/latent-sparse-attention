@@ -15,13 +15,9 @@ import cutlass.utils
 import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
+from lsa.core.kernels.constants import CuteDecode, CuteKeep
 from lsa.core.kernels.cutedsl import top_k as cutedsl_top_k
-from lsa.core.kernels.cutedsl.decode import BINS, WordSearch
-
-# Keys a row's listing holds at most, their words in shared memory
-MOST_LISTED = 8192
-KEEP_THREADS = 256
-KEEP_WARPS = KEEP_THREADS // 32
+from lsa.core.kernels.cutedsl.decode import WordSearch
 
 COMPILED: dict[int, Any] = {}
 
@@ -35,7 +31,7 @@ class StartLevelKeep(WordSearch):
         Args:
             node_bucket_size: Children a node bucket holds.
         """
-        super().__init__(KEEP_THREADS)
+        super().__init__(CuteKeep.KEEP_THREADS)
         self.node_bucket_size = node_bucket_size
 
     @cute.jit
@@ -63,13 +59,13 @@ class StartLevelKeep(WordSearch):
         class Storage:
             """Shared memory of a block: the listed words, their histogram, per-warp totals and scalars."""
 
-            words: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, MOST_LISTED], 16]
-            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, BINS], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, KEEP_WARPS], 16]
+            words: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteKeep.MOST_LISTED], 16]
+            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteDecode.BINS], 16]
+            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteKeep.KEEP_WARPS], 16]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
 
         self.kernel(keys, listed, children, out, keep, Storage).launch(
-            grid=(keys.shape[0], 1, 1), block=[KEEP_THREADS, 1, 1], stream=stream
+            grid=(keys.shape[0], 1, 1), block=[CuteKeep.KEEP_THREADS, 1, 1], stream=stream
         )
 
     @cute.kernel
@@ -95,9 +91,9 @@ class StartLevelKeep(WordSearch):
         thread, _, _ = cute.arch.thread_idx()
         row_index, _, _ = cute.arch.block_idx()
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        words = storage.words.get_tensor(cute.make_layout(MOST_LISTED))
-        histogram = storage.histogram.get_tensor(cute.make_layout(BINS))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(KEEP_WARPS))
+        words = storage.words.get_tensor(cute.make_layout(CuteKeep.MOST_LISTED))
+        histogram = storage.histogram.get_tensor(cute.make_layout(CuteDecode.BINS))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(CuteKeep.KEEP_WARPS))
         shared = storage.shared.get_tensor(cute.make_layout(4))
         row = keys[row_index, None]
         kept = out[row_index, None]
@@ -105,7 +101,7 @@ class StartLevelKeep(WordSearch):
         want = cutlass.min(keep, length)
 
         # A key's high half is its score in signed order - flipping the sign bit gives the unsigned word
-        for i in range(thread, length, KEEP_THREADS):
+        for i in range(thread, length, CuteKeep.KEEP_THREADS):
             words[i] = cutlass.Int32(row[i] >> 32) ^ cutlass.Int32(-(2**31))
         self.barrier.arrive_and_wait()
         kth_word, above = self.kth(words, length, want, 4, False, histogram, warp_totals, shared)
@@ -113,7 +109,7 @@ class StartLevelKeep(WordSearch):
         # Every word above the keep-th, and its ties lowest column first until the keep is full, in column order
         placed = cutlass.Int32(0)
         ties_taken = cutlass.Int32(0)
-        for first in range(0, length, KEEP_THREADS):
+        for first in range(0, length, CuteKeep.KEEP_THREADS):
             i = first + thread
             greater = False
             tied = cutlass.Int32(0)
@@ -132,7 +128,7 @@ class StartLevelKeep(WordSearch):
                     kept[(placed + before) * self.node_bucket_size + c] = children[column, c]
             placed = placed + total
             ties_taken = ties_taken + tie_total
-        for i in range(placed * self.node_bucket_size + thread, kept.shape[0], KEEP_THREADS):
+        for i in range(placed * self.node_bucket_size + thread, kept.shape[0], CuteKeep.KEEP_THREADS):
             kept[i] = cutlass.Int32(-1)
 
 
@@ -173,7 +169,7 @@ def supports(scores: torch.Tensor, children: torch.Tensor, keep: int) -> bool:
     _, _, width = cutedsl_top_k.plan(keep, scores.shape[1])
     return (
         width < scores.shape[1]
-        and width <= MOST_LISTED
+        and width <= CuteKeep.MOST_LISTED
         and cutedsl_top_k.supports(scores, keep)
         and children.dtype == torch.int32
         and children.is_contiguous()
@@ -197,7 +193,7 @@ def keep_start_level_listed(scores: torch.Tensor, children: torch.Tensor, keep: 
     """
     if not supports(scores, children, keep):
         raise ValueError(
-            f"the listed keep takes fp32 rows the listing narrows to at most {MOST_LISTED} keys - got "
+            f"the listed keep takes fp32 rows the listing narrows to at most {CuteKeep.MOST_LISTED} keys - got "
             f"{scores.dtype} {tuple(scores.shape)} for a keep of {keep}"
         )
     rows, columns = scores.shape

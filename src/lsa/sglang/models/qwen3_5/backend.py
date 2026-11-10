@@ -48,6 +48,7 @@ import torch
 
 from lsa.constants import Sentinel
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.sglang import context_parallel, memory, plugin, settings
 from lsa.sglang.constants import Banner
 from lsa.sglang.index import read, registry, weights
@@ -468,7 +469,7 @@ def flash_reads(device: torch.device) -> bool:
     Args:
         device: The device the selection is on.
     """
-    return device.type != "cuda" or dispatch.capability(device)[0] == dispatch.HOPPER[0]
+    return device.type != "cuda" or dispatch.capability(device)[0] == Arch.HOPPER[0]
 
 
 # Splits of one query's list the Triton read reduces over - a prefill chunk has rows enough to fill the GPU,

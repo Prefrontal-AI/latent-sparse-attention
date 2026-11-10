@@ -22,19 +22,10 @@ import cutlass.utils
 import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
-from lsa.core.kernels.cutedsl.decode import BINS, WordSearch, score_word
+from lsa.core.kernels.constants import CuteDecode, CuteTopK, TritonTopK
+from lsa.core.kernels.cutedsl.decode import WordSearch, score_word
 from lsa.core.kernels.cutedsl.scoring import pack_key
-from lsa.core.kernels.triton.top_k import WHOLE, listing_plan
-
-# Samples a row's threshold is ranked from at most, in shared memory
-MOST_SAMPLES = 8192
-# Threads of a row's CTA - few enough that several rows share an SM
-LISTING_THREADS = 512
-LISTING_WARPS = LISTING_THREADS // 32
-# Columns a thread reads in a pass - a CTA's width apart, or side by side in an ordered listing
-COLUMNS_PER_THREAD = 8
-# Digits of the sampled threshold settled - the rest left clear, so the threshold sits at or under the sample's rank
-THRESHOLD_PASSES = 2
+from lsa.core.kernels.triton.top_k import listing_plan
 
 COMPILED: dict[bool, Any] = {}
 
@@ -48,7 +39,7 @@ class RowListing(WordSearch):
         Args:
             ordered: List in column order, each thread reading a run of columns.
         """
-        super().__init__(LISTING_THREADS)
+        super().__init__(CuteTopK.LISTING_THREADS)
         self.ordered = ordered
 
     def column_of(self, first: Any, c: int, thread: Any) -> Any:
@@ -60,8 +51,8 @@ class RowListing(WordSearch):
             thread: The thread.
         """
         if self.ordered:
-            return first + thread * COLUMNS_PER_THREAD + c
-        return first + c * LISTING_THREADS + thread
+            return first + thread * CuteTopK.COLUMNS_PER_THREAD + c
+        return first + c * CuteTopK.LISTING_THREADS + thread
 
     @cute.jit
     def __call__(
@@ -92,13 +83,13 @@ class RowListing(WordSearch):
         class Storage:
             """Shared memory of a block: the listed samples, their histogram, per-warp totals and scalars."""
 
-            samples: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, MOST_SAMPLES], 16]
-            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, BINS], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, LISTING_WARPS], 16]
+            samples: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteTopK.MOST_SAMPLES], 16]
+            histogram: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteDecode.BINS], 16]
+            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, CuteTopK.LISTING_WARPS], 16]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
 
         self.kernel(scores, lengths, keys, listed, stride, rank, top_k, Storage).launch(
-            grid=(scores.shape[0], 1, 1), block=[LISTING_THREADS, 1, 1], stream=stream
+            grid=(scores.shape[0], 1, 1), block=[CuteTopK.LISTING_THREADS, 1, 1], stream=stream
         )
 
     @cute.kernel
@@ -128,9 +119,9 @@ class RowListing(WordSearch):
         thread, _, _ = cute.arch.thread_idx()
         row_index, _, _ = cute.arch.block_idx()
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
-        samples = storage.samples.get_tensor(cute.make_layout(MOST_SAMPLES))
-        histogram = storage.histogram.get_tensor(cute.make_layout(BINS))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(LISTING_WARPS))
+        samples = storage.samples.get_tensor(cute.make_layout(CuteTopK.MOST_SAMPLES))
+        histogram = storage.histogram.get_tensor(cute.make_layout(CuteDecode.BINS))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(CuteTopK.LISTING_WARPS))
         shared = storage.shared.get_tensor(cute.make_layout(4))
         row = scores[row_index, None]
         out = keys[row_index, None]
@@ -141,18 +132,18 @@ class RowListing(WordSearch):
         # A row the listing holds whole lists every column at its own place
         placed = length
         if length <= capacity:
-            for column in range(thread, length, LISTING_THREADS):
+            for column in range(thread, length, CuteTopK.LISTING_THREADS):
                 out[column] = pack_key(row[column], column)
         else:
-            sampled = cutlass.min(cute.ceil_div(length, stride), MOST_SAMPLES)
-            for j in range(thread, sampled, LISTING_THREADS):
+            sampled = cutlass.min(cute.ceil_div(length, stride), CuteTopK.MOST_SAMPLES)
+            for j in range(thread, sampled, CuteTopK.LISTING_THREADS):
                 samples[j] = score_word(row[j * stride])
             self.barrier.arrive_and_wait()
             prefix, _ = self.kth(
                 samples,
                 sampled,
                 cutlass.min(rank, sampled),
-                THRESHOLD_PASSES,
+                CuteTopK.THRESHOLD_PASSES,
                 False,
                 histogram,
                 warp_totals,
@@ -162,22 +153,22 @@ class RowListing(WordSearch):
 
             # Each pass one scan places every thread's columns at or above the threshold
             placed = cutlass.Int32(0)
-            values = cute.make_rmem_tensor(COLUMNS_PER_THREAD, cutlass.Float32)
-            for first in range(0, length, LISTING_THREADS * COLUMNS_PER_THREAD):
+            values = cute.make_rmem_tensor(CuteTopK.COLUMNS_PER_THREAD, cutlass.Float32)
+            for first in range(0, length, CuteTopK.LISTING_THREADS * CuteTopK.COLUMNS_PER_THREAD):
                 hits = cutlass.Int32(0)
-                for c in cutlass.range_constexpr(COLUMNS_PER_THREAD):
+                for c in cutlass.range_constexpr(CuteTopK.COLUMNS_PER_THREAD):
                     column = self.column_of(first, c, thread)
                     values[c] = -cutlass.Float32.inf
                     if column < length:
                         values[c] = row[column]
-                for c in cutlass.range_constexpr(COLUMNS_PER_THREAD):
+                for c in cutlass.range_constexpr(CuteTopK.COLUMNS_PER_THREAD):
                     column = self.column_of(first, c, thread)
                     hits = hits + cutlass.Int32(
                         column < length and cutlass.Uint32(score_word(values[c])) >= threshold
                     )
                 before, total = self.exclusive_sum(hits, warp_totals)
                 place = placed + before
-                for c in cutlass.range_constexpr(COLUMNS_PER_THREAD):
+                for c in cutlass.range_constexpr(CuteTopK.COLUMNS_PER_THREAD):
                     column = self.column_of(first, c, thread)
                     if column < length and cutlass.Uint32(score_word(values[c])) >= threshold:
                         if place < capacity:
@@ -223,7 +214,7 @@ def plan(top_k: int, columns: int) -> tuple[int, int, int]:
         top_k: Columns each row keeps.
         columns: Columns of the score matrix.
     """
-    if columns <= WHOLE * top_k:
+    if columns <= TritonTopK.WHOLE * top_k:
         return 1, 1, columns
     stride, rank, capacity, _ = listing_plan(top_k, columns)
     return stride, rank, capacity
@@ -241,7 +232,7 @@ def supports(scores: torch.Tensor, top_k: int) -> bool:
         scores.is_cuda
         and scores.dtype == torch.float32
         and scores.stride(1) == 1
-        and -(-scores.shape[1] // stride) <= MOST_SAMPLES
+        and -(-scores.shape[1] // stride) <= CuteTopK.MOST_SAMPLES
     )
 
 
@@ -267,7 +258,7 @@ def list_rows(
     """
     if not supports(scores, top_k):
         raise ValueError(
-            f"the CuTeDSL listing takes fp32 rows of unit column stride sampled at most {MOST_SAMPLES} times - got "
+            f"the CuTeDSL listing takes fp32 rows of unit column stride sampled at most {CuteTopK.MOST_SAMPLES} times - got "
             f"{scores.dtype} {tuple(scores.shape)} with strides {scores.stride()} for a top-k of {top_k}"
         )
     rows, columns = scores.shape
