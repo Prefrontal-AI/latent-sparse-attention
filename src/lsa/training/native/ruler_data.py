@@ -9,9 +9,11 @@ They are reproducible under the lm-eval version `uv.lock` pins, whose generators
 They are not the files `lsa data prepare ruler` makes - NVIDIA's own generators draw other needles and haystacks, and a
 checkpoint scores about 5 points lower on their files over the seven needle tasks other than niah_multikey_3.
 
-Generation is CPU work and runs as one slurm job. A compute node has no egress, so the sources are fetched where the
-command is typed: the essays and the tokenizer from the hub, SQuAD and HotpotQA from the release the generators' own
-sources are mirrored in, and the sentence tokenizer.
+Generation is CPU work and runs as one slurm job. A compute node may have no egress, so the sources are fetched where
+the command is typed: the essays and the tokenizer from the hub, SQuAD and HotpotQA from the release `ruler-sources-v1`
+when it holds them and from their upstream urls otherwise (HotpotQA is not in the release yet, so it comes from the
+upstream url or the hub mirror), and the sentence tokenizer.
+`--fetch-in-job` moves that into the submitted job, for a site whose compute nodes can reach the network.
 """
 
 import argparse
@@ -252,7 +254,9 @@ def render(task: str, length: int, samples: int, tokenizer: Any, root: str) -> l
     return rows
 
 
-def prepare(root: str, tasks: list[str], lengths: list[int], samples: int, force: bool) -> None:
+def prepare(
+    root: str, tasks: list[str], lengths: list[int], samples: int, force: bool, fetch_first: bool = False
+) -> None:
     """Write every cell of the grid that is not already on disk.
 
     Args:
@@ -261,7 +265,10 @@ def prepare(root: str, tasks: list[str], lengths: list[int], samples: int, force
         lengths: Context lengths in tokens.
         samples: Rows per cell.
         force: Regenerate a cell that exists.
+        fetch_first: Fetch the sources first, as `ensure` does - for a job that runs where the command was not typed.
     """
+    if fetch_first:
+        ensure(root)
     from lm_eval.tasks.ruler.common_utils import get_tokenizer
 
     tokenizer = get_tokenizer(tokenizer=tokenizer_path())
@@ -323,11 +330,34 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lengths", nargs="+", type=int, default=list(LENGTHS))
     parser.add_argument("--samples", type=int, default=SAMPLES, help="rows per cell")
     parser.add_argument("--force", action="store_true", help="regenerate cells that exist")
+    parser.add_argument(
+        "--fetch-in-job",
+        action="store_true",
+        help="fetch the sources in the submitted job rather than here - needs compute nodes that can reach the network",
+    )
     slurm.add_flags(parser)
 
 
+def validate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Refuse a command line the job would only fail on later, before anything is fetched.
+
+    Args:
+        parser: The command's parser, which reports the error.
+        args: The parsed command line, of which `tasks`, `lengths` and `samples` are read.
+    """
+    unknown = [task for task in args.tasks if task not in ruler_card().tasks]
+    if unknown:
+        parser.error(f"{unknown} are not RULER tasks - expected from {list(ruler_card().tasks)}")
+    if not args.tasks or not args.lengths or min(args.lengths) < 1:
+        parser.error(
+            f"--tasks and --lengths need at least one positive entry, got {args.tasks} and {args.lengths}"
+        )
+    if args.samples < 1:
+        parser.error(f"--samples must be positive, got {args.samples}")
+
+
 def main(argv: list[str] | None = None) -> None:
-    """Fetch the sources and submit the job that renders the cells the command line names.
+    """Submit the job that renders the cells the command line names, after fetching the sources unless told otherwise.
 
     Args:
         argv: The command line, or None for `sys.argv`.
@@ -337,8 +367,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     add_options(parser)
     args = parser.parse_args(argv)
+    validate(parser, args)
     root = os.path.abspath(args.root)
-    if not args.dry_run:
+    if not (args.dry_run or args.fetch_in_job):
         ensure(root)
     environment = [*env.offline_hf(), *env.eval_data(), *env.exports({"PYTHONUNBUFFERED": "1"})]
     slurm.submit(
@@ -352,6 +383,7 @@ def main(argv: list[str] | None = None) -> None:
         args.lengths,
         args.samples,
         args.force,
+        args.fetch_in_job,
     )
 
 

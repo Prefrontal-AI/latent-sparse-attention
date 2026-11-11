@@ -79,14 +79,15 @@ DEPENDENCIES = ("tenacity==9.1.4",)
 
 # The haystack sources, as the pinned clone holds them.
 # english_words.json is the commit's own LFS object, and the essays and SQuAD are release assets of the exact files.
-# HotpotQA is fetched unpinned upstream, so a fresh fetch that differs is a different corpus and setup refuses it
+# HotpotQA is pinned too, so a fresh fetch that differs is a different corpus and setup refuses it
 ASSETS = {
     "english_words.json": "affcd6d45fdf3cc843d585c99c97ad615094e760e6c4756b654bab6c73bc2eca",
     "squad.json": "80a5225e94905956a6446d296ca1093975c4d3b3260f1d6c8f68bc2ab77182d8",
     "hotpotqa.json": "e3da074df24e8369009918aa5cdbdd254dadcde4c63f7569d36afd6f2268caa8",
     "PaulGrahamEssays.json": "58e352531a80cef2d22c205dbebfbfd64a8afe55a32434de845f200718756c65",
 }
-# Tried in order - the CMU host for HotpotQA is often down, and the mirror is the file it serves.
+# Tried in order - the release first, where it holds the file, and HotpotQA's CMU host is often down, so its hub mirror is the file it serves.
+# The release holds no `hotpotqa.json` until the maintainer uploads it, and a missing asset answers 404, which falls through to the upstream urls.
 # `{revision}` is the card's pinned commit
 ASSET_URLS = {
     "english_words.json": (
@@ -97,6 +98,7 @@ ASSET_URLS = {
         "https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v2.0.json",
     ),
     "hotpotqa.json": (
+        "https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/ruler-sources-v1/hotpotqa.json",
         "http://curtis.ml.cmu.edu/datasets/hotpot/hotpot_dev_distractor_v1.json",
         "https://huggingface.co/datasets/namlh2004/hotpotqa/resolve/7e54db4656209750ff487f6fdf8e39a66dba136b/hotpot_dev_distractor_v1.json",
     ),
