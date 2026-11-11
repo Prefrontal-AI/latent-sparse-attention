@@ -1,4 +1,4 @@
-"""The window arm against the reference training code's sliding window with sinks, ported as a few lines of masking.
+"""The window method against the reference training code's sliding window with sinks, ported as a few lines of masking.
 
 The reference training code lets query i read key j when j <= i and either i - j < window_size or j < num_sink_tokens
 (`SlidingWindowAttention.pattern`).
@@ -16,7 +16,7 @@ from lsa.training.native.layers import MultiresInnerAttention
 HEAD_DIM = 8
 SCALE = HEAD_DIM**-0.5
 LENGTH = 40
-# Eight query heads over one key-value head, the multi-query shape the sparse arms were compared on
+# Eight query heads over one key-value head, the multi-query shape the sparse methods were compared on
 QUERY_HEADS = 8
 
 
@@ -69,7 +69,7 @@ def module(window_size, sink_size):
         "sinks past window",
     ],
 )
-def test_the_window_arm_reads_what_the_reference_training_codes_sliding_window_reads(
+def test_the_window_method_reads_what_the_reference_training_codes_sliding_window_reads(
     tokens, window_size, sink_size
 ):
     q, k, v = tokens
@@ -78,7 +78,7 @@ def test_the_window_arm_reads_what_the_reference_training_codes_sliding_window_r
     assert torch.allclose(got, expected, atol=1e-12)
 
 
-def test_the_window_arm_is_the_flash_left_window_plus_sinks_at_one_key_more_than_the_left(tokens):
+def test_the_window_method_is_the_flash_left_window_plus_sinks_at_one_key_more_than_the_left(tokens):
     # window_size=[1535, 0], num_sink_tokens=4 in the reference training code is window_size 1536, sink_size 4 here
     left, sinks = 5, 4
     q, k, v = tokens
@@ -86,13 +86,13 @@ def test_the_window_arm_is_the_flash_left_window_plus_sinks_at_one_key_more_than
     assert torch.allclose(got, reference_context(q, k, v, flash_window_pattern(left, sinks)), atol=1e-12)
 
 
-def test_the_window_arm_matches_the_reference_gradient_on_q_k_and_v(tokens):
+def test_the_window_method_matches_the_reference_gradient_on_q_k_and_v(tokens):
     q, k, v = (tensor.clone().requires_grad_() for tensor in tokens)
-    arm = module(6, 3)
+    method = module(6, 3)
     weights = torch.randn(
         LENGTH, QUERY_HEADS, HEAD_DIM, generator=torch.Generator().manual_seed(9), dtype=torch.float64
     )
-    (arm(q, k, v, scale=SCALE) * weights).sum().backward()
+    (method(q, k, v, scale=SCALE) * weights).sum().backward()
     got = [tensor.grad.clone() for tensor in (q, k, v)]
     q2, k2, v2 = (tensor.detach().clone().requires_grad_() for tensor in tokens)
     (reference_context(q2, k2, v2, sliding_window_pattern(6, 3)) * weights).sum().backward()

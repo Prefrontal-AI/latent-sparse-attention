@@ -4,7 +4,7 @@ A mean held-out loss can hide an attention that cannot reach far, because most t
 last few thousand before them. The probe asks one question instead: a sequence's own tokens are overwritten with
 a needle `The secret code for <name> is <digits>.`, a few distractors with other names and codes, and at the end
 the query `The secret code for <name> is`, and the model is scored on the digits. Nothing is generated - it is a
-forward pass on a modified held-out sequence, so every arm runs it the same way.
+forward pass on a modified held-out sequence, so every method runs it the same way.
 
 The control is the same sequence with the needle replaced by filler of the same length, so it differs from the
 probe at the needle's tokens alone. What the model gets right there is what its priors give, and the gain of the

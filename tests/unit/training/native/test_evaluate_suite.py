@@ -19,7 +19,7 @@ def test_the_benchmark_suite_hands_the_command_line_to_the_benchmark(monkeypatch
         sys,
         "argv",
         ["lsa native evaluate", "configs/a.yaml", "--suite", "benchmark", "--checkpoint", "/x/step-1"]
-        + ["--tasks", "ruler", "--label", "arm"],
+        + ["--tasks", "ruler", "--label", "method"],
     )
 
     run.main("evaluate")
@@ -29,7 +29,7 @@ def test_the_benchmark_suite_hands_the_command_line_to_the_benchmark(monkeypatch
         "configs/a.yaml",
         "/x/step-1",
         "ruler",
-        "arm",
+        "method",
     )
 
 

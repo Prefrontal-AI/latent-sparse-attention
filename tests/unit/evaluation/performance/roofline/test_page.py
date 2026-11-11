@@ -70,10 +70,10 @@ def test_template_sets_triton_beside_cutedsl_after_the_time_bars() -> None:
     )
     assert template.index("<h3>This profile</h3>") < template.index('<section id="pipeline">')
     assert 'id="f-triton"' in template
-    assert 'id="f-arm-table"' in template
+    assert 'id="f-kernels-table"' in template
 
 
-def test_render_embeds_both_arms(tmp_path: Path) -> None:
+def test_render_embeds_both_languages(tmp_path: Path) -> None:
     roofline = {
         "kernels": [{"kernels": "cutedsl", "kind": "cutedsl"}, {"kernels": "triton", "kind": "triton"}],
         "steps": [

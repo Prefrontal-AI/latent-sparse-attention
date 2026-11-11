@@ -8,7 +8,7 @@ from tests.integ.training.native.test_models import attentions, experiment
 
 
 @pytest.mark.parametrize("kind", ["nsa", "pisa"])
-def test_native_model_routes_every_full_attention_layer_to_the_sparse_arm(kind):
+def test_native_model_routes_every_full_attention_layer_to_the_sparse_method(kind):
     spec = model_spec(
         experiment(
             kind,
@@ -33,7 +33,7 @@ def test_native_model_routes_every_full_attention_layer_to_the_sparse_arm(kind):
     assert sum(parameter.numel() for parameter in model.parameters()) > 0
 
 
-def test_sparse_arm_sweeps_preserve_current_and_historical_budgets():
+def test_sparse_method_sweeps_preserve_current_and_historical_budgets():
     from pathlib import Path
 
     from lsa import config_loader

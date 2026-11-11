@@ -3,7 +3,7 @@
 python -m lsa.evaluation.performance.roofline.page DIR/roofline.json DIR/roofline.html
 python -m lsa.evaluation.performance.roofline.page DIR/roofline.json DIR/roofline.html --compare H200/roofline.json
 
-The page draws both arms of the profile, CuTeDSL first with the Triton arm beside it. With `--compare`, another GPU's
+The page draws both languages of the profile, CuTeDSL first with Triton beside it. With `--compare`, another GPU's
 profile rides along, and the page sets each step's time on the two GPUs side by side.
 """
 

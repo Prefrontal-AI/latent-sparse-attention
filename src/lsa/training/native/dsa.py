@@ -264,7 +264,7 @@ class DsaAttention(HeadShapeAttention):
             queries: Rotated queries [T, H, D].
             keys: Rotated keys [T, Hkv, D].
             values: Values [T, Hkv, D].
-            attention_masks: Dense arm masks, unused for fixed-length sequences.
+            attention_masks: Dense method masks, unused for fixed-length sequences.
             index_heads: Position-free vectors, unused by DSA's post-rotation indexer.
 
         Returns:

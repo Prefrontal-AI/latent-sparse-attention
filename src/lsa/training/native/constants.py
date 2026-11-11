@@ -151,7 +151,7 @@ class Evaluation:
     SEQUENCES: int = 64
 
     # Position bucket starts after the first, 512 closing the open block and 1540 being sinks plus window plus top-k
-    # => below 1540 every arm reads every key and the runs must agree
+    # => below 1540 every method reads every key and the runs must agree
     EDGES: tuple[int, ...] = (512, 1540, 4096, 8192)
 
     # Sequence chunks the output projection runs over, so the logits are never whole

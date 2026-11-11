@@ -1,4 +1,4 @@
-"""Train a flat LSA indexer while retaining the position-free arm's exact read."""
+"""Train a flat LSA indexer while retaining the position-free method's exact read."""
 
 import math
 from dataclasses import dataclass

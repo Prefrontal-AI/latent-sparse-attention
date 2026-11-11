@@ -1,4 +1,4 @@
-"""The two GPT-2 flavours train a few steps on one card under the window arm, through the real data streams.
+"""The two GPT-2 flavours train a few steps on one card under the window method, through the real data streams.
 
 A microbatch holds one sequence or two: a lone sequence once took GatedDeltaNet's kernel down its no-boundary path,
 which gave non-finite outputs from random initialisation in the first layer, at 4,096 tokens as at 16,384.
@@ -37,7 +37,7 @@ MULTI_QUERY = {"query_head_count": 8, "kv_head_count": 1, "head_dim": 128, "rota
         "hybrid-long-documents-32k",
     ],
 )
-def test_a_few_accumulated_steps_of_the_window_arm_leave_every_weight_finite(
+def test_a_few_accumulated_steps_of_the_window_method_leave_every_weight_finite(
     tmp_path, flavor, head_shape, corpus, seq_len, checkpointing, sequences
 ):
     experiment = native.NativeConfig(

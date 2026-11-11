@@ -2,9 +2,9 @@
 
 Cross entropy is the only loss a native run trains on, and the trainer owns it. What lives here is how a
 held-out pass reads it: a mean loss is a poor comparison between attentions on its own, because most of a long
-sequence is predictable from its last few thousand tokens, which every arm reads in full. Where the arms differ is
+sequence is predictable from its last few thousand tokens, which every method reads in full. Where the methods differ is
 the far end, so the loss is scored by position in buckets whose first edges are the open block and the fine
-read's key budget - the buckets below the budget are a check that should agree across arms, and the ones above
+read's key budget - the buckets below the budget are a check that should agree across methods, and the ones above
 it are where an attention that reads less may lose.
 
 Scores are kept per sequence, so two runs on one seed pair sequence by sequence, and summed within a bucket,

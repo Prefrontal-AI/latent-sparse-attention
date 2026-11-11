@@ -55,7 +55,7 @@ def test_a_mean_and_a_pooled_perplexity_are_the_two_statistics():
     assert report.statistic(pairs) == pytest.approx(np.exp(1.5))
 
 
-def test_identical_arms_differ_by_nothing_and_a_shifted_arm_is_separated_from_zero():
+def test_identical_methods_differ_by_nothing_and_a_shifted_method_is_separated_from_zero():
     base = np.array([1.0, 0.0] * 50)
     delta, low, high = report.paired_bootstrap(base, base.copy(), iterations=200)
     assert (delta, low, high) == (0.0, 0.0, 0.0)
@@ -81,26 +81,26 @@ def test_the_same_seed_gives_the_same_interval():
     )
 
 
-def test_only_examples_with_the_same_prompt_in_every_arm_are_paired():
+def test_only_examples_with_the_same_prompt_in_every_method_are_paired():
     first = {0: {"prompt_hash": "a"}, 1: {"prompt_hash": "b"}, 2: {"prompt_hash": "c"}}
     second = {0: {"prompt_hash": "a"}, 1: {"prompt_hash": "other"}, 3: {"prompt_hash": "d"}}
     assert report.shared_ids(first, second) == [0]
 
 
-def test_a_report_tabulates_each_arm_and_its_difference_from_the_baseline(tmp_path):
-    for arm, accuracies in (("dense", [1.0, 1.0, 0.0, 1.0]), ("window", [1.0, 0.0, 0.0, 0.0])):
+def test_a_report_tabulates_each_method_and_its_difference_from_the_baseline(tmp_path):
+    for method, accuracies in (("dense", [1.0, 1.0, 0.0, 1.0]), ("window", [1.0, 0.0, 0.0, 0.0])):
         results = results_of("sciq", [logged(i, acc=value) for i, value in enumerate(accuracies)])
-        records.write_records(tmp_path / arm / "core", results, {})
+        records.write_records(tmp_path / method / "core", results, {})
     text = report.report(tmp_path, "dense", ["core"])
     assert "| sciq (acc) | 0.750 | 0.250 |" in text
     assert "-0.500" in text
 
 
-def test_a_ruler_report_gives_scores_by_length_and_the_window_arms_cells(tmp_path):
-    for arm, score in (("dense", 1.0), ("window", 0.0)):
+def test_a_ruler_report_gives_scores_by_length_and_the_window_methods_cells(tmp_path):
+    for method, score in (("dense", 1.0), ("window", 0.0)):
         for name in ("ruler_niah_single_1_4096", "ruler_niah_single_1_8192"):
             results = results_of(name, [logged(i, score=score if i else 1.0) for i in range(4)])
-            records.write_records(tmp_path / arm / "ruler", results, {})
+            records.write_records(tmp_path / method / "ruler", results, {})
     text = report.report(tmp_path, "dense", ["ruler"], window="window")
     assert "| 4096 | 1.000 | 0.250 |" in text
     assert "scores above zero on 2 of 2 cells" in text

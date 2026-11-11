@@ -1,27 +1,27 @@
-"""Time every arm of one model's layer, both phases, one after another on one GPU.
+"""Time every method of one model's layer, both phases, one after another on one GPU.
 
     lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
     lsa evaluate isolated qwen38_27b --output $LSA_ROOT/layer-perf/isolated --dry-run
     lsa evaluate isolated glm53_flash --phase decode --output $LSA_ROOT/layer-perf/isolated-decode
-    lsa evaluate isolated glm53_flash --arm pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
-    lsa evaluate isolated glm53_flash --arm pisa_c16 --output $LSA_ROOT/layer-perf/isolated-pisa-c16
+    lsa evaluate isolated glm53_flash --method pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
+    lsa evaluate isolated glm53_flash --method pisa_c16 --output $LSA_ROOT/layer-perf/isolated-pisa-c16
     lsa evaluate isolated glm53_flash --gpu b300 --output $LSA_ROOT/layer-perf/isolated-b300 --dry-run
-    lsa evaluate isolated glm53_flash --arm full --arm lsa_flat 'data.contexts=[10485760]' --dry-run
+    lsa evaluate isolated glm53_flash --method full --method lsa_flat 'data.contexts=[10485760]' --dry-run
 
-A layer timing is only comparable across arms when the card behaved the same for all of them. Jobs of one arm each
-land on whichever nodes are free and share them with other users' jobs, so an arm can be timed on a card another
-job is heating or on a node with a busier power budget. This is one job that holds one GPU for every arm and
-phase in turn, so the arms ran on one card and differ in what they are and not in where they ran. It does not ask
+A layer timing is only comparable across methods when the card behaved the same for all of them. Jobs of one method each
+land on whichever nodes are free and share them with other users' jobs, so a method can be timed on a card another
+job is heating or on a node with a busier power budget. This is one job that holds one GPU for every method and
+phase in turn, so the methods ran on one card and differ in what they are and not in where they ran. It does not ask
 for the whole node: on H200 an exclusive rerun moved layer prefill by at most 1.5% against the same timings on a
 shared node, every method, so the node's other GPUs stay free for other jobs. The telemetry each point keeps (see [telemetry](../telemetry.py)) says what the card did.
 
-Every arm prefills in chunks of 32,768 tokens, the contexts are the ladder the published records hold, and the
-design's arms - flat and tree - run their kernels in CuTeDSL. The image is the configs' own. An arm that fails
+Every method prefills in chunks of 32,768 tokens, the contexts are the ladder the published records hold, and the
+design's methods - flat and tree - run their kernels in CuTeDSL. The image is the configs' own. A method that fails
 does not stop the ones after it, and the job says which failed when the last is done.
 
-`--gpu b300` times the B300 arms: arm X is `b300_X.yaml` beside the H200 file, with the B300 image and backends its
-own configs set. An arm with no B300 file is an error and not a silent fall back to the H200 file. The chunk is
-32,768 for both phases on both cards; an arm falls back to 8,192 only when 32,768 runs out of memory at a context,
+`--gpu b300` times the B300 methods: method X is `b300_X.yaml` beside the H200 file, with the B300 image and backends its
+own configs set. A method with no B300 file is an error and not a silent fall back to the H200 file. The chunk is
+32,768 for both phases on both cards; a method falls back to 8,192 only when 32,768 runs out of memory at a context,
 and its record says so.
 """
 
@@ -39,18 +39,18 @@ from lsa.sglang.launch import checkout_root
 if TYPE_CHECKING:
     from lsa.evaluation.config import KernelsConfig
 
-# The arms of each model, in the order they run - the configs under `configs/evaluation/kernels/<model>/`
+# The methods of each model, in the order they run - the configs under `configs/evaluation/kernels/<model>/`
 # => the baselines, the two designs and PISA, which the paper's layer figures draw from; every other config is in
-# `EXTRA_ARMS` or `UNTIMED_ARMS`
-ARMS: dict[str, tuple[str, ...]] = {
+# `EXTRA_METHODS` or `UNTIMED_METHODS`
+METHODS: dict[str, tuple[str, ...]] = {
     "glm53_flash": ("full", "native", "lsa_flat", "lsa_tree", "pisa"),
     "qwen38_27b": ("full", "qsa", "lsa_flat", "lsa_tree", "pisa"),
 }
 
-# The cards an arm can be timed on, as `gpu.TOKENS` names them - the first is the default, the H200 files
+# The cards a method can be timed on, as `gpu.TOKENS` names them - the first is the default, the H200 files
 GPUS: tuple[str, ...] = ("h200", "b300")
 
-# The phases of a layer, in the order each arm runs them
+# The phases of a layer, in the order each method runs them
 PHASES: tuple[str, ...] = ("prefill", "decode")
 
 # What the published records of a model were timed with beyond its config, by card - GLM's sparse attention kernels
@@ -62,27 +62,27 @@ MODEL_OVERRIDES: dict[tuple[str, str], tuple[str, ...]] = {
     ("qwen38_27b", "b300"): (),
 }
 
-# Arms a job runs only when asked by `--arm`, beside the ones every run of a model times
-EXTRA_ARMS: dict[str, tuple[str, ...]] = {
+# Methods a job runs only when asked by `--method`, beside the ones every run of a model times
+EXTRA_METHODS: dict[str, tuple[str, ...]] = {
     "glm53_flash": ("pisa_c8", "pisa_c16"),
     "qwen38_27b": ("pisa_c8", "pisa_c16"),
 }
 
 # H200 configs a job never times, each with why - a delta measured on its own, or a layer the paper does not draw
-UNTIMED_ARMS: dict[str, dict[str, str]] = {
+UNTIMED_METHODS: dict[str, dict[str, str]] = {
     "glm53_flash": {
-        "lsa_flat_early_budget": "a delta on lsa_flat timed on its own, on B300 as a per-phase arm",
-        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree arm does not - it decodes flat",
+        "lsa_flat_early_budget": "a delta on lsa_flat timed on its own, on B300 as a per-phase method",
+        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree method does not - it decodes flat",
     },
     "qwen38_27b": {
-        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree arm does not - it decodes flat",
+        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree method does not - it decodes flat",
         "lsa_fixed": "the fixed design, scored but not drawn in the paper's layer-performance figure",
-        "gdn": "the gated delta net layer, not an attention arm - timed on its own for the whole-model composition",
+        "gdn": "the gated delta net layer, not an attention method - timed on its own for the whole-model composition",
     },
 }
 
-# B300 arms whose config is one file per phase, to the file of each phase - the arm needs `--arm` like an extra one
-PER_PHASE_ARMS: dict[str, dict[str, dict[str, str]]] = {
+# B300 methods whose config is one file per phase, to the file of each phase - the method needs `--method` like an extra one
+PER_PHASE_METHODS: dict[str, dict[str, dict[str, str]]] = {
     "glm53_flash": {
         "lsa_flat_early_budget": {
             "prefill": "b300_lsa_flat_early_budget_prefill",
@@ -92,101 +92,105 @@ PER_PHASE_ARMS: dict[str, dict[str, dict[str, str]]] = {
     "qwen38_27b": {},
 }
 
-# The arms that run the design's selector, the only ones that have kernels to choose
-DESIGN_ARMS: tuple[str, ...] = ("lsa_flat", "lsa_tree", "lsa_flat_early_budget")
+# The methods that run the design's selector, the only ones that have kernels to choose
+DESIGN_METHODS: tuple[str, ...] = ("lsa_flat", "lsa_tree", "lsa_flat_early_budget")
 
 
 def configs_dir() -> Path:
-    """Return the arms' config directory in the checkout this process runs from."""
+    """Return the methods' config directory in the checkout this process runs from."""
     return checkout_root() / "configs" / "evaluation" / "kernels"
 
 
-def arm_files(model: str, arm: str, card: str = "h200") -> list[str]:
-    """Return the config files one arm is loaded from.
+def method_files(model: str, method: str, card: str = "h200") -> list[str]:
+    """Return the config files one method is loaded from.
 
     Args:
         model: The model's config directory.
-        arm: The arm's name.
+        method: The method's name.
         card: The card's token, one of `GPUS`.
 
     Returns:
-        The H200 arm's file, the B300 arm's `b300_` file, or a per-phase arm's files on B300.
+        The H200 method's file, the B300 method's `b300_` file, or a per-phase method's files on B300.
 
     Raises:
-        ValueError: The card has no file for the arm.
+        ValueError: The card has no file for the method.
     """
     if card == "h200":
-        return [str(configs_dir() / model / f"{arm}.yaml")]
-    if arm in PER_PHASE_ARMS[model]:
-        names = list(PER_PHASE_ARMS[model][arm].values())
+        return [str(configs_dir() / model / f"{method}.yaml")]
+    if method in PER_PHASE_METHODS[model]:
+        names = list(PER_PHASE_METHODS[model][method].values())
     else:
-        names = [f"b300_{arm}"]
+        names = [f"b300_{method}"]
     configs = configs_dir()
     files = [configs / model / f"{name}.yaml" for name in names]
     if missing := [file.name for file in files if not file.exists()]:
-        raise ValueError(f"no {card} config for the arm {arm!r} of {model!r} - missing {', '.join(missing)}")
+        raise ValueError(
+            f"no {card} config for the method {method!r} of {model!r} - missing {', '.join(missing)}"
+        )
     return [str(file) for file in files]
 
 
-def arm_overrides(model: str, arm: str, output: str | None, card: str = "h200") -> list[str]:
-    """Return the dotted overrides one arm is loaded with.
+def method_overrides(model: str, method: str, output: str | None, card: str = "h200") -> list[str]:
+    """Return the dotted overrides one method is loaded with.
 
     Args:
         model: The model's config directory.
-        arm: The arm's config file, without its suffix.
+        method: The method's config file, without its suffix.
         output: Where the records go, or None for the config's own `run.output`.
         card: The card's token, one of `GPUS`.
 
     Returns:
-        The chunk every arm prefills in, the model's own settings on the card, CuTeDSL kernels for a design arm and the output.
+        The chunk every method prefills in, the model's own settings on the card, CuTeDSL kernels for a design method and the output.
     """
     overrides = [f"data.chunk={Kernels.CHUNK}", *MODEL_OVERRIDES[(model, card)]]
-    if arm in DESIGN_ARMS:
+    if method in DESIGN_METHODS:
         overrides.append("model.serving.kernels=cutedsl")
     if output:
         overrides.append(f"run.output={output}")
     return overrides
 
 
-def load_arms(
+def load_methods(
     model: str,
     output: str | None,
     phases: tuple[str, ...] = PHASES,
-    arms: tuple[str, ...] = (),
+    methods: tuple[str, ...] = (),
     card: str = "h200",
     overrides: tuple[str, ...] = (),
 ) -> list["KernelsConfig"]:
-    """Load the arms of a model, each one's prefill and then its decode.
+    """Load the methods of a model, each one's prefill and then its decode.
 
     Args:
         model: The model's config directory.
         output: Where the records go, or None for the config's own `run.output`.
-        phases: The phases to keep of every arm, `data.phase` values.
-        arms: The arms to run, or empty for every arm of the model.
-        card: The card's token, one of `GPUS` - `b300` loads each arm's `b300_` file.
-        overrides: Dotted `key=value` assignments laid over every arm after its own overrides, so they win.
+        phases: The phases to keep of every method, `data.phase` values.
+        methods: The methods to run, or empty for every method of the model.
+        card: The card's token, one of `GPUS` - `b300` loads each method's `b300_` file.
+        overrides: Dotted `key=value` assignments laid over every method after its own overrides, so they win.
 
     Returns:
         The evaluations in the order they run.
 
     Raises:
-        ValueError: The model has no arms listed, an arm it does not have is asked for, or the card has no file for an arm.
+        ValueError: The model has no methods listed, a method it does not have is asked for, or the card has no file for a method.
     """
-    if model not in ARMS:
-        raise ValueError(f"no arms for {model!r} - one of {', '.join(ARMS)}")
+    if model not in METHODS:
+        raise ValueError(f"no methods for {model!r} - one of {', '.join(METHODS)}")
     if card not in GPUS:
         raise ValueError(f"no card {card!r} - one of {', '.join(GPUS)}")
-    known = (*ARMS[model], *EXTRA_ARMS[model], *(PER_PHASE_ARMS[model] if card == "b300" else ()))
-    if unknown := [arm for arm in arms if arm not in known]:
-        raise ValueError(f"no arm {unknown} for {model!r} - one of {', '.join(known)}")
+    known = (*METHODS[model], *EXTRA_METHODS[model], *(PER_PHASE_METHODS[model] if card == "b300" else ()))
+    if unknown := [method for method in methods if method not in known]:
+        raise ValueError(f"no method {unknown} for {model!r} - one of {', '.join(known)}")
     from lsa.evaluation.config import KernelsConfig, load
 
     experiments: list[KernelsConfig] = []
-    for arm in arms or ARMS[model]:
+    for method in methods or METHODS[model]:
         loaded = [
             experiment
-            for file in arm_files(model, arm, card)
-            for experiment in load(file, [*arm_overrides(model, arm, output, card), *overrides], "kernels")
+            for file in method_files(model, method, card)
+            for experiment in load(
+                file, [*method_overrides(model, method, output, card), *overrides], "kernels"
+            )
         ]
         kernels = [
             experiment
@@ -197,17 +201,17 @@ def load_arms(
     return experiments
 
 
-def run_arms(experiments: list["KernelsConfig"]) -> None:
+def run_methods(experiments: list["KernelsConfig"]) -> None:
     """Run every evaluation in turn on the job's first task, whatever happens to the ones before.
 
-    Every arm runs, and the job fails afterwards if any did, so a job that timed nothing does not read as done.
+    Every method runs, and the job fails afterwards if any did, so a job that timed nothing does not read as done.
     Nothing runs on any task but the first.
 
     Args:
-        experiments: The evaluations, as `load_arms` returns them.
+        experiments: The evaluations, as `load_methods` returns them.
 
     Raises:
-        RuntimeError: One or more arms failed, after all of them ran.
+        RuntimeError: One or more methods failed, after all of them ran.
     """
     from lsa.evaluation.run import run_experiment
 
@@ -225,8 +229,13 @@ def run_arms(experiments: list["KernelsConfig"]) -> None:
         raise RuntimeError(f"failed {len(failed)} of {len(experiments)}: {failed}")
 
 
+# A job submitted before methods were called methods is pickled with this name
+# => it still unpickles when it starts on an updated checkout
+run_arms = run_methods
+
+
 def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace) -> dict[str, Any]:
-    """Return what the one job asks for - one GPU of a shared node, for the hours its arms add up to.
+    """Return what the one job asks for - one GPU of a shared node, for the hours its methods add up to.
 
     Args:
         experiments: The evaluations the job runs.
@@ -252,45 +261,52 @@ def job_parameters(experiments: list["KernelsConfig"], args: argparse.Namespace)
 
 def main() -> None:
     """Parse the command line, print the evaluations, and submit them as one job unless asked only to print."""
-    parser = argparse.ArgumentParser(description="Time every arm of a model's layer in one job on one GPU")
+    parser = argparse.ArgumentParser(description="Time every method of a model's layer in one job on one GPU")
     parser.add_argument(
-        "model", choices=sorted(ARMS), help="the model's directory under configs/evaluation/kernels"
+        "model", choices=sorted(METHODS), help="the model's directory under configs/evaluation/kernels"
     )
     parser.add_argument("--output", help="the records root, instead of the configs' own")
     parser.add_argument(
         "--phase",
         action="append",
         choices=PHASES,
-        help="a phase to run for every arm, repeatable - both when not given",
+        help="a phase to run for every method, repeatable - both when not given",
     )
     parser.add_argument(
-        "--arm",
+        "--method",
         action="append",
         default=[],
-        help="an arm to run instead of the model's own, repeatable - an arm's config file name",
+        help="a method to run instead of the model's own, repeatable - a method's config file name",
     )
+    # The flag's name before methods were called methods, kept so existing commands still run
+    parser.add_argument("--arm", dest="method", action="append", help=argparse.SUPPRESS)
     parser.add_argument(
         "--gpu",
         choices=GPUS,
         default="h200",
-        help="the card to time on - b300 loads each arm's b300_ config, h200 the arm's own",
+        help="the card to time on - b300 loads each method's b300_ config, h200 the method's own",
     )
     slurm.add_flags(parser)
     parser.add_argument(
         "overrides",
         nargs="*",
-        help="dotted key=value assignments for every arm and phase, applied after the arms' own overrides",
+        help="dotted key=value assignments for every method and phase, applied after the methods' own overrides",
     )
     # Intermixed, so overrides may follow the flags as well as the model
     args = parser.parse_intermixed_args()
 
     require_extra("omegaconf", "hydra")
-    experiments = load_arms(
-        args.model, args.output, tuple(args.phase or PHASES), tuple(args.arm), args.gpu, tuple(args.overrides)
+    experiments = load_methods(
+        args.model,
+        args.output,
+        tuple(args.phase or PHASES),
+        tuple(args.method),
+        args.gpu,
+        tuple(args.overrides),
     )
-    for arm in args.arm or ARMS[args.model]:
+    for method in args.method or METHODS[args.model]:
         print(
-            f"arm {arm}: {[os.path.relpath(file, configs_dir()) for file in arm_files(args.model, arm, args.gpu)]}"
+            f"method {method}: {[os.path.relpath(file, configs_dir()) for file in method_files(args.model, method, args.gpu)]}"
         )
     for experiment in experiments:
         print(
@@ -315,7 +331,7 @@ def main() -> None:
     executor = slurm.executor(
         Launches.SINGLE_JOB, [*env.offline_hf(), *env.eval_data()], args.folder, **parameters
     )
-    job = executor.submit(run_arms, experiments)
+    job = executor.submit(run_methods, experiments)
     print(f"submitted {job.job_id}  {args.model}", flush=True)
 
 

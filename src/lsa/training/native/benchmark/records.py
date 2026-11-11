@@ -3,7 +3,7 @@
     <records>/<checkpoint label>/<preset>/
         config.json          the checkpoint, its step, the attention, the options and what produced the numbers
         results.json         lm-eval's aggregate per task
-        samples/<task>.jsonl one row per example, keyed by its id so two arms pair by example
+        samples/<task>.jsonl one row per example, keyed by its id so two methods pair by example
 
 A sample row keeps what a comparison reads - the metrics, the target and the reply - and leaves out the prompt, which
 for a RULER cell is 16,000 tokens and is rebuilt from the same fixed file. The doc and prompt hashes are kept, so a

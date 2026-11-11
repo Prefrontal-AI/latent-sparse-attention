@@ -36,7 +36,7 @@ from lsa.training.native.schedule import decay_start_step, decay_step_count
 class AttentionConfig:
     """Which attention the full-attention layers run, and the design's knobs when it is multi-resolution.
 
-    `dense` is plain causal attention and `window` a sliding window, the two arms a multi-resolution run is
+    `dense` is plain causal attention and `window` a sliding window, the two methods a multi-resolution run is
     compared against. `multires` reads every closed key exactly once - itself, when its bucket is selected, or
     through its bucket's summary otherwise. `lsa` reads what the flat LSA design serves and nothing else: its sinks,
     window and open block, and the keys of the buckets one selection shared by every head picks, in the index space of
@@ -48,7 +48,7 @@ class AttentionConfig:
     """
 
     kind: str = Kind.MULTIRES
-    # The dense arm's kernel, torchtitan's name for it. The other arms run their own flex read
+    # The dense method's kernel, torchtitan's name for it. The other methods run their own flex read
     backend: str = Backend.FLEX
     # Unselected buckets enter the softmax through their summaries. False reads the selection alone
     coarse: bool = True
@@ -256,7 +256,7 @@ class ModelConfig:
     The flavor is torchtitan's own name for a Qwen3.5 size, or one of the two models at the GPT-2 vocabulary, and the
     model starts from random initialisation - a native run asks what an attention learns, not what it does to a
     checkpoint. The head shape is the flavor's own until a run names one: eight query heads over one key-value head
-    of 128 dims with no rotation is the multi-query shape the sparse arms were compared on. The tokenizer is a model
+    of 128 dims with no rotation is the multi-query shape the sparse methods were compared on. The tokenizer is a model
     [card](../../assets/__init__.py)'s snapshot, because every Qwen3.5 size shares one vocabulary.
     """
 
@@ -266,7 +266,7 @@ class ModelConfig:
     query_head_count: int | None = None
     kv_head_count: int | None = None
     head_dim: int | None = None
-    # Leading head dims the model rotates, 0 for none. The lsa arm's index space is the dims it leaves
+    # Leading head dims the model rotates, 0 for none. The lsa method's index space is the dims it leaves
     rotary_dim: int | None = None
     # The model card whose snapshot holds the tokenizer. None takes the tokenizer the corpus was tokenized with, which
     # a model trained from random initialisation has no other claim to

@@ -6,7 +6,7 @@
     lsa kernels roofline --output DIR --steps "decode select" --graph --batch 1 4 8
 
 The job runs [profile](profile.py) twice - once for the timings with no tool attached, since `ncu` slows every launch,
-then under `ncu` with the full section set and the counters the roofline needs. It then reads the report into `roofline.json` and renders `roofline.html` from it, beside it. Every step runs under each arm of `--kernels` - both by default, so a step reads side by side in `triton` and `cutedsl` on the same inputs.
+then under `ncu` with the full section set and the counters the roofline needs. It then reads the report into `roofline.json` and renders `roofline.html` from it, beside it. Every step runs in each language of `--kernels` - both by default, so a step reads side by side in `triton` and `cutedsl` on the same inputs.
 The run holds one GPU of the site's open partition, which is the one outside its reservation.
 """
 
@@ -94,8 +94,8 @@ def profile_kernels(
         output: The directory that gets the report, the timings and `roofline.json`.
         contexts: Tokens in the request, one profile pass each.
         steps: Step names, or `all`.
-        kernels: The arms to profile each step in.
-        repeats: Timed calls per step and arm.
+        kernels: The languages to profile each step in.
+        repeats: Timed calls per step and language.
         batches: Batches to time a graph replay at, or None for no graph timing.
 
     Returns:
@@ -151,7 +151,7 @@ def main() -> None:
         nargs="+",
         choices=workloads.KERNELS,
         default=list(workloads.KERNELS),
-        help="the arms to profile each step in",
+        help="the languages to profile each step in",
     )
     parser.add_argument("--repeats", type=int, default=20, help="timed calls per step")
     parser.add_argument("--graph", action="store_true", help="also time each step replayed from a CUDA graph")

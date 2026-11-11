@@ -277,7 +277,7 @@ pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid
 
     <section id="versus">
       <h2>CuTeDSL against Triton</h2>
-      <p class="note">One dot pair per step: the filled dot is CuTeDSL, the hollow dot is Triton, on a log time axis. The ratio is Triton over CuTeDSL, so above 1 CuTeDSL is faster. Rows run from the biggest win to the smallest. Kernel replay sums the step's own kernels in the Nsight Compute profile, torch launches left out. Wall time is the step's median from CUDA events in a pass with no profiler attached, torch launches included. The reference GEMM is a cuBLAS call in both arms, so it is a control that should read 1.00x.</p>
+      <p class="note">One dot pair per step: the filled dot is CuTeDSL, the hollow dot is Triton, on a log time axis. The ratio is Triton over CuTeDSL, so above 1 CuTeDSL is faster. Rows run from the biggest win to the smallest. Kernel replay sums the step's own kernels in the Nsight Compute profile, torch launches left out. Wall time is the step's median from CUDA events in a pass with no profiler attached, torch launches included. The reference GEMM is a cuBLAS call in both languages, so it is a control that should read 1.00x.</p>
       <div class="controls" id="vs-controls">
         <div class="lab-group"><span class="lab">Context</span> <select id="vs-context" aria-label="Comparison context"></select></div>
         <fieldset id="vs-mode"><legend>Time</legend>
@@ -293,12 +293,12 @@ pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid
 
     <section id="compare" hidden>
       <h2>Against <span class="cmp-other">the other GPU</span></h2>
-      <p class="note">Each step's median wall time on this GPU beside the same step on <span class="cmp-other">the other GPU</span>, in the same arm, on the same synthetic inputs at the same context. The filled dot is this GPU, the hollow dot the other, on a log time axis. The ratio is the other GPU's time over this one's, so above 1 this GPU is faster. A step whose shapes do not follow the context is compared at the one context it ran at.</p>
+      <p class="note">Each step's median wall time on this GPU beside the same step on <span class="cmp-other">the other GPU</span>, in the same language, on the same synthetic inputs at the same context. The filled dot is this GPU, the hollow dot the other, on a log time axis. The ratio is the other GPU's time over this one's, so above 1 this GPU is faster. A step whose shapes do not follow the context is compared at the one context it ran at.</p>
       <div class="controls" id="cmp-controls">
         <div class="lab-group"><span class="lab">Context</span> <select id="cmp-context" aria-label="Comparison context"></select></div>
-        <fieldset id="cmp-arm"><legend>Arm</legend>
-          <label class="seg"><input type="radio" name="cmparm" value="cutedsl" checked> kernels: cutedsl</label>
-          <label class="seg"><input type="radio" name="cmparm" value="triton"> kernels: triton</label>
+        <fieldset id="cmp-kernels"><legend>Kernels</legend>
+          <label class="seg"><input type="radio" name="cmpkernels" value="cutedsl" checked> kernels: cutedsl</label>
+          <label class="seg"><input type="radio" name="cmpkernels" value="triton"> kernels: triton</label>
         </fieldset>
       </div>
       <p id="cmp-sentence"></p>
@@ -345,7 +345,7 @@ pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid
     <div class="controls" id="controls">
       <div class="lab-group"><span class="lab">Context</span> <select id="f-context" aria-label="Context filter"></select></div>
       <fieldset id="f-stage"><legend>Stage</legend></fieldset>
-      <fieldset id="f-arm"><legend>Triton</legend>
+      <fieldset id="f-kernels"><legend>Triton</legend>
         <label class="chip" for="f-triton"><input type="checkbox" id="f-triton" checked> Show Triton</label>
       </fieldset>
       <fieldset id="f-axis"><legend>Intensity at</legend>
@@ -375,9 +375,9 @@ pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid
 
   <section id="table">
     <h2>All kernel records</h2>
-    <p class="note">Every profiled launch of both arms, including torch and cuBLAS kernels. The Kernels column says which arm a launch belongs to. Select a column header to sort.</p>
-    <div class="controls" id="arm-controls">
-      <div class="lab-group"><span class="lab">Kernels</span> <select id="f-arm-table" aria-label="Arm filter"><option value="all">Both arms</option><option value="cutedsl">cutedsl</option><option value="triton">triton</option></select></div>
+    <p class="note">Every profiled launch of both languages, including torch and cuBLAS kernels. The Kernels column says which language a launch belongs to. Select a column header to sort.</p>
+    <div class="controls" id="kernels-controls">
+      <div class="lab-group"><span class="lab">Kernels</span> <select id="f-kernels-table" aria-label="Kernels filter"><option value="all">Both languages</option><option value="cutedsl">cutedsl</option><option value="triton">triton</option></select></div>
     </div>
     <div class="tablewrap" id="all-table"></div>
   </section>
@@ -386,7 +386,7 @@ pre { margin: 0; padding: 12px 14px; background: var(--panel); border: 1px solid
     <h2>Method</h2>
     <dl class="spec">
       <dt>Profiler</dt><dd>Nsight Compute, <code>--set full</code>, <code>--clock-control none</code> so the GPU runs at its boost clock, cache flushed between passes. Each kernel is one replay, so durations are single samples.</dd>
-      <dt>Arms</dt><dd>Both arms are profiled on identical inputs. The Triton arm goes through the same front doors with <code>kernels="triton"</code>, so a step's inputs, shapes and contexts match, and only the kernels behind the door differ.</dd>
+      <dt>Languages</dt><dd>Both languages are profiled on identical inputs. Triton goes through the same front doors with <code>kernels="triton"</code>, so a step's inputs, shapes and contexts match, and only the kernels behind the door differ.</dd>
       <dt>Inputs</dt><dd>Synthetic, built at the served shapes: a 32,768-query chunk, index dim 64, top-p 1,024, top-k 4,096, window 512, sink 4, buckets of 8 keys, 64 buckets a 512-key page, beam 2,048 of node buckets of 4, 32,768 start nodes.</dd>
       <dt>Counters</dt><dd>FLOPs come from the FP32 instruction counters and the tensor-pipe operation counters. Bytes come from the DRAM, L2 and L1 traffic counters. Intensity is FLOPs over bytes at that level.</dd>
       <dt>Roofs</dt><dd id="roofs-text">H200 specification: 989.4 TFLOP/s bf16 tensor, 494.7 TFLOP/s tf32 tensor, 66.9 TFLOP/s FP32, 4.8 TB/s HBM. Dashed lines are what a copy and a cuBLAS bf16 GEMM measured on this machine.</dd>
@@ -689,8 +689,8 @@ function normKernel(r, index) {
   var sol = r.sol || {}, fl = (r.flops && typeof r.flops === "object") ? r.flops : {}, by = r.bytes || {}, ln = r.launch || {}, dv = r.derived || {}, ins = r.instructions || {};
   var step = r.step || "";
   var k = { index: index, step: step, stage: r.stage || STAGE_OF[step] || "prefill scan", context: num(r.context), name: String(r.kernel || r.name || "") };
-  k.arm = r.kernels === "triton" ? "triton" : "cutedsl";
-  k.cutedsl = typeof r.cutedsl === "boolean" ? r.cutedsl : (r.kind ? r.kind === "cutedsl" : (k.arm === "cutedsl" && /cutlass|cute/i.test(k.name)));
+  k.kernels = r.kernels === "triton" ? "triton" : "cutedsl";
+  k.cutedsl = typeof r.cutedsl === "boolean" ? r.cutedsl : (r.kind ? r.kind === "cutedsl" : (k.kernels === "cutedsl" && /cutlass|cute/i.test(k.name)));
   k.triton = r.kind === "triton";
   k.ns = pick(r.duration_ns, r.duration_us !== undefined && r.duration_us !== null ? r.duration_us * 1e3 : null);
   var total = pick(fl.total, typeof r.flops === "number" ? r.flops : null);
@@ -719,15 +719,15 @@ function normKernel(r, index) {
   k.card = null;
   return k;
 }
-// Both arms, by their index in the JSON
+// Both languages, by their index in the JSON
 var ALLK = (RAW.kernels || []).map(normKernel);
-// Everything below that draws one language reads the CuTeDSL arm
-var KERNELS = ALLK.filter(function (k) { return k.arm === "cutedsl"; });
+// Everything below that draws one language reads the CuTeDSL kernels
+var KERNELS = ALLK.filter(function (k) { return k.kernels === "cutedsl"; });
 var ALLSTEPS = (RAW.steps || []).map(function (s) {
-  return { step: s.step || "", stage: s.stage || STAGE_OF[s.step] || "prefill scan", context: num(s.context), ms: pick(s.median_ms), min: pick(s.min_ms), follows: s.follows_context, arm: s.kernels === "triton" ? "triton" : "cutedsl" };
+  return { step: s.step || "", stage: s.stage || STAGE_OF[s.step] || "prefill scan", context: num(s.context), ms: pick(s.median_ms), min: pick(s.min_ms), follows: s.follows_context, kernels: s.kernels === "triton" ? "triton" : "cutedsl" };
 });
-var STEPS = ALLSTEPS.filter(function (s) { return s.arm === "cutedsl"; });
-var HAS_TRITON = ALLK.some(function (k) { return k.arm === "triton"; });
+var STEPS = ALLSTEPS.filter(function (s) { return s.kernels === "cutedsl"; });
+var HAS_TRITON = ALLK.some(function (k) { return k.kernels === "triton"; });
 
 /* group launches of a step and context, and bind each launch to its card */
 var GROUPS = {};
@@ -779,7 +779,7 @@ var nKernels = CUTE.length ? cuteNames.size : CARDS.length;
 /* ---------- run note ---------- */
 (function runNote() {
   var note = $("#run-note");
-  note.textContent = (machine.commit ? "Measured on main at " + machine.commit : "Measured on one checkout of main") + ", both arms, with the timing pass run without a profiler attached.";
+  note.textContent = (machine.commit ? "Measured on main at " + machine.commit : "Measured on one checkout of main") + ", both languages, with the timing pass run without a profiler attached.";
 })();
 
 /* ---------- header facts ---------- */
@@ -1389,30 +1389,30 @@ function takeaways() {
 }
 drawBars();
 
-/* ---------- the Triton arm ---------- */
-function ownKernel(k, arm) { return arm === "cutedsl" ? k.cutedsl : k.triton; }
-var ARM_GROUPS = { cutedsl: {}, triton: {} };
+/* ---------- the Triton kernels ---------- */
+function ownKernel(k, kernels) { return kernels === "cutedsl" ? k.cutedsl : k.triton; }
+var GROUPS_BY_KERNELS = { cutedsl: {}, triton: {} };
 ALLK.forEach(function (k) {
-  var g = ARM_GROUPS[k.arm], key = k.step + "@" + k.context;
+  var g = GROUPS_BY_KERNELS[k.kernels], key = k.step + "@" + k.context;
   (g[key] = g[key] || []).push(k);
 });
 // A step's kernel replay: its own kernels' time. The reference GEMM is a torch call, so all its launches count
-function replayNs(arm, step, ctx) {
-  var recs = (ARM_GROUPS[arm][step + "@" + ctx] || []).filter(function (k) { return k.ns !== null && (step === "reference gemm" || ownKernel(k, arm)); });
+function replayNs(kernels, step, ctx) {
+  var recs = (GROUPS_BY_KERNELS[kernels][step + "@" + ctx] || []).filter(function (k) { return k.ns !== null && (step === "reference gemm" || ownKernel(k, kernels)); });
   return recs.length ? recs.reduce(function (a, k) { return a + k.ns; }, 0) : null;
 }
-function wallMs(arm, step, ctx) {
-  var hit = ALLSTEPS.filter(function (s) { return s.arm === arm && s.step === step && s.context === ctx && s.ms !== null; })[0];
+function wallMs(kernels, step, ctx) {
+  var hit = ALLSTEPS.filter(function (s) { return s.kernels === kernels && s.step === step && s.context === ctx && s.ms !== null; })[0];
   return hit ? hit.ms : null;
 }
 function stepContexts(step) {
   return CONTEXTS.filter(function (c) { return wallMs("cutedsl", step, c) !== null || replayNs("cutedsl", step, c) !== null; });
 }
-// One point of the Triton arm per step and context: its launches summed
+// One Triton point per step and context: its launches summed
 var TRI_POINTS = (function () {
   var out = [];
-  Object.keys(ARM_GROUPS.triton).forEach(function (key) {
-    var recs = ARM_GROUPS.triton[key].filter(function (k) { return k.triton && k.ns !== null && k.stage !== "anchor"; });
+  Object.keys(GROUPS_BY_KERNELS.triton).forEach(function (key) {
+    var recs = GROUPS_BY_KERNELS.triton[key].filter(function (k) { return k.triton && k.ns !== null && k.stage !== "anchor"; });
     if (!recs.length) return;
     var ns = 0, fl = 0, dram = 0, l2 = 0, pipes = { bf16: 0, tf32: 0, fp8: 0, fp32: 0 }, have = { f: false, d: false, l: false }, w = { sm: 0, mem: 0, dram: 0, l2: 0 };
     recs.forEach(function (k) {
@@ -1459,7 +1459,7 @@ function vsRows() {
 }
 function vsName(r) { return stepName(r.step) + (r.ctx !== vs.context ? " (at " + ctxLabel(r.ctx) + ")" : ""); }
 function vsSentence(rows) {
-  if (!rows.length) return "No step has both arms at " + ctxLabel(vs.context) + ".";
+  if (!rows.length) return "No step has both languages at " + ctxLabel(vs.context) + ".";
   var tie = 0.03, wins = rows.filter(function (r) { return r.ratio >= 1 + tie; }), losses = rows.filter(function (r) { return r.ratio <= 1 - tie; }), ties = rows.filter(function (r) { return Math.abs(r.ratio - 1) < tie; });
   var best = rows[0], by = vs.mode === "replay" ? "kernel replay" : "wall time";
   function fmt(ns) { return fmtUs(ns); }
@@ -1476,7 +1476,7 @@ function drawVersus() {
   var all = rows.concat(ctl ? [ctl] : []);
   var H = m.t + all.length * RH + (ctl ? 16 : 0) + m.b;
   svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-  if (!all.length) return emptyChart(svg, W, 120, "No step has both arms at this context");
+  if (!all.length) return emptyChart(svg, W, 120, "No step has both languages at this context");
   var vals = [];
   all.forEach(function (r) { vals.push(r.cute, r.tri); });
   var lo = Math.pow(10, Math.floor(Math.log10(Math.min.apply(null, vals)))), hi = Math.pow(10, Math.ceil(Math.log10(Math.max.apply(null, vals))));
@@ -1547,28 +1547,28 @@ function drawVersus() {
   var om = OTHER.machine || {}, thisLabel = GPU || "this GPU", otherLabel = gpuLabel(om) || "the other GPU";
   Array.prototype.forEach.call(document.querySelectorAll(".cmp-other"), function (e) { e.textContent = otherLabel; });
   function rowsOf(steps) {
-    return steps.map(function (s) { return { step: s.step || "", context: num(s.context), ms: pick(s.median_ms), arm: s.kernels === "triton" ? "triton" : "cutedsl", follows: s.follows_context }; });
+    return steps.map(function (s) { return { step: s.step || "", context: num(s.context), ms: pick(s.median_ms), kernels: s.kernels === "triton" ? "triton" : "cutedsl", follows: s.follows_context }; });
   }
   var mine = rowsOf(RAW.steps || []), theirs = rowsOf(OTHER.steps);
-  function at(rows, arm, step, ctx) {
-    var hit = rows.filter(function (r) { return r.arm === arm && r.step === step && r.ms !== null && (ctx === null || r.context === ctx); });
+  function at(rows, kernels, step, ctx) {
+    var hit = rows.filter(function (r) { return r.kernels === kernels && r.step === step && r.ms !== null && (ctx === null || r.context === ctx); });
     return hit.length ? hit[hit.length - 1] : null;
   }
   var ctxs = Array.from(new Set(mine.map(function (r) { return r.context; }).filter(function (c) { return c !== null && theirs.some(function (o) { return o.context === c; }); }))).sort(function (a, b) { return a - b; });
-  var cmp = { context: ctxs.length ? ctxs[ctxs.length - 1] : null, arm: "cutedsl" };
+  var cmp = { context: ctxs.length ? ctxs[ctxs.length - 1] : null, kernels: "cutedsl" };
   function cmpRows() {
     var names = Array.from(new Set(mine.map(function (r) { return r.step; })));
     var out = [];
     names.forEach(function (step) {
-      var a = at(mine, cmp.arm, step, cmp.context), b = at(theirs, cmp.arm, step, cmp.context);
+      var a = at(mine, cmp.kernels, step, cmp.context), b = at(theirs, cmp.kernels, step, cmp.context);
       if (!a || !b) {
         // A step whose shapes do not follow the context ran at one context only
         var fixedMine = mine.filter(function (r) { return r.step === step && r.follows === false; }).length;
         if (!fixedMine) return;
-        a = at(mine, cmp.arm, step, null); b = at(theirs, cmp.arm, step, null);
+        a = at(mine, cmp.kernels, step, null); b = at(theirs, cmp.kernels, step, null);
       }
       if (!a || !b || a.ms <= 0) return;
-      var other = cmp.arm === "cutedsl" ? "triton" : "cutedsl";
+      var other = cmp.kernels === "cutedsl" ? "triton" : "cutedsl";
       var ao = at(mine, other, step, a.context), bo = at(theirs, other, step, b.context);
       out.push({ step: step, stage: STAGE_OF[step] || "prefill scan", ctx: a.context, mine: a.ms, theirs: b.ms, ratio: b.ms / a.ms, mineOther: ao ? ao.ms : null, theirsOther: bo ? bo.ms : null });
     });
@@ -1582,7 +1582,7 @@ function drawVersus() {
     var steps = rows.filter(function (r) { return r.step !== "reference gemm"; });
     var faster = steps.filter(function (r) { return r.ratio >= 1.03; }), slower = steps.filter(function (r) { return r.ratio <= 0.97; });
     var geo = steps.length ? Math.exp(steps.reduce(function (s, r) { return s + Math.log(r.ratio); }, 0) / steps.length) : null;
-    var sentence = steps.length ? "At " + ctxLabel(cmp.context) + " under kernels: " + cmp.arm + ", " + thisLabel + " is faster than " + otherLabel + " in " + faster.length + " of " + steps.length + " steps, by " + ratioText(geo) + " in the geometric mean, the most on " + name(steps[0]) + " at " + ratioText(steps[0].ratio) + " (" + sig(steps[0].mine) + " ms against " + sig(steps[0].theirs) + " ms)." : "No step ran on both GPUs at this context.";
+    var sentence = steps.length ? "At " + ctxLabel(cmp.context) + " under kernels: " + cmp.kernels + ", " + thisLabel + " is faster than " + otherLabel + " in " + faster.length + " of " + steps.length + " steps, by " + ratioText(geo) + " in the geometric mean, the most on " + name(steps[0]) + " at " + ratioText(steps[0].ratio) + " (" + sig(steps[0].mine) + " ms against " + sig(steps[0].theirs) + " ms)." : "No step ran on both GPUs at this context.";
     if (slower.length) sentence += " " + otherLabel + " is faster on " + slower.map(function (r) { return name(r) + " (" + ratioText(r.ratio) + ")"; }).join(", ") + ".";
     $("#cmp-sentence").textContent = sentence;
     var RH = 30, W = 960, m = { l: 230, r: 200, t: 34, b: 40 };
@@ -1617,11 +1617,11 @@ function drawVersus() {
       S("text", { x: W - m.r + 64, y: y + 4, "class": "tag", text: Math.abs(r.ratio - 1) < 0.03 ? "tie" : r.ratio > 1 ? thisLabel + " faster" : otherLabel + " faster" }, svg);
       var hit = S("rect", { x: 0, y: y - RH / 2, width: W, height: RH, fill: "transparent", tabindex: "0", "aria-label": name(r) + ": " + thisLabel + " " + sig(r.mine) + " ms, " + otherLabel + " " + sig(r.theirs) + " ms" }, svg);
       attachTip(hit, function () {
-        return [r.step, r.stage, ["context", ctxLabel(r.ctx)], [thisLabel + " " + cmp.arm, sig(r.mine) + " ms"], [otherLabel + " " + cmp.arm, sig(r.theirs) + " ms"], [otherLabel + " / " + thisLabel, ratioText(r.ratio)]];
+        return [r.step, r.stage, ["context", ctxLabel(r.ctx)], [thisLabel + " " + cmp.kernels, sig(r.mine) + " ms"], [otherLabel + " " + cmp.kernels, sig(r.theirs) + " ms"], [otherLabel + " / " + thisLabel, ratioText(r.ratio)]];
       });
     });
-    var other = cmp.arm === "cutedsl" ? "triton" : "cutedsl";
-    tableInto($("#cmp-table"), ["Step", "Context", otherLabel + " " + cmp.arm, thisLabel + " " + cmp.arm, "Ratio", otherLabel + " " + other, thisLabel + " " + other, "Ratio"], rows.map(function (r) {
+    var other = cmp.kernels === "cutedsl" ? "triton" : "cutedsl";
+    tableInto($("#cmp-table"), ["Step", "Context", otherLabel + " " + cmp.kernels, thisLabel + " " + cmp.kernels, "Ratio", otherLabel + " " + other, thisLabel + " " + other, "Ratio"], rows.map(function (r) {
       return [r.step, ctxLabel(r.ctx), sig(r.theirs) + " ms", sig(r.mine) + " ms", ratioText(r.ratio), r.theirsOther === null ? "n/a" : sig(r.theirsOther) + " ms", r.mineOther === null ? "n/a" : sig(r.mineOther) + " ms", r.theirsOther && r.mineOther ? ratioText(r.theirsOther / r.mineOther) : "n/a"];
     }), 2);
   }
@@ -1629,8 +1629,8 @@ function drawVersus() {
   ctxs.forEach(function (c) { sel.appendChild(el("option", { value: String(c) }, [ctxLabel(c)])); });
   if (cmp.context !== null) sel.value = String(cmp.context);
   sel.addEventListener("change", function () { cmp.context = Number(sel.value); draw(); });
-  Array.prototype.forEach.call(document.querySelectorAll("input[name=cmparm]"), function (r) {
-    r.addEventListener("change", function () { if (r.checked) { cmp.arm = r.value; draw(); } });
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=cmpkernels]"), function (r) {
+    r.addEventListener("change", function () { if (r.checked) { cmp.kernels = r.value; draw(); } });
   });
   draw();
 })();
@@ -1696,7 +1696,7 @@ function miniTable(card) {
     });
   }
   table.appendChild(tb); wrap.appendChild(table);
-  if (pairs.some(function (p) { return p; })) wrap.appendChild(el("p", { "class": "note" }, ["The step rows sum every kernel of " + stepNames.map(stepName).join(" and ") + " in each arm, torch launches left out, so they cover more than this card's kernel. Above 1, CuTeDSL is faster."]));
+  if (pairs.some(function (p) { return p; })) wrap.appendChild(el("p", { "class": "note" }, ["The step rows sum every kernel of " + stepNames.map(stepName).join(" and ") + " in each language, torch launches left out, so they cover more than this card's kernel. Above 1, CuTeDSL is faster."]));
   var launches = cols.map(function (ctx) { return cardRecords(card, ctx).length; });
   if (launches.some(function (n) { return n > 1; })) wrap.appendChild(el("p", { "class": "note" }, ["Several launches match this card, so duration, FLOPs and bytes are summed and the percentages are weighted by duration."]));
   return wrap;
@@ -1795,7 +1795,7 @@ STAGES.forEach(function (s) { state.stages[s.id] = true; });
     fs.appendChild(el("label", { "class": "chip", "for": "st-" + i }, [cb, glyph(i, 12), s.label]));
   });
   var tcb = $("#f-triton");
-  if (!HAS_TRITON) { $("#f-arm").style.display = "none"; $("#rf-triton-note").style.display = "none"; }
+  if (!HAS_TRITON) { $("#f-kernels").style.display = "none"; $("#rf-triton-note").style.display = "none"; }
   tcb.addEventListener("change", function () { state.triton = tcb.checked; redraw(); });
   Array.prototype.forEach.call(document.querySelectorAll("input[name=axis]"), function (r) {
     r.addEventListener("change", function () { if (r.checked) { state.axis = r.value; redraw(); } });
@@ -2085,7 +2085,7 @@ function tableInto(host, heads, rows, leftCols) {
 var ALL_COLS = [
   { h: "Stage", v: function (k) { return k.stage; }, s: "text" },
   { h: "Step", v: function (k) { return stepName(k.step); }, s: "text" },
-  { h: "Kernels", v: function (k) { return k.arm; }, s: "text" },
+  { h: "Kernels", v: function (k) { return k.kernels; }, s: "text" },
   { h: "Kernel", v: function (k) { return k.cutedsl ? k.label : k.name.slice(0, 32); }, s: "text" },
   { h: "Context", v: function (k) { return k.context; }, f: ctxTitle, s: "num" },
   { h: "Time us", v: function (k) { return k.ns === null ? null : k.ns / 1e3; }, f: function (k) { return k.ns === null ? "n/a" : sig(k.ns / 1e3); }, s: "num" },
@@ -2102,11 +2102,11 @@ var ALL_COLS = [
   { h: "Smem KB", v: function (k) { return k.smem === null ? null : k.smem / 1024; }, f: function (k) { return k.smem === null ? "n/a" : sig(k.smem / 1024); }, s: "num" },
   { h: "Occupancy %", v: function (k) { return k.occ; }, f: function (k) { return fix(k.occ, 1); }, s: "num" }
 ];
-var sortState = { col: 1, dir: 1 }, armFilter = "all";
+var sortState = { col: 1, dir: 1 }, kernelsFilter = "all";
 function drawAll() {
   var host = $("#all-table"); clear(host);
   if (!ALLK.length) { host.appendChild(el("p", { "class": "empty" }, ["No kernel records in this profile."])); return; }
-  var rows = ALLK.filter(function (k) { return armFilter === "all" || k.arm === armFilter; }).sort(function (a, b) {
+  var rows = ALLK.filter(function (k) { return kernelsFilter === "all" || k.kernels === kernelsFilter; }).sort(function (a, b) {
     var c = ALL_COLS[sortState.col], va = c.v(a), vb = c.v(b);
     if (va === null || va === undefined) return 1;
     if (vb === null || vb === undefined) return -1;
@@ -2139,10 +2139,10 @@ function drawAll() {
 }
 
 function redraw() { drawRoofline(); drawSol(); }
-(function armControl() {
-  var sel = $("#f-arm-table");
-  if (!HAS_TRITON) { $("#arm-controls").style.display = "none"; return; }
-  sel.addEventListener("change", function () { armFilter = sel.value; drawAll(); });
+(function kernelsControl() {
+  var sel = $("#f-kernels-table");
+  if (!HAS_TRITON) { $("#kernels-controls").style.display = "none"; return; }
+  sel.addEventListener("change", function () { kernelsFilter = sel.value; drawAll(); });
 })();
 redraw(); drawTime(); drawAll();
 })();

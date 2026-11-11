@@ -331,25 +331,25 @@ def _masked_attention(
 
 
 class MultiresInnerAttention(FlexInnerAttention):
-    """Qwen3.5's full-attention kernel, swapped for the arm a run names.
+    """Qwen3.5's full-attention kernel, swapped for the method a run names.
 
-    The dense arm is torchtitan's own flex attention. The window and multi-resolution arms read `[T, H, K]`
+    The dense method is torchtitan's own flex attention. The window and multi-resolution methods read `[T, H, K]`
     queries and `[T, H, K]` keys of a batch of whole sequences, regroup them as one stream a sequence and key-value
     head, and put the context back.
     """
 
     @dataclass(kw_only=True, slots=True)
     class Config(FlexInnerAttention.Config):
-        """Settings of the attention: the arm's knobs, tokens per sequence and the head dims rotated."""
+        """Settings of the attention: the method's knobs, tokens per sequence and the head dims rotated."""
 
         attention: AttentionConfig = field(default_factory=AttentionConfig)
         # Tokens per sequence, which splits the packed tokens back into the sequences they were laid end to end
         seq_len: int = 16384
-        # Leading head dims the model rotates, which the lsa arm's index space drops
+        # Leading head dims the model rotates, which the lsa method's index space drops
         rotary_dim: int = 64
 
     def __init__(self, config: Config) -> None:
-        """Keep the arm's knobs and set the read's measurement off."""
+        """Keep the method's knobs and set the read's measurement off."""
         super().__init__(config)
         self.attention = config.attention
         self.seq_len = config.seq_len
@@ -370,16 +370,16 @@ class MultiresInnerAttention(FlexInnerAttention):
         enable_gqa: bool = False,
         **kwargs: Any,
     ) -> torch.Tensor:
-        """Attend causally within each sequence, under the arm this layer was built with.
+        """Attend causally within each sequence, under the method this layer was built with.
 
         Args:
             q_THK: Queries [T, H, K], sequences laid end to end.
             k_THK: Keys [T, Hkv, K].
             v_THV: Values [T, Hkv, V].
-            attention_masks: torchtitan's mask, which the dense arm reads and the others ignore.
+            attention_masks: torchtitan's mask, which the dense method reads and the others ignore.
             scale: The factor logits are scaled by.
             enable_gqa: Whether the heads are grouped.
-            **kwargs: The rest of what the outer attention passes, forwarded to the dense arm.
+            **kwargs: The rest of what the outer attention passes, forwarded to the dense method.
 
         Returns:
             The context [T, H, V].

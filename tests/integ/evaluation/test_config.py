@@ -580,7 +580,7 @@ run:
 """
 
 
-def test_a_pisa_experiment_needs_no_projection_file_and_arms_the_plugin_with_its_own_settings(tmp_path):
+def test_a_pisa_experiment_needs_no_projection_file_and_methods_the_plugin_with_its_own_settings(tmp_path):
     (only,) = load(tmp_path, PISA)
     body = only.model.settings
     assert body["selector"] == "pisa"

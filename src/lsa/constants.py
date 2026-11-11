@@ -72,7 +72,7 @@ class Attention:
     # => never the checkpoint's own kind, GLM's DSA as `block_sparse`
     RECORDED: tuple[str, ...] = (FULL, BLOCK_SPARSE, LSA, PISA)
 
-    # The arms of a natively trained model, which no server ran. `window` is a sliding window with sinks, the name the
+    # The methods of a natively trained model, which no server ran. `window` is a sliding window with sinks, the name the
     # native trainer gives it, and `nsa` is the compressed, selected and windowed design
     NSA: str = "nsa"
     WINDOW: str = "window"

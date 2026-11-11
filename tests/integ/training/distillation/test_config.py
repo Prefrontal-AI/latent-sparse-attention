@@ -4,7 +4,9 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
+import torch
 
+from lsa.training.distillation import checkpoint
 from lsa.training.distillation import config as distillation
 
 MINIMAL = """
@@ -173,7 +175,7 @@ def test_the_full_dense_target_needs_the_key_and_query_input(tmp_path):
     assert run.run.objective.target == "dense_full"
 
 
-def test_the_full_arm_differs_from_the_truncate_arm_in_the_target_alone():
+def test_the_full_method_differs_from_the_truncate_method_in_the_target_alone():
     runs = Path("configs/training/distillation/glm53_flash")
     for seed in range(3):
         (cut,) = distillation.load(runs / f"long_16k_1m_heavy_key_and_query_d2048_truncate_seed{seed}.yaml")
@@ -181,7 +183,7 @@ def test_the_full_arm_differs_from_the_truncate_arm_in_the_target_alone():
         assert (full.run.objective.target, full.run.objective.target_depth) == ("dense_full", None)
         assert (cut.run.objective.target, cut.run.objective.target_depth) == ("dense", 2048)
         assert full.run.name == f"long_16k_1m_heavy_key_and_query_dense_full_seed{seed}"
-        # Every other field of the resolved run is the same, bar the names the two arms report under
+        # Every other field of the resolved run is the same, bar the names the two methods report under
         same = lambda run: {  # noqa: E731
             **asdict(run),
             "run": {
@@ -192,3 +194,63 @@ def test_the_full_arm_differs_from_the_truncate_arm_in_the_target_alone():
             },
         }
         assert same(full) == same(cut)
+
+
+# One offline method, under the key a file names the methods by
+SERVED_METHODS = """  report:
+    served:
+      {key}:
+        - {{name: B1, kind: pisa}}
+"""
+
+
+def test_a_file_that_names_the_methods_arms_still_loads_with_a_warning(tmp_path):
+    """`methods` was `arms` before the rename, and a file written then keeps working"""
+    path = write(tmp_path, MINIMAL + SERVED_METHODS.format(key="arms"))
+    with pytest.warns(
+        FutureWarning, match=r"run\.report\.served\.arms is an old name - set run\.report\.served\.methods"
+    ):
+        (experiment,) = distillation.load(path)
+    assert [method.name for method in experiment.run.report.served.methods] == ["B1"]
+
+
+def test_an_override_that_names_the_methods_arms_still_loads(tmp_path):
+    with pytest.warns(FutureWarning):
+        (experiment,) = distillation.load(
+            write(tmp_path, MINIMAL), ["run.report.served.arms=[{name: B1, kind: pisa}]"]
+        )
+    assert [method.name for method in experiment.run.report.served.methods] == ["B1"]
+
+
+def test_a_file_that_sets_both_arms_and_methods_is_refused(tmp_path):
+    text = MINIMAL + SERVED_METHODS.format(key="methods") + "      arms:\n        - {name: B2, kind: pisa}\n"
+    with pytest.raises(ValueError, match="sets run.report.served.arms and its new name methods"):
+        distillation.load(write(tmp_path, text))
+
+
+def test_a_resume_state_saved_before_the_rename_still_resumes(tmp_path):
+    """A state saved before the rename holds `arms` where the run now holds `methods`"""
+    (experiment,) = distillation.load(write(tmp_path, MINIMAL + SERVED_METHODS.format(key="methods")))
+    saved = asdict(experiment)
+    served = saved["run"]["report"]["served"]
+    served["arms"] = served.pop("methods")
+    path = tmp_path / "resume.pt"
+    torch.save({"run": saved, "shard": None}, path)
+
+    state = checkpoint.read_resume(path, experiment, None)
+
+    assert state is not None
+    assert state["run"] == asdict(experiment)
+
+
+def test_a_resume_state_of_another_configuration_is_still_refused(tmp_path):
+    (experiment,) = distillation.load(write(tmp_path, MINIMAL + SERVED_METHODS.format(key="methods")))
+    saved = asdict(experiment)
+    served = saved["run"]["report"]["served"]
+    served["arms"] = []
+    del served["methods"]
+    path = tmp_path / "resume.pt"
+    torch.save({"run": saved, "shard": None}, path)
+
+    with pytest.raises(ValueError, match="another configuration"):
+        checkpoint.read_resume(path, experiment, None)

@@ -362,13 +362,13 @@ def build_roofline(
     for kernel in kernels:
         label = kernel["label"] or ""
         step, _, rest = label.partition("@")
-        context, _, arm = rest.partition("@")
+        context, _, language = rest.partition("@")
         records.append(
             {
                 "step": step,
                 "stage": stages.get(step),
                 "context": int(context) if context else None,
-                "kernels": arm or None,
+                "kernels": language or None,
                 "kernel": kernel["name"],
                 "kind": classify(kernel["name"]),
                 **derive(kernel["metrics"]),

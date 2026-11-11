@@ -58,12 +58,12 @@ from lsa.sglang.settings.design import (
     DesignSettings,
 )
 from lsa.training import require_extra
-from lsa.training.distillation.arms import ArmSet, expand_arms, read_arms
 from lsa.training.distillation.checkpoint import resolve_layers
 from lsa.training.distillation.constants import Cache, Native, Results, Served
 from lsa.training.distillation.data.cache import Document, layer_path, listing, set_root
 from lsa.training.distillation.data.native import key_and_query, load_attention
 from lsa.training.distillation.data.pool import stream
+from lsa.training.distillation.methods import MethodSet, expand_methods, read_methods
 from lsa.training.distillation.metrics import agreement, exact_read, probe_rows, served_row_metrics
 from lsa.training.distillation.probe_report import length_label, mean, probe_tables
 from lsa.training.distillation.reporting import served_designs, spread
@@ -71,7 +71,7 @@ from lsa.training.distillation.reporting import served_designs, spread
 # The config module reaches omegaconf and hydra, so importing it here would fail before `require_extra` runs
 # => the guard names the extra and the import happens once past it
 if TYPE_CHECKING:
-    from lsa.training.distillation.config import ArmConfig, DistillConfig
+    from lsa.training.distillation.config import DistillConfig, MethodConfig
 
 # What a job asks for when the command line says nothing
 PARAMETERS: dict[str, Any] = {
@@ -97,9 +97,9 @@ METRICS: dict[str, tuple[str, str]] = {
     "target_held": ("share of a probe's long-range target keys read", "{:.3f}"),
     "target_any": ("share of probes with a long-range target that read at least one", "{:.3f}"),
     "line_held": ("share of the needle's sentence read", "{:.3f}"),
-    "agreement": ("share of the served design's long-range keys an arm also reads", "{:.3f}"),
-    "scored_vectors": ("vectors an arm scored a query against", "{:.0f}"),
-    "scored_dots": ("dot products an arm took a query - a vector a query head", "{:.0f}"),
+    "agreement": ("share of the served design's long-range keys a method also reads", "{:.3f}"),
+    "scored_vectors": ("vectors a method scored a query against", "{:.0f}"),
+    "scored_dots": ("dot products a method took a query - a vector a query head", "{:.0f}"),
 }
 
 
@@ -347,31 +347,31 @@ def key_and_query_of(document: Document, rows: torch.Tensor, attention: Any, pro
 
 
 def agreement_with(
-    arm: "ArmConfig",
+    method: "MethodConfig",
     read: torch.Tensor,
     served: dict[str, torch.Tensor],
     document: Document,
     positions: torch.Tensor,
 ) -> torch.Tensor:
-    """Measure how much of the long-range read of the served design an arm names it holds.
+    """Measure how much of the long-range read of the served design a method names it holds.
 
     Args:
-        arm: The arm, which names the design.
-        read: The arm's read [R, W] int32, on the document's device.
+        method: The method, which names the design.
+        read: The method's read [R, W] int32, on the document's device.
         served: The served reads made so far, by design.
         document: The cached document.
         positions: The rows' positions [R] int64.
 
     Returns:
-        The share of the design's long-range keys the arm holds [R] fp32.
+        The share of the design's long-range keys the method holds [R] fp32.
 
     Raises:
         ValueError: The design was not served as one list a row - on a host with no GPU, or a read a rank.
     """
-    other = served.get(arm.agrees_with or "")
+    other = served.get(method.agrees_with or "")
     if other is None or other.ndim != 2:
         raise ValueError(
-            f"arm {arm.name!r} agrees with {arm.agrees_with!r}, which has no served read of one list a row"
+            f"method {method.name!r} agrees with {method.agrees_with!r}, which has no served read of one list a row"
         )
     return agreement(read, other, positions, document.sink_size, document.window_size)
 
@@ -385,7 +385,7 @@ def score_layer(
     most_rows: int,
     attention: Any = None,
     per_row: bool = False,
-    arm_set: ArmSet | None = None,
+    method_set: MethodSet | None = None,
     task: str | None = None,
 ) -> dict[str, Any]:
     """Score every read of one (document, layer) on the same rows, spread over every row it samples.
@@ -454,7 +454,7 @@ def score_layer(
         began = time.monotonic()
         read = read_sampled(settings, index_queries, index_keys, positions.to(torch.int32))
         seconds[name] = time.monotonic() - began
-        # One list a row, the form an arm's agreement reads
+        # One list a row, the form a method's agreement reads
         served[name] = read[:, 0] if read.ndim == 3 and read.shape[1] == 1 else read
         scored(read, name)
     for name, (space, top_k) in budgets.items():
@@ -471,27 +471,27 @@ def score_layer(
         scored(read.view(len(rows), ranks, -1).squeeze(1), name)
     if document.native_key_ids is not None:
         scored(document.native_key_ids[rows], Served.NATIVE)
-    if arm_set is not None and arm_set.arms:
+    if method_set is not None and method_set.methods:
         began = time.monotonic()
-        arm_reads = read_arms(
-            arm_set,
-            {name: indexed[spaces[name]] for name in arm_set.designs},
+        method_reads = read_methods(
+            method_set,
+            {name: indexed[spaces[name]] for name in method_set.designs},
             document,
             rows,
-            lambda: inputs or key_and_query_of(document, rows, attention, "a PISA arm"),
+            lambda: inputs or key_and_query_of(document, rows, attention, "a PISA method"),
             None if attention is None else float(attention.scaling),
         )
-        arm_seconds = (time.monotonic() - began) / len(arm_reads)
-        for variant in expand_arms(arm_set.arms):
-            seconds[variant.name] = arm_seconds
-            arm_read = arm_reads[variant.name]
-            read = arm_read.selected_key_ids.to(document.device)
+        method_seconds = (time.monotonic() - began) / len(method_reads)
+        for variant in expand_methods(method_set.methods):
+            seconds[variant.name] = method_seconds
+            method_read = method_reads[variant.name]
+            read = method_read.selected_key_ids.to(document.device)
             costs = {
-                "scored_vectors": arm_read.scored_vectors.float().to(document.device),
-                "scored_dots": arm_read.scored_dots.float().to(document.device),
+                "scored_vectors": method_read.scored_vectors.float().to(document.device),
+                "scored_dots": method_read.scored_dots.float().to(document.device),
             }
-            if variant.arm.agrees_with is not None:
-                costs["agreement"] = agreement_with(variant.arm, read, served, document, positions)
+            if variant.method.agrees_with is not None:
+                costs["agreement"] = agreement_with(variant.method, read, served, document, positions)
             scored(read, variant.name, costs)
     record: dict[str, Any] = {
         "document": document.name,
@@ -556,8 +556,8 @@ def score(
     designs = served_designs(experiment, device)
     all_designs = experiment.run.report.served.settings(experiment.model.indexer)
     spaces = design_spaces(experiment, all_designs)
-    arm_set = ArmSet(
-        experiment.run.report.served.arms,
+    method_set = MethodSet(
+        experiment.run.report.served.methods,
         all_designs,
         {name: space.projections for name, space in spaces.items()},
     )
@@ -571,7 +571,7 @@ def score(
     # => its attention is never loaded
     attentions = (
         load_attention(experiment.model.name, layers, device)
-        if latent and (any(space.input == KEY_AND_QUERY for space in maps) or needs_attention(arm_set))
+        if latent and (any(space.input == KEY_AND_QUERY for space in maps) or needs_attention(method_set))
         else {}
     )
     todo = [
@@ -598,7 +598,7 @@ def score(
                 experiment.run.report.served.rows,
                 attentions.get(layer),
                 experiment.run.report.served.per_row,
-                arm_set,
+                method_set,
                 entry.get("source"),
             )
             # A prompt holds fewer keys than the length it was cut at
@@ -632,11 +632,13 @@ def model_kind(model: str) -> tuple[bool, bool]:
     return asset.family == Native.LATENT_FAMILY, asset.attention == Attention.BLOCK_SPARSE
 
 
-def needs_attention(arm_set: ArmSet) -> bool:
-    """Return whether an arm reads GLM's attention at the layer's own softmax scale, which the layer's modules give."""
+def needs_attention(method_set: MethodSet) -> bool:
+    """Return whether a method reads GLM's attention at the layer's own softmax scale, which the layer's modules give."""
     return any(
-        arm.kind == Served.ARM_PISA and arm.space == Served.SPACE_ATTENTION and arm.logit_scale is None
-        for arm in arm_set.arms
+        method.kind == Served.METHOD_PISA
+        and method.space == Served.SPACE_ATTENTION
+        and method.logit_scale is None
+        for method in method_set.methods
     )
 
 

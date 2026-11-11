@@ -1,4 +1,4 @@
-"""The tables of a served read over probe prompts - an arm by a task and a length, with the error taken over prompts.
+"""The tables of a served read over probe prompts - a method by a task and a length, with the error taken over prompts.
 
 A probe record keeps each scored row's kind, how many long-range keys it looks for and how far back the nearest is, and
 every read's metrics a row (`lsa distill served-read`).
