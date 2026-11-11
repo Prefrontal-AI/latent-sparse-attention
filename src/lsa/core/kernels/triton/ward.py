@@ -13,12 +13,13 @@ import torch
 import triton
 import triton.language as tl
 
+from lsa.core.kernels.constants import PackedKey, TritonWard
 from lsa.core.kernels.triton.keys import ordered_bits
 
-# The Gram matrix's dot - exact, three tf32 passes that match it, or one
-PRECISION = {"ieee": 0, "tf32x3": 1, "tf32": 2}
-MAX_KEY = tl.constexpr(0x7FFFFFFFFFFFFFFF)
-INDEX_BITS = tl.constexpr(12)
+# A jit body reads a global only as a constexpr, never a class attribute
+# => the values it reads are bound here
+INDEX_BITS: tl.constexpr = tl.constexpr(PackedKey.INDEX_BITS)
+MAX_KEY: tl.constexpr = tl.constexpr(PackedKey.MAX)
 
 
 @triton.jit
@@ -311,7 +312,7 @@ def ward_merge(
         P=pools,
         D=index_dim,
         BLOCK=min(pools, 64),
-        PREC=PRECISION[precision],
+        PREC=TritonWard.PRECISION[precision],
         MAX_ROUNDS=pools,
         JUMPS=max(1, (pools - 1).bit_length()),
         num_warps=4,
@@ -515,7 +516,7 @@ def cluster_node_buckets(
                 buckets,
                 D=index_dim,
                 BLOCK=tile,
-                PREC=PRECISION[precision],
+                PREC=TritonWard.PRECISION[precision],
                 num_warps=4,
             )
             _fix_mutual_kernel[grid](key, order, count, partner, keep, buckets, BLOCK=tile, num_warps=4)

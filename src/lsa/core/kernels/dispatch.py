@@ -36,27 +36,23 @@ from functools import cache
 
 import torch
 
-HOPPER = (9, 0)
-B200 = (10, 0)
-B300 = (10, 3)
-# The GPUs that have `tcgen05` MMA and tensor memory, which a kernel under cutedsl/blackwell needs
-BLACKWELL = frozenset({B200, B300})
+from lsa.core.kernels.constants import Arch
 
 # The GPUs each step's CuTeDSL kernel has been checked on, equal to the Triton kernel
 CUTEDSL: dict[str, frozenset[tuple[int, int]]] = {
-    "threshold estimate": frozenset({HOPPER, B300}),
-    "bucket scan": frozenset({HOPPER, B300}),
-    "candidate scoring": frozenset({HOPPER, B300}),
-    "dense scoring": frozenset({HOPPER, B300}),
-    "expansion by threshold": frozenset({HOPPER, B300}),
-    "expansion in rank order": frozenset({HOPPER, B300}),
-    "beam step": frozenset({HOPPER, B300}),
-    "start-level keep": frozenset({HOPPER, B300}),
-    "top-p pick": frozenset({HOPPER, B300}),
-    "node-bucket clustering": frozenset({HOPPER, B300}),
-    "ward clustering": frozenset({HOPPER, B300}),
-    "decode select": frozenset({HOPPER, B300}),
-    "short-context listing": frozenset({HOPPER, B300}),
+    "threshold estimate": frozenset({Arch.HOPPER, Arch.B300}),
+    "bucket scan": frozenset({Arch.HOPPER, Arch.B300}),
+    "candidate scoring": frozenset({Arch.HOPPER, Arch.B300}),
+    "dense scoring": frozenset({Arch.HOPPER, Arch.B300}),
+    "expansion by threshold": frozenset({Arch.HOPPER, Arch.B300}),
+    "expansion in rank order": frozenset({Arch.HOPPER, Arch.B300}),
+    "beam step": frozenset({Arch.HOPPER, Arch.B300}),
+    "start-level keep": frozenset({Arch.HOPPER, Arch.B300}),
+    "top-p pick": frozenset({Arch.HOPPER, Arch.B300}),
+    "node-bucket clustering": frozenset({Arch.HOPPER, Arch.B300}),
+    "ward clustering": frozenset({Arch.HOPPER, Arch.B300}),
+    "decode select": frozenset({Arch.HOPPER, Arch.B300}),
+    "short-context listing": frozenset({Arch.HOPPER, Arch.B300}),
 }
 
 

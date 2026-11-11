@@ -12,11 +12,9 @@ from types import ModuleType
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.core.kernels.cutedsl.blackwell import node_bucket_clustering as blackwell_clustering
 from lsa.core.kernels.cutedsl.hopper import node_bucket_clustering as hopper_clustering
-
-# Rounds between two looks at what is left, as the Triton pairing looks
-CHECK = hopper_clustering.CHECK
 
 
 def kernel_for(device: torch.device) -> ModuleType:
@@ -25,7 +23,7 @@ def kernel_for(device: torch.device) -> ModuleType:
     Args:
         device: The device the key sums are on.
     """
-    if device.type == "cuda" and dispatch.capability(device) in dispatch.BLACKWELL:
+    if device.type == "cuda" and dispatch.capability(device) in Arch.BLACKWELL:
         return blackwell_clustering
     return hopper_clustering
 

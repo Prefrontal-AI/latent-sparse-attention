@@ -21,12 +21,12 @@ from typing import NamedTuple
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import TritonScanSelect
 from lsa.core.kernels.cutedsl import decode as cutedsl_decode
 from lsa.core.kernels.cutedsl import top_k as cutedsl_top_k
 from lsa.core.kernels.expansion import expand_by_threshold, expand_in_order
 from lsa.core.kernels.scan_select import Listing, ScanSelect
 from lsa.core.kernels.triton.paged import scan_paged
-from lsa.core.kernels.triton.scan_select import SCAN_SELECT_BUCKETS
 from lsa.core.kernels.triton.shape import add_planes_spread, scan_paged_shaped
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.sglang import context_buckets
@@ -317,8 +317,8 @@ class Selector:
         if beam:
             return True
         gathered = self.cache.gathered_buckets
-        return (gathered(group[-1].visible) >= SCAN_SELECT_BUCKETS) == (
-            gathered(run.visible) >= SCAN_SELECT_BUCKETS
+        return (gathered(group[-1].visible) >= TritonScanSelect.SCAN_SELECT_BUCKETS) == (
+            gathered(run.visible) >= TritonScanSelect.SCAN_SELECT_BUCKETS
         )
 
     def read_segment(
@@ -401,7 +401,7 @@ class Selector:
             bucket_centroids = cache.gather(row, visible)
             shapes = cache.gather_shapes(row, visible)
             index_queries = index_queries.to(torch.bfloat16)
-            fused = bucket_centroids.shape[0] >= SCAN_SELECT_BUCKETS
+            fused = bucket_centroids.shape[0] >= TritonScanSelect.SCAN_SELECT_BUCKETS
             if fused:
                 listing = self.scan_select.listed(index_queries, bucket_centroids, visible_counts, shapes)
             else:

@@ -7,6 +7,7 @@ keeps and writes - the greatest by score, a tie to the lower column, in column o
 import pytest
 import torch
 
+from lsa.core.kernels.constants import CuteBeam, CuteSpread
 from lsa.core.kernels.cutedsl import beam as cutedsl_beam
 from lsa.core.kernels.cutedsl import spread
 
@@ -91,13 +92,13 @@ def keep_expected_and_got(scores, candidates, children, keep, lengths, cluster):
     index_queries = torch.zeros(rows, 64, device=DEVICE, dtype=torch.bfloat16)
     centroids = torch.zeros(POOL, 64, device=DEVICE, dtype=torch.bfloat16)
     expected = cutedsl_beam.keep_scored(index_queries, scores, candidates, centroids, children, keep, lengths)
-    got = spread.keep_scored(scores, candidates, children, keep, lengths, spread.SPREAD_THREADS, cluster)
+    got = spread.keep_scored(scores, candidates, children, keep, lengths, CuteSpread.SPREAD_THREADS, cluster)
     return expected, got
 
 
 def pick_expected_and_got(scores, candidates, lengths, top_p, cluster):
     expected = cutedsl_beam.pick_scored(scores, candidates, lengths, top_p)
-    got = spread.pick_scored(scores, candidates, lengths, top_p, spread.SPREAD_THREADS, cluster)
+    got = spread.pick_scored(scores, candidates, lengths, top_p, CuteSpread.SPREAD_THREADS, cluster)
     return expected, got
 
 
@@ -179,7 +180,7 @@ def test_the_spread_pick_names_the_buckets_one_cta_names(cluster, rows, width, t
     assert torch.equal(got[1], expected[1])
 
 
-@pytest.mark.parametrize("rows", [1, spread.FEW_ROWS, spread.FEW_ROWS + 1, 16])
+@pytest.mark.parametrize("rows", [1, CuteSpread.FEW_ROWS, CuteSpread.FEW_ROWS + 1, 16])
 def test_the_layout_the_descent_ships_keeps_and_picks_what_one_cta_does(rows):
     width, keep = 12288, 2048
     layout = spread.layout(rows, width, keep)
@@ -260,7 +261,7 @@ def test_an_empty_batch_keeps_nothing():
 
 
 def test_a_row_whose_slice_does_not_fit_is_refused():
-    width = spread.CLUSTER * cutedsl_beam.SHARED_WORDS
+    width = CuteSpread.CLUSTER * CuteBeam.SHARED_WORDS
     scores = torch.empty(1, width, device=DEVICE)
     candidates = torch.empty(1, width, device=DEVICE, dtype=torch.int32)
     children = torch.zeros(10, NODE_BUCKET_SIZE, device=DEVICE, dtype=torch.int32)
@@ -271,7 +272,10 @@ def test_a_row_whose_slice_does_not_fit_is_refused():
 
 
 def test_a_narrow_row_stays_in_one_cta_and_a_wide_batch_takes_smaller_clusters():
-    assert spread.layout(1, spread.SPREAD_FROM - 1, 2048) is None
-    assert spread.layout(1, 12288, 2048) == (spread.SPREAD_THREADS, spread.CLUSTER)
-    assert spread.layout(spread.FEW_ROWS + 1, 12288, 2048) == (spread.SPREAD_THREADS, spread.CLUSTER // 2)
-    assert spread.layout(1, spread.CLUSTER * cutedsl_beam.SHARED_WORDS, 2048) is None
+    assert spread.layout(1, CuteSpread.SPREAD_FROM - 1, 2048) is None
+    assert spread.layout(1, 12288, 2048) == (CuteSpread.SPREAD_THREADS, CuteSpread.CLUSTER)
+    assert spread.layout(CuteSpread.FEW_ROWS + 1, 12288, 2048) == (
+        CuteSpread.SPREAD_THREADS,
+        CuteSpread.CLUSTER // 2,
+    )
+    assert spread.layout(1, CuteSpread.CLUSTER * CuteBeam.SHARED_WORDS, 2048) is None

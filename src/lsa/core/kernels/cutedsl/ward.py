@@ -9,6 +9,7 @@ from types import ModuleType
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.core.kernels.cutedsl.blackwell import ward as blackwell_ward
 from lsa.core.kernels.cutedsl.hopper import ward as hopper_ward
 
@@ -19,7 +20,7 @@ def kernel_for(device: torch.device) -> ModuleType:
     Args:
         device: The device the pool keys are on.
     """
-    if device.type == "cuda" and dispatch.capability(device) in dispatch.BLACKWELL:
+    if device.type == "cuda" and dispatch.capability(device) in Arch.BLACKWELL:
         return blackwell_ward
     return hopper_ward
 

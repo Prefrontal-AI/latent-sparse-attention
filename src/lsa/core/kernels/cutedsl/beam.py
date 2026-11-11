@@ -37,53 +37,9 @@ import cutlass.utils
 import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
+from lsa.core.kernels.constants import CuteBeam, Index, PackedKey, Radix, ShapedRead
 from lsa.core.kernels.cutedsl import keep as cutedsl_keep
 from lsa.core.kernels.triton.shape import basis_words, sign_query
-
-# Threads of a beam step that scores children, and of every other launch - the more loads in flight, the better, until
-# a scoring level's gathers crowd each other out. A scoring level whose shared memory passes SCORING_SHARED_BYTES
-# falls from four CTAs an SM to three and takes the larger CTA too: over 8,192 children and 3,024 open node buckets it
-# ran 1.77 ms at 256 threads and 1.56 at 512, and 1.52 and 1.55 over 2,524. The pick gains as much and never loses
-SCORING_THREADS = 256
-READING_THREADS = 512
-SCORING_SHARED_BYTES = 49 * 1024
-# A row already scored is only read, and twice the threads halve each one's run of it
-# => 1,024 threads
-SCORED_THREADS = 1024
-MOST_WARPS = SCORED_THREADS // 32
-# Bins of a radix pass, and the bins each lane of the warp that finds a pass's digit holds
-BINS = 256
-BINS_PER_LANE = BINS // 32
-# The ordered word of -inf - a kept column at it keeps no children
-NEG_INF_WORD = 0x007FFFFF
-# The key of no bucket
-EMPTY_KEY = -(2**63)
-# Words of shared memory before the row - the histogram, each warp's two counts and the search's state, to 16 bytes
-STATE_WORDS = 8
-FIXED_WORDS = (BINS + 2 * MOST_WARPS + STATE_WORDS + 3) // 4 * 4
-# Shared memory a CTA may take on Hopper - the fixed words, the row and the kept columns
-SHARED_BYTES = 227 * 1024
-SHARED_WORDS = SHARED_BYTES // 4 - FIXED_WORDS
-# Scores a thread loads before it stores any
-COPY_IN_FLIGHT = 16
-# Words a row samples, at a fixed stride where they lie, the listing it expects above the sample's threshold and the
-# most it holds, in the keep - a row narrower than SAMPLED_FROM times its keep, or than the sample, is searched whole.
-# Every word of room past the row costs occupancy: a pick of 1,024 over 9,232 columns ran 2.05 ms with room for twice
-# its keep and 1.72 with room for 1.5 times
-SAMPLES = 4096
-TARGET = 1.15
-HOLD = 1.5
-SAMPLED_FROM = 8
-# Children a thread gathers before it adds any - enough loads in flight to cover a gather's latency
-IN_FLIGHT = 8
-# Bytes a thread of a child holds, as Triton's layout of the child scores holds them
-THREAD_BYTES = 16
-INDEX_DIM = 64
-# Sign directions a shaped level's kernel takes, and the basis words of one
-SHAPE_RANK = 2
-SHAPE_WORDS = INDEX_DIM // 32
-# Bits of the query levels a sign basis is scored against
-QUERY_BITS = 8
 
 
 class BeamStep:
@@ -109,8 +65,8 @@ class BeamStep:
         self.element_bytes = element_bytes
         self.shaped = shaped
         self.scored = scored
-        self.dims_per_thread = THREAD_BYTES // element_bytes
-        self.lanes = INDEX_DIM // self.dims_per_thread
+        self.dims_per_thread = CuteBeam.THREAD_BYTES // element_bytes
+        self.lanes = Index.DIM // self.dims_per_thread
         # The xor offsets from the widest down
         self.offsets = [self.lanes >> (i + 1) for i in range(self.lanes.bit_length() - 1)]
         self.node_bucket_size = node_bucket_size
@@ -310,21 +266,27 @@ class BeamStep:
 
         # One block of shared memory sized at launch - the fixed words, the row's words, and the room past them
         counts = cute.arch.get_dyn_smem(cutlass.Int32, 16)
-        histogram = cute.make_tensor(counts, cute.make_layout(BINS))
-        warp_above = cute.make_tensor(counts + BINS, cute.make_layout(MOST_WARPS))
-        warp_tied = cute.make_tensor(counts + BINS + MOST_WARPS, cute.make_layout(MOST_WARPS))
-        shared = cute.make_tensor(counts + BINS + 2 * MOST_WARPS, cute.make_layout(STATE_WORDS))
+        histogram = cute.make_tensor(counts, cute.make_layout(Radix.BINS))
+        warp_above = cute.make_tensor(counts + Radix.BINS, cute.make_layout(CuteBeam.MOST_WARPS))
+        warp_tied = cute.make_tensor(
+            counts + Radix.BINS + CuteBeam.MOST_WARPS, cute.make_layout(CuteBeam.MOST_WARPS)
+        )
+        shared = cute.make_tensor(
+            counts + Radix.BINS + 2 * CuteBeam.MOST_WARPS, cute.make_layout(CuteBeam.STATE_WORDS)
+        )
         words = cute.recast_tensor(
-            cute.make_tensor(counts + FIXED_WORDS, cute.make_layout(width)), cutlass.Uint32
+            cute.make_tensor(counts + CuteBeam.FIXED_WORDS, cute.make_layout(width)), cutlass.Uint32
         )
         # Past the row, the listing above the sample's threshold, then the kept columns
         spare_count = cutlass.max(listing_room, kept_words(keep))
         spare = cute.recast_tensor(
-            cute.make_tensor(counts + FIXED_WORDS + width, cute.make_layout(spare_count)), cutlass.Uint32
+            cute.make_tensor(counts + CuteBeam.FIXED_WORDS + width, cute.make_layout(spare_count)),
+            cutlass.Uint32,
         )
         # A column fits 16 bits, and half the room keeps a wide level at five CTAs an SM
         kept = cute.recast_tensor(
-            cute.make_tensor(counts + FIXED_WORDS + width, cute.make_layout(kept_words(keep))), cutlass.Uint16
+            cute.make_tensor(counts + CuteBeam.FIXED_WORDS + width, cute.make_layout(kept_words(keep))),
+            cutlass.Uint16,
         )
 
         self.load_open(open_scores, row, open_count, words)
@@ -339,10 +301,26 @@ class BeamStep:
         want = cutlass.min(width, keep)
         listed = cutlass.Int32(-1)
         # A row narrower than the host sized the room for is searched whole
-        if listing_room != 0 and width >= cutlass.max(SAMPLED_FROM * keep, SAMPLES):
-            sample = cute.make_tensor(words.iterator, cute.make_layout(SAMPLES, stride=width // SAMPLES))
-            rank = cutlass.Int32(cutlass.Float32(want * SAMPLES) * TARGET / cutlass.Float32(width)) + 1
-            self.search(sample, SAMPLES, cutlass.min(rank, SAMPLES), 2, histogram, shared, warp, lane)
+        if listing_room != 0 and width >= cutlass.max(CuteBeam.SAMPLED_FROM * keep, CuteBeam.SAMPLES):
+            sample = cute.make_tensor(
+                words.iterator, cute.make_layout(CuteBeam.SAMPLES, stride=width // CuteBeam.SAMPLES)
+            )
+            rank = (
+                cutlass.Int32(
+                    cutlass.Float32(want * CuteBeam.SAMPLES) * CuteBeam.TARGET / cutlass.Float32(width)
+                )
+                + 1
+            )
+            self.search(
+                sample,
+                CuteBeam.SAMPLES,
+                cutlass.min(rank, CuteBeam.SAMPLES),
+                2,
+                histogram,
+                shared,
+                warp,
+                lane,
+            )
             listed = self.list_above(
                 words, width, cutlass.Uint32(shared[0]), spare, listing_room, shared, lane
             )
@@ -409,14 +387,14 @@ class BeamStep:
             words: The row's words in shared memory.
         """
         thread, _, _ = cute.arch.thread_idx()
-        loaded_scores = cute.make_rmem_tensor(COPY_IN_FLIGHT, cutlass.Float32)
-        for base in range(0, open_count, self.threads * COPY_IN_FLIGHT):
-            for f in cutlass.range_constexpr(COPY_IN_FLIGHT):
+        loaded_scores = cute.make_rmem_tensor(CuteBeam.COPY_IN_FLIGHT, cutlass.Float32)
+        for base in range(0, open_count, self.threads * CuteBeam.COPY_IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.COPY_IN_FLIGHT):
                 i = base + f * self.threads + thread
                 loaded_scores[f] = cutlass.Float32(0)
                 if i < open_count:
                     loaded_scores[f] = open_scores[row, i]
-            for f in cutlass.range_constexpr(COPY_IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.COPY_IN_FLIGHT):
                 i = base + f * self.threads + thread
                 if i < open_count:
                     words[i] = self.word_of(loaded_scores[f])
@@ -456,31 +434,31 @@ class BeamStep:
         for e in cutlass.range_constexpr(self.dims_per_thread):
             query[e] = index_queries[row, member * self.dims_per_thread + e].to(cutlass.Float32)
         loaded = cute.make_rmem_tensor(
-            cute.make_layout((IN_FLIGHT, self.dims_per_thread), stride=(self.dims_per_thread, 1)),
+            cute.make_layout((CuteBeam.IN_FLIGHT, self.dims_per_thread), stride=(self.dims_per_thread, 1)),
             centroids.element_type,
         )
-        kids = cute.make_rmem_tensor(IN_FLIGHT, cutlass.Int32)
+        kids = cute.make_rmem_tensor(CuteBeam.IN_FLIGHT, cutlass.Int32)
         products = cute.make_rmem_tensor(self.dims_per_thread, cutlass.Float32)
         # A shaped child's spread is four lanes', one a direction and basis word, as the shaped scorer splits it
-        query_planes = cute.make_rmem_tensor(QUERY_BITS, cutlass.Int32)
+        query_planes = cute.make_rmem_tensor(ShapedRead.QUERY_BITS, cutlass.Int32)
         if cutlass.const_expr(self.shaped):
             planes = shapes[3]
-            for p in cutlass.range_constexpr(QUERY_BITS):
-                query_planes[p] = planes[row, p * SHAPE_WORDS + member % SHAPE_WORDS]
-        for base in range(0, carried_count, groups * IN_FLIGHT):
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for p in cutlass.range_constexpr(ShapedRead.QUERY_BITS):
+                query_planes[p] = planes[row, p * ShapedRead.WORDS + member % ShapedRead.WORDS]
+        for base in range(0, carried_count, groups * CuteBeam.IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.IN_FLIGHT):
                 j = base + f * groups + group
                 kids[f] = cutlass.Int32(-1)
                 if j < carried_count:
                     kids[f] = carried[row, j]
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.IN_FLIGHT):
                 cute.autovec_copy(
                     cute.local_tile(centroids, (1, self.dims_per_thread), (cutlass.max(kids[f], 0), member))[
                         0, None
                     ],
                     loaded[f, None],
                 )
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for f in cutlass.range_constexpr(CuteBeam.IN_FLIGHT):
                 j = base + f * groups + group
                 total = cutlass.Float32(0)
                 if cutlass.const_expr(self.shaped):
@@ -533,24 +511,24 @@ class BeamStep:
             shapes: The basis, variances and floor, the queries' planes and terms, and z.
         """
         basis, variances, floor, _, query_terms, deviations = shapes
-        word_index = member % SHAPE_WORDS
-        direction = (member // SHAPE_WORDS) % SHAPE_RANK
+        word_index = member % ShapedRead.WORDS
+        direction = (member // ShapedRead.WORDS) % ShapedRead.RANK
         step = query_terms[row, 0]
-        word = basis[node, direction * SHAPE_WORDS + word_index]
-        level = cute.arch.popc(word) * cutlass.Int32(1 - (1 << (QUERY_BITS - 1)))
-        for p in cutlass.range_constexpr(QUERY_BITS):
+        word = basis[node, direction * ShapedRead.WORDS + word_index]
+        level = cute.arch.popc(word) * cutlass.Int32(1 - (1 << (ShapedRead.QUERY_BITS - 1)))
+        for p in cutlass.range_constexpr(ShapedRead.QUERY_BITS):
             level = level + (cute.arch.popc(word & query_planes[p]) << p)
         levels = cutlass.Float32(level)
         chosen = cute.math.fma(step, levels, cute.arch.shuffle_sync_bfly(step * levels, 1))
         projection = cute.math.fma(chosen, cutlass.Float32(2.0), -query_terms[row, 1]) * cute.math.rsqrt(
-            cutlass.Float32(INDEX_DIM), fastmath=True
+            cutlass.Float32(Index.DIM), fastmath=True
         )
         squared = projection * projection
         spread_variance = variances[node, direction]
         along = cute.math.fma(
-            squared, spread_variance, cute.arch.shuffle_sync_bfly(squared * spread_variance, SHAPE_WORDS)
+            squared, spread_variance, cute.arch.shuffle_sync_bfly(squared * spread_variance, ShapedRead.WORDS)
         )
-        kept = cute.math.fma(projection, projection, cute.arch.shuffle_sync_bfly(squared, SHAPE_WORDS))
+        kept = cute.math.fma(projection, projection, cute.arch.shuffle_sync_bfly(squared, ShapedRead.WORDS))
         variance = cute.math.fma(cutlass.Float32(1.0) - kept, floor[node], along)
         spread = cute.math.sqrt(cutlass.max(variance, cutlass.Float32(0.0)), fastmath=True)
         if cutlass.const_expr(self.element_bytes == 1):
@@ -602,7 +580,7 @@ class BeamStep:
             shared[1] = rank
         for p in cutlass.range_constexpr(passes):
             shift = 24 - 8 * p
-            histogram[thread % BINS] = cutlass.Int32(0)
+            histogram[thread % Radix.BINS] = cutlass.Int32(0)
             self.barrier.arrive_and_wait()
             prefix = cutlass.Uint32(shared[0])
             high = cutlass.Uint32(0)
@@ -693,8 +671,8 @@ class BeamStep:
         remaining = shared[1]
         # Lane l holds the bins 8l to 8l + 7 counted from the top
         lane_total = cutlass.Int32(0)
-        for b in cutlass.range_constexpr(BINS_PER_LANE):
-            lane_total = lane_total + histogram[BINS - 1 - (lane * BINS_PER_LANE + b)]
+        for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+            lane_total = lane_total + histogram[Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)]
         before = lane_total
         for i in cutlass.range_constexpr(5):
             # A shuffle up clamps at lane 0, which cutlass-dsl 4.6.2 does not default to
@@ -706,8 +684,8 @@ class BeamStep:
             above = before
             digit = cutlass.Int32(0)
             found = cutlass.Int32(0)
-            for b in cutlass.range_constexpr(BINS_PER_LANE):
-                bin_index = BINS - 1 - (lane * BINS_PER_LANE + b)
+            for b in cutlass.range_constexpr(Radix.BINS_PER_LANE):
+                bin_index = Radix.BINS - 1 - (lane * Radix.BINS_PER_LANE + b)
                 count = histogram[bin_index]
                 if found == 0 and above + count >= remaining:
                     digit = bin_index
@@ -744,7 +722,7 @@ class BeamStep:
         for slot in range(thread, want, self.threads):
             column = cutlass.Int32(kept[slot])
             node = cutlass.Int32(-1)
-            if cutlass.Uint32(words[column]) > cutlass.Uint32(NEG_INF_WORD):
+            if cutlass.Uint32(words[column]) > cutlass.Uint32(CuteBeam.NEG_INF_WORD):
                 node = carried[row, column]
             # The loads are all in flight before the first store
             for c in cutlass.range_constexpr(self.node_bucket_size):
@@ -780,7 +758,7 @@ class BeamStep:
             closed_children: The closed node buckets' children.
             out: The kept node buckets' children.
         """
-        valid = word > cutlass.Uint32(NEG_INF_WORD)
+        valid = word > cutlass.Uint32(CuteBeam.NEG_INF_WORD)
         node = cutlass.Int32(-1)
         if cutlass.const_expr(self.scored):
             node = carried[row, column]
@@ -909,7 +887,7 @@ class TopPPick(BeamStep):
         for slot in range(thread, keep, self.threads):
             column = cutlass.Int32(kept[slot])
             word = cutlass.Uint32(words[column])
-            valid = word > cutlass.Uint32(NEG_INF_WORD)
+            valid = word > cutlass.Uint32(CuteBeam.NEG_INF_WORD)
             cache_row = cutlass.Int32(-1)
             if column < open_count:
                 logical = covered_buckets + column
@@ -919,7 +897,7 @@ class TopPPick(BeamStep):
             else:
                 cache_row = carried[row, column - open_count]
                 valid = valid and cache_row >= 0
-            key = cutlass.Int64(EMPTY_KEY)
+            key = cutlass.Int64(PackedKey.EMPTY)
             if valid:
                 ordered = cutlass.Int32(word ^ cutlass.Uint32(0x80000000))
                 key = (cutlass.Int64(ordered) << 32) | cutlass.Int64(0x7FFFFFFF - cache_row)
@@ -1008,12 +986,12 @@ class ScoredPick(BeamStep):
         )
         want = cutlass.min(count, keep)
         for slot in range(thread, keep, self.threads):
-            key = cutlass.Int64(EMPTY_KEY)
+            key = cutlass.Int64(PackedKey.EMPTY)
             if slot < want:
                 column = cutlass.Int32(kept[slot])
                 word = cutlass.Uint32(words[column])
                 cache_row = candidates[row, column]
-                if word > cutlass.Uint32(NEG_INF_WORD) and cache_row >= 0:
+                if word > cutlass.Uint32(CuteBeam.NEG_INF_WORD) and cache_row >= 0:
                     ordered = cutlass.Int32(word ^ cutlass.Uint32(0x80000000))
                     key = (cutlass.Int64(ordered) << 32) | cutlass.Int64(0x7FFFFFFF - cache_row)
             out[row, slot] = key
@@ -1034,9 +1012,9 @@ def room(width: int, keep: int) -> tuple[int, int]:
         width: Columns a query scores.
         keep: Columns a query keeps.
     """
-    if width < max(SAMPLED_FROM * keep, SAMPLES):
+    if width < max(CuteBeam.SAMPLED_FROM * keep, CuteBeam.SAMPLES):
         return 0, kept_words(keep)
-    listing_room = math.ceil(HOLD * keep)
+    listing_room = math.ceil(CuteBeam.HOLD * keep)
     return listing_room, max(listing_room, kept_words(keep))
 
 
@@ -1048,7 +1026,11 @@ def threads_for(carried_count: int, shared_bytes: int) -> int:
         carried_count: Rows a query scores.
         shared_bytes: Shared memory a CTA takes.
     """
-    return SCORING_THREADS if carried_count and shared_bytes <= SCORING_SHARED_BYTES else READING_THREADS
+    return (
+        CuteBeam.SCORING_THREADS
+        if carried_count and shared_bytes <= CuteBeam.SCORING_SHARED_BYTES
+        else CuteBeam.READING_THREADS
+    )
 
 
 def kept_words(keep: int) -> int:
@@ -1082,9 +1064,10 @@ def supports(
         shape_rank: Directions of the closed node buckets' shapes, or None when they are unshaped.
     """
     return (
-        shape_rank in (None, SHAPE_RANK)
-        and open_count + carried.shape[1] + room(open_count + carried.shape[1], keep)[1] <= SHARED_WORDS
-        and index_queries.shape[1] == INDEX_DIM
+        shape_rank in (None, ShapedRead.RANK)
+        and open_count + carried.shape[1] + room(open_count + carried.shape[1], keep)[1]
+        <= CuteBeam.SHARED_WORDS
+        and index_queries.shape[1] == Index.DIM
         and index_queries.dtype == torch.bfloat16
         and centroids.dtype in (torch.float8_e4m3fn, torch.bfloat16)
         and centroids.is_contiguous()
@@ -1116,14 +1099,14 @@ def compiled(
     )
     centroid_type = cutlass.Float8E4M3FN if element_bytes == 1 else cutlass.BFloat16
     arguments = (
-        make_fake_tensor(cutlass.BFloat16, (rows, INDEX_DIM), stride=(query_stride, 1), assumed_align=16),
+        make_fake_tensor(cutlass.BFloat16, (rows, Index.DIM), stride=(query_stride, 1), assumed_align=16),
         make_fake_tensor(cutlass.Float32, (rows, open_count), stride=(score_stride, 1), assumed_align=4),
         make_fake_tensor(
             cutlass.Int32, (open_rows, node_bucket_size), stride=(open_stride, 1), assumed_align=4
         ),
         make_fake_tensor(cutlass.Int32, (rows, carried_count), stride=(carried_stride, 1), assumed_align=4),
         make_fake_compact_tensor(
-            centroid_type, (centroid_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            centroid_type, (centroid_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         ),
         make_fake_tensor(
             cutlass.Int32, (closed_count, node_bucket_size), stride=(closed_stride, 1), assumed_align=4
@@ -1135,10 +1118,14 @@ def compiled(
         cutlass.Int32(1),
         cutlass.Int32(1),
         cutlass.Float32(1.0),
-        make_fake_compact_tensor(cutlass.Int32, (shape_count, SHAPE_RANK * SHAPE_WORDS), stride_order=(1, 0)),
-        make_fake_compact_tensor(cutlass.Float32, (shape_count, SHAPE_RANK), stride_order=(1, 0)),
+        make_fake_compact_tensor(
+            cutlass.Int32, (shape_count, ShapedRead.RANK * ShapedRead.WORDS), stride_order=(1, 0)
+        ),
+        make_fake_compact_tensor(cutlass.Float32, (shape_count, ShapedRead.RANK), stride_order=(1, 0)),
         make_fake_compact_tensor(cutlass.Float32, (shape_count,)),
-        make_fake_compact_tensor(cutlass.Int32, (rows, QUERY_BITS * SHAPE_WORDS), stride_order=(1, 0)),
+        make_fake_compact_tensor(
+            cutlass.Int32, (rows, ShapedRead.QUERY_BITS * ShapedRead.WORDS), stride_order=(1, 0)
+        ),
         make_fake_compact_tensor(cutlass.Float32, (rows, 2), stride_order=(1, 0)),
         cutlass.Float32(1.0),
         cutlass.Int32(1),
@@ -1190,7 +1177,7 @@ def beam_step(
     if not supports(index_queries, centroids, carried, open_count, keep, shape_rank):
         raise ValueError(
             "the CuTeDSL beam step takes bf16 index queries of 64 dims over contiguous fp8 or bf16 centroids, shapes "
-            f"of {SHAPE_RANK} directions, and a row and its kept within {SHARED_WORDS} words - got "
+            f"of {ShapedRead.RANK} directions, and a row and its kept within {CuteBeam.SHARED_WORDS} words - got "
             f"{index_queries.dtype} {tuple(index_queries.shape)}, {centroids.dtype} {tuple(centroids.shape)}, shapes "
             f"of {shape_rank} directions and {open_count} + {carried.shape[1]} columns"
         )
@@ -1205,7 +1192,7 @@ def beam_step(
         # Nothing reads them, but CuTe wants a tensor
         open_scores = torch.empty(rows, 1, device=index_queries.device)
         open_children = torch.empty(1, node_bucket_size, device=index_queries.device, dtype=torch.int32)
-    threads = threads_for(carried.shape[1], (FIXED_WORDS + width + spare) * 4)
+    threads = threads_for(carried.shape[1], (CuteBeam.FIXED_WORDS + width + spare) * 4)
     basis, variances, floor, planes, query_terms, deviations = shape_arguments(index_queries, shapes)
     compiled(centroids.element_size(), node_bucket_size, threads, shapes is not None)(
         index_queries.contiguous(),
@@ -1227,7 +1214,7 @@ def beam_step(
         planes,
         query_terms,
         deviations,
-        (FIXED_WORDS + width + spare) * 4,
+        (CuteBeam.FIXED_WORDS + width + spare) * 4,
     )
     return out
 
@@ -1264,7 +1251,7 @@ def keep_scored(
     if not supports(index_queries, centroids, candidates, 0, keep) or scores.stride(1) != 1:
         raise ValueError(
             "the CuTeDSL scored keep takes bf16 index queries of 64 dims over contiguous fp8 or bf16 centroids and a "
-            f"row and its kept within {SHARED_WORDS} words - got {index_queries.dtype} {tuple(index_queries.shape)}, "
+            f"row and its kept within {CuteBeam.SHARED_WORDS} words - got {index_queries.dtype} {tuple(index_queries.shape)}, "
             f"{centroids.dtype} {tuple(centroids.shape)} and {candidates.shape[1]} columns"
         )
     rows, width = scores.shape
@@ -1274,8 +1261,8 @@ def keep_scored(
     if rows == 0:
         return out
     basis, variances, floor, planes, query_terms, deviations = shape_arguments(index_queries, None)
-    shared_bytes = (FIXED_WORDS + width + spare) * 4
-    compiled(centroids.element_size(), node_bucket_size, SCORED_THREADS, False, True)(
+    shared_bytes = (CuteBeam.FIXED_WORDS + width + spare) * 4
+    compiled(centroids.element_size(), node_bucket_size, CuteBeam.SCORED_THREADS, False, True)(
         index_queries.contiguous(),
         scores,
         closed_children[:0],
@@ -1321,7 +1308,7 @@ def compiled_scored_pick() -> Any:
         make_fake_stream(use_tvm_ffi_env_stream=True),
     )
     COMPILED_SCORED_PICKS[0] = cute.compile(
-        ScoredPick(1, SCORED_THREADS), *arguments, options="--enable-tvm-ffi"
+        ScoredPick(1, CuteBeam.SCORED_THREADS), *arguments, options="--enable-tvm-ffi"
     )
     return COMPILED_SCORED_PICKS[0]
 
@@ -1336,7 +1323,7 @@ def supports_scored_pick(width: int, top_p: int) -> bool:
     Returns:
         Whether the pick takes the rows.
     """
-    return width + room(width, min(top_p, width))[1] <= SHARED_WORDS
+    return width + room(width, min(top_p, width))[1] <= CuteBeam.SHARED_WORDS
 
 
 def pick_scored(
@@ -1362,7 +1349,7 @@ def pick_scored(
     keep = min(top_p, width)
     if not supports_scored_pick(width, top_p) or scores.stride(1) != 1 or candidates.stride(1) != 1:
         raise ValueError(
-            f"the CuTeDSL scored pick takes a row and its kept within {SHARED_WORDS} words of contiguous columns - "
+            f"the CuTeDSL scored pick takes a row and its kept within {CuteBeam.SHARED_WORDS} words of contiguous columns - "
             f"got {width} columns of strides {scores.stride(1)} and {candidates.stride(1)} and a top-p of {top_p}"
         )
     out = torch.empty(rows, keep, device=scores.device, dtype=torch.int64)
@@ -1371,7 +1358,7 @@ def pick_scored(
         return out, listed.fill_(keep)
     listing_room, spare = room(width, keep)
     compiled_scored_pick()(
-        scores, candidates, lengths, out, listed, listing_room, (FIXED_WORDS + width + spare) * 4
+        scores, candidates, lengths, out, listed, listing_room, (CuteBeam.FIXED_WORDS + width + spare) * 4
     )
     return out, listed
 
@@ -1393,26 +1380,26 @@ def shape_arguments(
     if shapes is None:
         # Nothing reads them, and a fill of each would be five launches a level in a graph
         return (
-            torch.empty(1, SHAPE_RANK * SHAPE_WORDS, device=device, dtype=torch.int32),
-            torch.empty(1, SHAPE_RANK, device=device),
+            torch.empty(1, ShapedRead.RANK * ShapedRead.WORDS, device=device, dtype=torch.int32),
+            torch.empty(1, ShapedRead.RANK, device=device),
             torch.empty(1, device=device),
-            torch.empty(rows, QUERY_BITS * SHAPE_WORDS, device=device, dtype=torch.int32),
+            torch.empty(rows, ShapedRead.QUERY_BITS * ShapedRead.WORDS, device=device, dtype=torch.int32),
             torch.empty(rows, 2, device=device),
             0.0,
         )
     basis, variances, floor, deviations = shapes
     planes = sign_query(index_queries)
     words = (
-        basis_words(basis).view(-1, SHAPE_RANK * SHAPE_WORDS)
+        basis_words(basis).view(-1, ShapedRead.RANK * ShapedRead.WORDS)
         if basis.numel()
-        else torch.zeros(1, SHAPE_RANK * SHAPE_WORDS, device=device, dtype=torch.int32)
+        else torch.zeros(1, ShapedRead.RANK * ShapedRead.WORDS, device=device, dtype=torch.int32)
     )
     query_terms = torch.stack([planes.steps[:, 0], planes.totals], dim=1)
     return (
         words,
         variances.contiguous(),
         floor.contiguous(),
-        planes.planes.view(rows, QUERY_BITS * SHAPE_WORDS),
+        planes.planes.view(rows, ShapedRead.QUERY_BITS * ShapedRead.WORDS),
         query_terms,
         deviations,
     )
@@ -1427,9 +1414,9 @@ def supports_keep(index_queries: torch.Tensor, width: int, keep: int) -> bool:
         keep: Columns a query keeps.
     """
     return (
-        index_queries.shape[1] == INDEX_DIM
+        index_queries.shape[1] == Index.DIM
         and index_queries.dtype == torch.bfloat16
-        and width + room(width, keep)[1] <= SHARED_WORDS
+        and width + room(width, keep)[1] <= CuteBeam.SHARED_WORDS
     )
 
 
@@ -1452,12 +1439,12 @@ def keep_start_level(
     """
     # A row this wide stages too much for a second CTA on an SM
     # => it is listed first, and only its listing is searched
-    staged_bytes = 4 * (FIXED_WORDS + scores.shape[1] + room(scores.shape[1], keep)[1])
-    if 2 * staged_bytes > SHARED_BYTES and cutedsl_keep.supports(scores, children, keep):
+    staged_bytes = 4 * (CuteBeam.FIXED_WORDS + scores.shape[1] + room(scores.shape[1], keep)[1])
+    if 2 * staged_bytes > CuteBeam.SHARED_BYTES and cutedsl_keep.supports(scores, children, keep):
         return cutedsl_keep.keep_start_level_listed(scores, children, keep)
     carried = torch.empty(len(index_queries), 0, device=index_queries.device, dtype=torch.int32)
     # No carried row names one, but CuTe wants a tensor
-    centroids = torch.zeros(1, INDEX_DIM, device=index_queries.device, dtype=torch.bfloat16)
+    centroids = torch.zeros(1, Index.DIM, device=index_queries.device, dtype=torch.bfloat16)
     return beam_step(index_queries, scores, children, carried, centroids, children, keep, 1.0)
 
 
@@ -1475,11 +1462,11 @@ def compiled_pick(element_bytes: int, threads: int) -> Any:
     query_stride, score_stride, carried_stride, out_stride = (cute.sym_int64() for _ in range(4))
     centroid_type = cutlass.Float8E4M3FN if element_bytes == 1 else cutlass.BFloat16
     arguments = (
-        make_fake_tensor(cutlass.BFloat16, (rows, INDEX_DIM), stride=(query_stride, 1), assumed_align=16),
+        make_fake_tensor(cutlass.BFloat16, (rows, Index.DIM), stride=(query_stride, 1), assumed_align=16),
         make_fake_tensor(cutlass.Float32, (rows, open_count), stride=(score_stride, 1), assumed_align=4),
         make_fake_tensor(cutlass.Int32, (rows, carried_count), stride=(carried_stride, 1), assumed_align=4),
         make_fake_compact_tensor(
-            centroid_type, (centroid_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            centroid_type, (centroid_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         ),
         make_fake_compact_tensor(cutlass.Int32, (page_count,), assumed_align=4),
         make_fake_tensor(cutlass.Int64, (rows, width), stride=(out_stride, 1), assumed_align=8),
@@ -1534,7 +1521,7 @@ def pick_top_p(
     if not supports(index_queries, centroids, carried, open_count, keep):
         raise ValueError(
             "the CuTeDSL pick takes bf16 index queries of 64 dims over contiguous fp8 or bf16 centroids, and a row "
-            f"and its kept within {SHARED_WORDS} words - got {index_queries.dtype} {tuple(index_queries.shape)}, "
+            f"and its kept within {CuteBeam.SHARED_WORDS} words - got {index_queries.dtype} {tuple(index_queries.shape)}, "
             f"{centroids.dtype} {tuple(centroids.shape)} and {open_count} + {carried.shape[1]} columns"
         )
     out = torch.empty(rows, keep, device=index_queries.device, dtype=torch.int64)
@@ -1544,7 +1531,7 @@ def pick_top_p(
         # Nothing reads them, but CuTe wants a tensor
         open_scores = torch.empty(rows, 1, device=index_queries.device)
     listing_room, spare = room(width, keep)
-    compiled_pick(centroids.element_size(), READING_THREADS)(
+    compiled_pick(centroids.element_size(), CuteBeam.READING_THREADS)(
         index_queries.contiguous(),
         open_scores,
         carried,
@@ -1555,6 +1542,6 @@ def pick_top_p(
         covered_buckets,
         page_rows,
         listing_room,
-        (FIXED_WORDS + width + spare) * 4,
+        (CuteBeam.FIXED_WORDS + width + spare) * 4,
     )
     return out

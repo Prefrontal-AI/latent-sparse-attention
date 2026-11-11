@@ -12,11 +12,11 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from lsa.core.kernels.constants import TritonScanSelect
 from lsa.evaluation.performance.kernels.measure import decode
 from lsa.evaluation.performance.kernels.measure.score_check import lsa_score_oracle
 from lsa.evaluation.performance.kernels.measure.selection import LSASelectionCheck, selection_rows
 from lsa.evaluation.performance.kernels.measure.snapshot import IndexState
-from lsa.sglang.index import selector as selector_module
 from lsa.sglang.index.selector import Selector
 from lsa.sglang.settings.design import PAGE_SIZE, DesignSettings
 
@@ -133,7 +133,7 @@ def test_a_flat_rerun_from_the_snapshot_chooses_the_prepared_selection_and_leave
 
 
 def test_a_fused_rerun_is_held_to_the_exact_top_p_of_the_listing_s_scores(monkeypatch):
-    monkeypatch.setattr(selector_module, "SCAN_SELECT_BUCKETS", 0)
+    monkeypatch.setattr(TritonScanSelect, "SCAN_SELECT_BUCKETS", 0)
     layer = Layer(FLAT, 2 * PAGE_SIZE + CHUNK, seed=4)
     prepared, rerun, check, after, (first, second) = cycle(layer, 2 * PAGE_SIZE)
 
@@ -150,7 +150,7 @@ def test_a_fused_rerun_is_held_to_the_exact_top_p_of_the_listing_s_scores(monkey
 def test_a_chunk_wider_than_a_page_is_read_in_segments_and_held_whole(monkeypatch, fused):
     """A read holds at most a page of rows, so a chunk wider than a page reads in segments, one listing each"""
     if fused:
-        monkeypatch.setattr(selector_module, "SCAN_SELECT_BUCKETS", 0)
+        monkeypatch.setattr(TritonScanSelect, "SCAN_SELECT_BUCKETS", 0)
     start, length = 2 * PAGE_SIZE, PAGE_SIZE + CHUNK
     layer = Layer(FLAT, start + length, seed=6, chunk=length)
     # Sampled rows on both sides of the segments' border, numbered over the chunk
@@ -179,7 +179,7 @@ def test_a_flat_read_is_scored_independently():
 
 
 def test_a_fused_read_is_scored_independently(monkeypatch):
-    monkeypatch.setattr(selector_module, "SCAN_SELECT_BUCKETS", 0)
+    monkeypatch.setattr(TritonScanSelect, "SCAN_SELECT_BUCKETS", 0)
     layer = Layer(FLAT, 2 * PAGE_SIZE + CHUNK, seed=5)
     layer.catch_up(2 * PAGE_SIZE)
     result = {}
@@ -190,7 +190,7 @@ def test_a_fused_read_is_scored_independently(monkeypatch):
 
 
 def test_a_shaped_fused_rerun_is_held_to_the_exact_top_p_of_its_shaped_scores(monkeypatch):
-    monkeypatch.setattr(selector_module, "SCAN_SELECT_BUCKETS", 0)
+    monkeypatch.setattr(TritonScanSelect, "SCAN_SELECT_BUCKETS", 0)
     layer = Layer(SHAPED_FLAT, 2 * PAGE_SIZE + CHUNK, seed=4)
     prepared, rerun, check, after, (first, second) = cycle(layer, 2 * PAGE_SIZE)
 

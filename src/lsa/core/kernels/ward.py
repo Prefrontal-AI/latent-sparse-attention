@@ -11,6 +11,7 @@ import logging
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import HopperClustering
 from lsa.core.kernels.cutedsl import node_bucket_clustering as cutedsl_node_bucket_clustering
 from lsa.core.kernels.cutedsl import ward as cutedsl_ward
 from lsa.core.kernels.triton import ward as triton_ward
@@ -102,7 +103,7 @@ def cluster_node_buckets(
     triton_ward.check_buckets(key_sums)
     if (
         dispatch.runs_cutedsl("node-bucket clustering", kernels, key_sums.device)
-        and rounds_a_check == cutedsl_node_bucket_clustering.CHECK
+        and rounds_a_check == HopperClustering.CHECK
         and cutedsl_node_bucket_clustering.supports(key_sums, precision)
     ):
         return triton_ward.number_pairs(cutedsl_node_bucket_clustering.cluster_node_buckets(key_sums))

@@ -193,7 +193,7 @@ The cluster algorithm is Ward, the only one a design takes, so it has no key eit
 | beam width - node buckets a query keeps at level $\ell \ge 1$ | $p_\ell$ | `beam_width` | `model.indexer.beam_width` |
 | start level - the lowest level holding at most $n_{start}$ node buckets, where the beam begins | $n_{start}$ | `start_nodes` | `model.indexer.start_nodes` |
 | node centroid precision - `bf16` or `fp8` | - | `node_centroid_precision` | `model.serving.node_centroid_precision` |
-| the scale an fp8 node centroid is stored with | - | `NODE_CENTROID_SCALE` | - |
+| the scale an fp8 node centroid is stored with | - | `TritonBeam.NODE_CENTROID_SCALE` | - |
 | the hierarchy a cache holds | - | `Hierarchy` | - |
 | the pooled device copy of every request row's node buckets, which a captured decode step reads | - | `GraphTree` | - |
 | node bucket page - node buckets a pooled page of the graph tree holds | - | `NODE_BUCKET_PAGE` | - |

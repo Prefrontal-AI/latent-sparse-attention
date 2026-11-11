@@ -9,8 +9,8 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import scan_select
+from lsa.core.kernels.constants import TritonScanSelect
 from lsa.core.kernels.cutedsl import thresholds as cutedsl_thresholds
-from lsa.core.kernels.triton import scan_select as triton_scan_select
 
 pytestmark = pytest.mark.gpu
 
@@ -22,8 +22,8 @@ def unit_rows(count, generator, index_dim=64):
 
 
 def stride_and_rank(top_p):
-    stride = max(1, round(triton_scan_select.TARGET * top_p / triton_scan_select.SAMPLE_RANK))
-    return stride, max(1, round(triton_scan_select.TARGET * top_p / stride))
+    stride = max(1, round(TritonScanSelect.TARGET * top_p / TritonScanSelect.SAMPLE_RANK))
+    return stride, max(1, round(TritonScanSelect.TARGET * top_p / stride))
 
 
 def assert_same_thresholds(rows, buckets, top_p, seed):

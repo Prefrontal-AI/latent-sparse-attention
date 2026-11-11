@@ -24,14 +24,8 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from lsa.core.kernels.constants import ShapedRead
 from lsa.core.shape import leading_directions, pack_shape_basis
-
-# Bits of the query levels a packed basis is scored against
-QUERY_BITS = 8
-# Key positions a shape build reads at a time - a chunk of buckets' members gathered at once
-SHAPE_KEYS = 1 << 17
-# A plane gap's widening, past the fp32 rounding of the planes' levels and of the gap itself
-GAP_SLACK = 1 + 2**-8
 
 
 class SignQuery(NamedTuple):
@@ -117,12 +111,12 @@ def plane_gaps(index_queries: torch.Tensor) -> torch.Tensor:
         Gaps [S] fp32, a hair wide.
     """
     count, index_dim = index_queries.shape
-    chunk = min(128, index_dim)
+    chunk = min(ShapedRead.DIM_CHUNK, index_dim)
     queries = index_queries.float().view(count, index_dim // chunk, chunk)
-    top_level = (1 << (QUERY_BITS - 1)) - 1
+    top_level = (1 << (ShapedRead.QUERY_BITS - 1)) - 1
     steps = queries.abs().amax(-1, keepdim=True).clamp_min(1e-30) / top_level
     rounded = torch.round(queries / steps) * steps
-    return (rounded - queries).flatten(1).norm(dim=1) * GAP_SLACK + 1e-6
+    return (rounded - queries).flatten(1).norm(dim=1) * ShapedRead.GAP_SLACK + 1e-6
 
 
 def sign_query(index_queries: torch.Tensor) -> SignQuery:
@@ -135,14 +129,20 @@ def sign_query(index_queries: torch.Tensor) -> SignQuery:
         The queries' planes, steps and totals.
     """
     count, index_dim = index_queries.shape
-    chunk = min(128, index_dim)
+    chunk = min(ShapedRead.DIM_CHUNK, index_dim)
     device = index_queries.device
-    planes = torch.empty(count, QUERY_BITS, index_dim // 32, device=device, dtype=torch.int32)
+    planes = torch.empty(count, ShapedRead.QUERY_BITS, index_dim // 32, device=device, dtype=torch.int32)
     steps = torch.empty(count, index_dim // chunk, device=device, dtype=torch.float32)
     totals = torch.empty(count, device=device, dtype=torch.float32)
     if count:
         _sign_query_kernel[(count,)](
-            index_queries.contiguous(), planes, steps, totals, D=index_dim, DKC=chunk, PLANES=QUERY_BITS
+            index_queries.contiguous(),
+            planes,
+            steps,
+            totals,
+            D=index_dim,
+            DKC=chunk,
+            PLANES=ShapedRead.QUERY_BITS,
         )
     return SignQuery(planes, steps, totals)
 
@@ -313,7 +313,7 @@ def score_shaped_rows(
     if out is None:
         out = torch.empty(count, columns, device=index_queries.device, dtype=torch.float32)
     rank = variances.shape[1]
-    block = 32
+    block = ShapedRead.SCORE_BLOCK
     if count and columns:
         _score_rows_kernel[(count, triton.cdiv(columns, block))](
             index_queries,
@@ -331,12 +331,12 @@ def score_shaped_rows(
             rows.stride(0),
             out.stride(0),
             D=d,
-            DKC=min(128, d),
+            DKC=min(ShapedRead.DIM_CHUNK, d),
             COLUMNS=columns,
             BLOCK=block,
             RHO=rank,
             RHOP=triton.next_power_of_2(max(rank, 1)),
-            PLANES=QUERY_BITS,
+            PLANES=ShapedRead.QUERY_BITS,
             num_warps=4,
         )
     return out
@@ -425,7 +425,7 @@ def add_planes_spread(
     d = index_queries.shape[1]
     planes = query_planes or sign_query(index_queries)
     rank = shapes.variances.shape[1]
-    block = 64
+    block = ShapedRead.SPREAD_BLOCK
     if count and buckets:
         _add_planes_spread_kernel[(count, triton.cdiv(buckets, block))](
             scores,
@@ -439,11 +439,11 @@ def add_planes_spread(
             buckets,
             scores.stride(0),
             D=d,
-            DKC=min(128, d),
+            DKC=min(ShapedRead.DIM_CHUNK, d),
             BLOCK=block,
             RHO=rank,
             RHOP=triton.next_power_of_2(max(rank, 1)),
-            PLANES=QUERY_BITS,
+            PLANES=ShapedRead.QUERY_BITS,
             num_warps=4,
         )
     return scores
@@ -685,7 +685,7 @@ def scan_paged_shaped(
     planes = sign_query(index_queries)
     rank = shapes.variances.shape[1]
     out = torch.empty(batch_size, max_rows, device=index_queries.device, dtype=torch.float32)
-    rows = 64
+    rows = ShapedRead.PAGED_ROWS
     _scan_paged_shaped_kernel[(triton.cdiv(max_rows, rows), batch_size)](
         index_queries,
         bucket_centroids,
@@ -704,12 +704,12 @@ def scan_paged_shaped(
         out.stride(0),
         PAGE_SIZE=page_size,
         D=d,
-        DK=min(128, d),
-        DKC=min(128, d),
+        DK=min(ShapedRead.DIM_CHUNK, d),
+        DKC=min(ShapedRead.DIM_CHUNK, d),
         ROWS=rows,
         RHO=rank,
         RHOP=triton.next_power_of_2(max(rank, 1)),
-        PLANES=QUERY_BITS,
+        PLANES=ShapedRead.QUERY_BITS,
         num_warps=8,
         num_stages=2,
     )
@@ -818,7 +818,7 @@ def build_shapes(
     """
     count, slots = members.shape
     index_dim = centroids.shape[1]
-    chunk = max(1, SHAPE_KEYS // max(slots, 1))
+    chunk = max(1, ShapedRead.KEYS // max(slots, 1))
     bases, variances, floors = [], [], []
     for first in range(0, count, chunk):
         part = members[first : first + chunk]

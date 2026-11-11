@@ -4,8 +4,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from lsa.core.kernels.constants import PackedKey, TritonBeam
 from lsa.core.kernels.triton.beam import (
-    NODE_CENTROID_SCALE,
     bucket_keys,
     cache_row_keys,
     children_of,
@@ -16,7 +16,7 @@ from lsa.core.kernels.triton.beam import (
     pick_scores,
     score_children,
 )
-from lsa.core.kernels.triton.keys import EMPTY, pack_keys, unpack_ids, unpack_scores
+from lsa.core.kernels.triton.keys import pack_keys, unpack_ids, unpack_scores
 
 pytestmark = pytest.mark.gpu
 
@@ -142,14 +142,16 @@ def test_children_past_a_lengths_end_are_left_unscored():
 def test_fp8_children_score_as_the_rows_they_stand_for():
     torch.manual_seed(0)
     index_queries = F.normalize(torch.randn(37, 64, device=DEVICE), dim=-1).to(torch.bfloat16)
-    rounded = (F.normalize(torch.randn(4096, 64, device=DEVICE), dim=-1) * NODE_CENTROID_SCALE).to(
+    rounded = (F.normalize(torch.randn(4096, 64, device=DEVICE), dim=-1) * TritonBeam.NODE_CENTROID_SCALE).to(
         torch.float8_e4m3fn
     )
     children = torch.randint(0, 4096, (37, 1200), device=DEVICE, dtype=torch.int32)
     children[:, ::9] = -1
-    scores = score_children(index_queries, rounded, children, centroid_scale=NODE_CENTROID_SCALE)
+    scores = score_children(index_queries, rounded, children, centroid_scale=TritonBeam.NODE_CENTROID_SCALE)
     # What the bf16 rows they round to score, a sixteenth of the way
-    want = score_children(index_queries, rounded.to(torch.bfloat16) / NODE_CENTROID_SCALE, children)
+    want = score_children(
+        index_queries, rounded.to(torch.bfloat16) / TritonBeam.NODE_CENTROID_SCALE, children
+    )
     torch.testing.assert_close(scores, want, rtol=0, atol=1e-6)
 
 
@@ -253,7 +255,7 @@ def test_listed_columns_become_the_cache_rows_they_stand_for_with_their_scores_k
     candidates = torch.randint(-1, 500, (5, 40), device=DEVICE, generator=generator).int()
     columns = torch.randint(0, 40, (5, 12), device=DEVICE, generator=generator).int()
     keys = pack_keys(scores.gather(1, columns.long()), columns)
-    keys[:, 9:] = EMPTY
+    keys[:, 9:] = PackedKey.EMPTY
     listed = torch.tensor([12, 3, 0, 9, 11], device=DEVICE, dtype=torch.int32)
     got = cache_row_keys(keys, listed, candidates)
     for query in range(5):
@@ -263,7 +265,7 @@ def test_listed_columns_become_the_cache_rows_they_stand_for_with_their_scores_k
             score = scores[query, column].item()
             held = slot < int(listed[query]) and slot < 9 and score > -torch.inf and row >= 0
             if not held:
-                assert got[query, slot].item() == EMPTY
+                assert got[query, slot].item() == PackedKey.EMPTY
                 continue
             assert unpack_scores(got[query, slot]).item() == score
             assert 0x7FFFFFFF - (int(got[query, slot]) & 0xFFFFFFFF) == row

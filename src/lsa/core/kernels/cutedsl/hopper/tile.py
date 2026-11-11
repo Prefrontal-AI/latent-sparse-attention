@@ -16,15 +16,7 @@ from cutlass.cute.nvgpu import warpgroup
 from cutlass.cute.nvgpu.warpgroup.mma import MmaF16BF16Trait, MmaOp
 from cutlass.cutlass_dsl import T, dsl_user_op
 
-# Buckets a tile holds, and a warpgroup's threads
-TILE = 64
-THREADS = 128
-WARPS = THREADS // 32
-# Index dims the kernels take
-INDEX_DIM = 64
-# The cost key's low bits name the column, as the Triton key does
-INDEX_BITS = 12
-MAX_KEY = 0x7FFFFFFFFFFFFFFF
+from lsa.core.kernels.constants import HopperTileSize, Index, PackedKey
 
 
 def accumulator_rows_by_columns(accumulator: cute.Tensor) -> cute.Tensor:
@@ -149,7 +141,7 @@ def pack_cost_key(ordered: Any, column: Any) -> Any:
         ordered: The cost's ordered bits.
         column: The partner's place among the open buckets.
     """
-    return ((cutlass.Int64(ordered) + cutlass.Int64(1 << 31)) << INDEX_BITS) | cutlass.Int64(column)
+    return ((cutlass.Int64(ordered) + cutlass.Int64(1 << 31)) << PackedKey.INDEX_BITS) | cutlass.Int64(column)
 
 
 class HopperTile:
@@ -196,7 +188,9 @@ class HopperTile:
 
     def make_tile_mma(self) -> cute.TiledMma:
         """Return the MMA a tile of dots is taken on - Hopper's warpgroup tf32 MMA."""
-        return cute.make_tiled_mma(cute.make_mma_atom(MmaTF32Op((TILE, TILE))), (1, 1, 1))
+        return cute.make_tiled_mma(
+            cute.make_mma_atom(MmaTF32Op((HopperTileSize.TILE, HopperTileSize.TILE))), (1, 1, 1)
+        )
 
     def tile_views(
         self,
@@ -235,8 +229,12 @@ class HopperTile:
                 )
             )
         )
-        accumulator = cute.make_rmem_tensor(mma_slice.partition_shape_C((TILE, TILE)), cutlass.Float32)
-        coords = accumulator_rows_by_columns(mma_slice.partition_C(cute.make_identity_tensor((TILE, TILE))))
+        accumulator = cute.make_rmem_tensor(
+            mma_slice.partition_shape_C((HopperTileSize.TILE, HopperTileSize.TILE)), cutlass.Float32
+        )
+        coords = accumulator_rows_by_columns(
+            mma_slice.partition_C(cute.make_identity_tensor((HopperTileSize.TILE, HopperTileSize.TILE)))
+        )
         return tCrA, tCrB, accumulator, coords
 
     def release_tiles(self) -> None:
@@ -271,7 +269,7 @@ class HopperTile:
         if place < count:
             bucket = order[order_base + base + place]
         cute.autovec_copy(
-            cute.local_tile(key_sums[base + bucket, None], (INDEX_DIM // 2,), (thread % 2,)), staged
+            cute.local_tile(key_sums[base + bucket, None], (Index.DIM // 2,), (thread % 2,)), staged
         )
 
     @cute.jit
@@ -284,8 +282,8 @@ class HopperTile:
         """
         thread, _, _ = cute.arch.thread_idx()
         row = thread // 2
-        first_dim = (thread % 2) * (INDEX_DIM // 2)
-        for d in cutlass.range_constexpr(INDEX_DIM // 2):
+        first_dim = (thread % 2) * (Index.DIM // 2)
+        for d in cutlass.range_constexpr(Index.DIM // 2):
             rounded = round_tf32(staged[d])
             splits[row, first_dim + d, 0] = rounded
             splits[row, first_dim + d, 1] = staged[d] - rounded
@@ -377,7 +375,7 @@ class HopperTile:
         cute.arch.barrier()
         before = inclusive - value
         total = cutlass.Int32(0)
-        for w in cutlass.range_constexpr(WARPS):
+        for w in cutlass.range_constexpr(HopperTileSize.WARPS):
             if w < warp:
                 before = before + warp_totals[w]
             total = total + warp_totals[w]
