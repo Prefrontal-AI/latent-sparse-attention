@@ -23,7 +23,7 @@ from typing import Any
 from lsa import assets, io
 from lsa.data import manifests
 from lsa.data.tokenizer import load_tokenizer, tokenizer_checkpoint, tokenizer_repo
-from lsa.evaluation.accuracy.data import DATA_ROOT, longbench_card, longbench_path
+from lsa.evaluation.accuracy.data import default_data_root, longbench_card, longbench_path
 
 # What the preparing job asks for - one tokenizer over 503 documents, no GPU
 PARAMETERS: dict[str, Any] = {"gpus_per_node": 0, "cpus_per_task": 8, "mem_gb": 64, "timeout_min": 4 * 60}
@@ -92,18 +92,19 @@ def prepare(doc: dict[str, Any], tokenizer: Any, max_context_tokens: int) -> dic
 
 
 def prepare_longbench(
-    max_context: int, root: str = DATA_ROOT, tok: Any = None, tokenizer_name: str | None = None
+    max_context: int, root: str | None = None, tok: Any = None, tokenizer_name: str | None = None
 ) -> None:
     """Prepare every LongBench v2 row at one context limit and write its file and manifest entry.
 
     Args:
         max_context: The limit a prompt is truncated to, in tokens.
-        root: The data root.
+        root: The data root, or None for the default data root.
         tok: A loaded tokenizer, or None to load the one named.
         tokenizer_name: The tokenizer to count in, or None for the one the card names.
     """
     import datasets
 
+    root = root or default_data_root()
     card = longbench_card()
     tok = tok or tokenizer(tokenizer_name)
     tokenizer_name = tokenizer_name or tokenizer_repo(card)
@@ -134,7 +135,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: The command's parser.
     """
-    parser.add_argument("--root", default=DATA_ROOT)
+    parser.add_argument("--root", default=default_data_root())
     parser.add_argument(
         "--tokenizer", default=None, help="the tokenizer to count in - GLM-5.3-Flash's when unset"
     )

@@ -28,6 +28,7 @@ and its record says so.
 import argparse
 import os
 import traceback
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from lsa import env, slurm
@@ -46,8 +47,6 @@ ARMS: dict[str, tuple[str, ...]] = {
 
 # The cards an arm can be timed on, as `gpu.TOKENS` names them - the first is the default, the H200 files
 GPUS: tuple[str, ...] = ("h200", "b300")
-
-CONFIGS = checkout_root() / "configs" / "evaluation" / "kernels"
 
 CHUNK = 32768
 
@@ -84,6 +83,11 @@ PER_PHASE_ARMS: dict[str, dict[str, dict[str, str]]] = {
 DESIGN_ARMS: tuple[str, ...] = ("lsa_flat", "lsa_tree", "lsa_flat_early_budget")
 
 
+def configs_dir() -> Path:
+    """Return the arms' config directory in the checkout this process runs from."""
+    return checkout_root() / "configs" / "evaluation" / "kernels"
+
+
 def arm_files(model: str, arm: str, card: str = "h200") -> list[str]:
     """Return the config files one arm is loaded from.
 
@@ -99,12 +103,13 @@ def arm_files(model: str, arm: str, card: str = "h200") -> list[str]:
         ValueError: The card has no file for the arm.
     """
     if card == "h200":
-        return [str(CONFIGS / model / f"{arm}.yaml")]
+        return [str(configs_dir() / model / f"{arm}.yaml")]
     if arm in PER_PHASE_ARMS[model]:
         names = list(PER_PHASE_ARMS[model][arm].values())
     else:
         names = [f"b300_{arm}"]
-    files = [CONFIGS / model / f"{name}.yaml" for name in names]
+    configs = configs_dir()
+    files = [configs / model / f"{name}.yaml" for name in names]
     if missing := [file.name for file in files if not file.exists()]:
         raise ValueError(f"no {card} config for the arm {arm!r} of {model!r} - missing {', '.join(missing)}")
     return [str(file) for file in files]
@@ -272,7 +277,7 @@ def main() -> None:
     )
     for arm in args.arm or ARMS[args.model]:
         print(
-            f"arm {arm}: {[os.path.relpath(file, CONFIGS) for file in arm_files(args.model, arm, args.gpu)]}"
+            f"arm {arm}: {[os.path.relpath(file, configs_dir()) for file in arm_files(args.model, arm, args.gpu)]}"
         )
     for experiment in experiments:
         print(

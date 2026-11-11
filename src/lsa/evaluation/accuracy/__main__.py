@@ -15,7 +15,7 @@ from typing import Any
 
 from lsa import io
 from lsa.evaluation.accuracy import records, regrade, runner, worker
-from lsa.evaluation.accuracy.data import DATA_ROOT, hashes, suites
+from lsa.evaluation.accuracy.data import default_data_root, hashes, suites
 from lsa.evaluation.constants import Attention, Evaluation
 
 
@@ -59,7 +59,7 @@ def main() -> None:
     parser.add_argument(
         "--out", default=records.records_dir(Evaluation.ACCURACY), help="where run directories land"
     )
-    parser.add_argument("--data-root", default=DATA_ROOT)
+    parser.add_argument("--data-root", default=default_data_root())
     parser.add_argument(
         "--max-context",
         type=int,

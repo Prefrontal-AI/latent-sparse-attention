@@ -167,7 +167,7 @@ def test_b300_loads_each_arms_b300_file_in_chunks_of_32k(model):
     assert {e.data.chunk for e in experiments} == {32768}
     assert all(e.run.image == site.load()["images"]["b300"] for e in experiments)
     assert all(
-        isolated.arm_files(model, arm, "b300") == [str(isolated.CONFIGS / model / f"b300_{arm}.yaml")]
+        isolated.arm_files(model, arm, "b300") == [str(isolated.configs_dir() / model / f"b300_{arm}.yaml")]
         for arm in isolated.ARMS[model]
     )
 

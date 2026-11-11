@@ -42,7 +42,7 @@ from typing import Any
 from lsa import assets, io
 from lsa.data import manifests
 from lsa.data.tokenizer import tokenizer_repo
-from lsa.evaluation.accuracy.data import DATA_ROOT, load_manifest, ruler_card, ruler_path
+from lsa.evaluation.accuracy.data import default_data_root, load_manifest, ruler_card, ruler_path
 
 # What the generating job asks for when no flag says otherwise - 64 CPUs and 512G of one node for twelve hours, and no GPU
 # The full grid to 10M is what this is sized for, and a short one asks for less: 16 CPUs, 64 GB and 2 hours generated
@@ -59,22 +59,44 @@ PARAMETERS: dict[str, Any] = {
 PATCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ruler.patch")
 
 
+def ruler_nvidia() -> str:
+    """Return the generators' clone, `RULER_NVIDIA` or else beside the corpus they made.
+
+    The commit the clone is pinned to and the seed every cell is generated with are the card's.
+    An installed clone is never repaired in place, so the default clone is named by the patch it carries - a
+    changed patch installs anew.
+    """
+    if "RULER_NVIDIA" in os.environ:
+        return os.environ["RULER_NVIDIA"]
+    return os.path.join(default_data_root(), f"ruler-nvidia-{(io.file_sha256(PATCH) or '')[:8]}")
+
+
+def nltk_data() -> str:
+    """Return the sentence tokenizer's resource root, `NLTK_DATA` or else beside the corpus.
+
+    Read when asked and never written to the process environment, so a caller that needs it exported passes it on.
+    """
+    if "NLTK_DATA" in os.environ:
+        return os.environ["NLTK_DATA"]
+    return os.path.join(default_data_root(), "nltk_data")
+
+
+def generators() -> str:
+    """Return the directory of their data generators inside the clone."""
+    return os.path.join(ruler_nvidia(), "scripts", "data")
+
+
+def dependencies_dir() -> str:
+    """Return where their scripts' own dependencies are kept, inside the clone at the versions that made the files."""
+    return os.path.join(ruler_nvidia(), ".deps")
+
+
 def patched_files(patch: str) -> list[str]:
     """Return the paths a patch edits, as `git diff` names them."""
     with open(patch) as source:
         return [line[len("+++ b/") :].strip() for line in source if line.startswith("+++ b/")]
 
 
-# The generators' clone and the sentence tokenizer they load, beside the corpus they made. The commit the
-# clone is pinned to and the seed every cell is generated with are the card's. An installed clone is never
-# repaired in place, so the default clone is named by the patch it carries - a changed patch installs anew
-RULER_NVIDIA = os.environ.get(
-    "RULER_NVIDIA", os.path.join(DATA_ROOT, f"ruler-nvidia-{(io.file_sha256(PATCH) or '')[:8]}")
-)
-NLTK_DATA = os.environ.setdefault("NLTK_DATA", os.path.join(DATA_ROOT, "nltk_data"))
-GENERATORS = os.path.join(RULER_NVIDIA, "scripts", "data")
-# What their scripts import beyond this environment - kept inside the clone, at the versions that made the files
-DEPS = os.path.join(RULER_NVIDIA, ".deps")
 DEPENDENCIES = ("tenacity==9.1.4",)
 
 # The haystack sources, as the pinned clone holds them.
@@ -129,10 +151,10 @@ def task_config(ruler_task: str) -> dict:
     """Return their settings for one task - the yaml entry, then the defaults of the generator it names."""
     import yaml
 
-    with open(os.path.join(RULER_NVIDIA, "scripts", "synthetic.yaml")) as source:
+    with open(os.path.join(ruler_nvidia(), "scripts", "synthetic.yaml")) as source:
         customized = yaml.safe_load(source)
     config = dict(customized[YAML_NAME.get(ruler_task, ruler_task)])
-    constants = load_module(os.path.join(GENERATORS, "synthetic", "constants.py"), "ruler_constants")
+    constants = load_module(os.path.join(generators(), "synthetic", "constants.py"), "ruler_constants")
     config.update(constants.TASKS[config["task"]])
     return config
 
@@ -153,7 +175,7 @@ def task_command(
     config = task_config(ruler_task)
     command = [
         sys.executable,
-        os.path.join(GENERATORS, "synthetic", f"{config['task']}.py"),
+        os.path.join(generators(), "synthetic", f"{config['task']}.py"),
         "--save_dir",
         str(save_dir),
         "--save_name",
@@ -265,7 +287,8 @@ def generate_ruler(
             check=True,
             env=dict(
                 os.environ,
-                PYTHONPATH=DEPS,
+                PYTHONPATH=dependencies_dir(),
+                NLTK_DATA=nltk_data(),
                 TOKENIZERS_PARALLELISM="true",
                 RAYON_NUM_THREADS=str(threads or len(os.sched_getaffinity(0))),
             ),
@@ -282,7 +305,7 @@ def generate_ruler(
 def generator_commit() -> str:
     """Return the commit the clone is at."""
     return subprocess.run(
-        ["git", "-C", RULER_NVIDIA, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ["git", "-C", ruler_nvidia(), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
     ).stdout.strip()
 
 
@@ -338,7 +361,7 @@ def prepare_ruler(
     tasks: list[str],
     lengths: list[int],
     samples: int | dict[int, int],
-    root: str = DATA_ROOT,
+    root: str | None = None,
     tokenizer_name: str | None = None,
     force: bool = False,
     jobs: int = 1,
@@ -357,6 +380,7 @@ def prepare_ruler(
         fetch_first: Verify or install the pinned generators and sources first, as `ensure` does - for a job that
             runs where the command was not typed.
     """
+    root = root or default_data_root()
     if fetch_first:
         ensure()
     tokenizer_name = tokenizer_name or tokenizer_repo(ruler_card())
@@ -386,7 +410,7 @@ def prepare_ruler(
 
 
 def check(
-    tasks: list[str], lengths: list[int], root: str = DATA_ROOT, growth: float = 1.5, log: Callable = print
+    tasks: list[str], lengths: list[int], root: str | None = None, growth: float = 1.5, log: Callable = print
 ) -> list[str]:
     """Print one line per cell - rows, how close the prompts come to the length, what was dropped.
 
@@ -398,6 +422,7 @@ def check(
     Returns:
         The manifest keys of the cells that are missing, overshoot, or stopped growing.
     """
+    root = root or default_data_root()
     manifest = load_manifest(root)
     bad = []
     log(
@@ -510,7 +535,7 @@ def verify_nltk(directory: str | None = None) -> None:
         "tokenizers/punkt_tab/english/abbrev_types.txt",
         "tokenizers/punkt_tab/english/ortho_context.tab",
     ):
-        nltk.data.find(resource, paths=[NLTK_DATA if directory is None else directory])
+        nltk.data.find(resource, paths=[nltk_data() if directory is None else directory])
 
 
 def install(directory: str) -> None:
@@ -564,10 +589,11 @@ def publish(source: str, destination: str) -> None:
 
 def ensure_nltk() -> None:
     """Reuse verified tokenizers or publish a verified installation at an absent resource root."""
-    if os.path.lexists(NLTK_DATA):
+    root = nltk_data()
+    if os.path.lexists(root):
         verify_nltk()
         return
-    parent = os.path.dirname(os.path.abspath(NLTK_DATA))
+    parent = os.path.dirname(os.path.abspath(root))
     os.makedirs(parent, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".lsa-nltk-", dir=parent) as staging:
         resources = os.path.join(staging, "resources")
@@ -576,7 +602,7 @@ def ensure_nltk() -> None:
             check=True,
         )
         verify_nltk(resources)
-        publish(resources, NLTK_DATA)
+        publish(resources, root)
     verify_nltk()
 
 
@@ -588,27 +614,28 @@ def ensure() -> None:
     Raises:
         ValueError: Existing prerequisites are incomplete or differ from the declared inputs.
     """
+    clone = ruler_nvidia()
     try:
-        if os.path.lexists(RULER_NVIDIA):
-            verify(RULER_NVIDIA)
+        if os.path.lexists(clone):
+            verify(clone)
             ensure_nltk()
-            print(f"{RULER_NVIDIA}: pinned generators and sources verified", flush=True)
+            print(f"{clone}: pinned generators and sources verified", flush=True)
             return
-        parent = os.path.dirname(os.path.abspath(RULER_NVIDIA))
+        parent = os.path.dirname(os.path.abspath(clone))
         os.makedirs(parent, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix=".lsa-ruler-", dir=parent) as staging:
             checkout = os.path.join(staging, "checkout")
             install(checkout)
             verify(checkout)
             ensure_nltk()
-            publish(checkout, RULER_NVIDIA)
-            verify(RULER_NVIDIA)
+            publish(checkout, clone)
+            verify(clone)
     except (ValueError, LookupError, OSError, subprocess.CalledProcessError) as error:
         raise ValueError(
             f"RULER prerequisites could not be verified: {error}. Existing inputs were not replaced; "
             "set RULER_NVIDIA and NLTK_DATA to fresh private paths to install clean prerequisites."
         ) from error
-    print(f"{RULER_NVIDIA}: pinned generators and sources installed", flush=True)
+    print(f"{clone}: pinned generators and sources installed", flush=True)
 
 
 def add_options(parser: argparse.ArgumentParser) -> None:
@@ -617,7 +644,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: The command's parser.
     """
-    parser.add_argument("--root", default=DATA_ROOT)
+    parser.add_argument("--root", default=default_data_root())
     parser.add_argument(
         "--tokenizer", default=None, help="the tokenizer to count in - GLM-5.3-Flash's when unset"
     )

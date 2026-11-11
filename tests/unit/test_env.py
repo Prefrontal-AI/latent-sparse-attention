@@ -142,13 +142,25 @@ def test_an_installed_copy_imports_without_a_site(tmp_path):
     packages = tmp_path / "site-packages"
     shutil.copytree(Path(env.__file__).parent, packages / "lsa", ignore=shutil.ignore_patterns("__pycache__"))
     code = (
-        "import lsa.env, lsa.sglang.launch, lsa.evaluation.performance.kernels.modules; print(lsa.site.SITES)"
+        "import lsa.env, lsa.sglang.launch, lsa.evaluation.performance.kernels.modules, "
+        "lsa.evaluation.performance.kernels.isolated, lsa.evaluation.accuracy.data, "
+        "lsa.evaluation.accuracy.data.ruler; print(lsa.site.SITES)"
     )
     variables = {**os.environ, "PYTHONPATH": str(packages), "LSA_ROOT": str(tmp_path / "root")}
     variables.pop("LSA_SITE", None)
     finished = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=variables)
     assert finished.returncode == 0, finished.stderr
     assert finished.stdout.strip() == str(tmp_path / "configs" / "site")
+
+
+def test_importing_ruler_leaves_the_process_environment_alone(tmp_path):
+    """The sentence tokenizer's root is read where it is needed, so an import sets no `NLTK_DATA`."""
+    code = "import os, lsa.evaluation.accuracy.data.ruler; print('NLTK_DATA' in os.environ)"
+    variables = {**os.environ, "LSA_ROOT": str(tmp_path / "root")}
+    variables.pop("NLTK_DATA", None)
+    finished = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=variables)
+    assert finished.returncode == 0, finished.stderr
+    assert finished.stdout.strip() == "False"
 
 
 def test_the_scripts_still_export_the_site_root(tmp_path, monkeypatch):
