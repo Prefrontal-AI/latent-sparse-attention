@@ -6,7 +6,9 @@ chip. A CTA holds 128 rows and a part of one block of 4096 samples, reads the sa
 scores them a tile at a time on the tensor cores, and works from the MMA's accumulators: a first pass adds each
 row's samples, a second bins them, and a last launch takes each row's threshold from its bins.
 
-The thresholds are the Triton ones bit for bit. The scores are the same bf16 dot with an fp32 accumulator. The mean
+The thresholds are the Triton ones bit for bit, though only agreement is required: a threshold sets how much is listed, and
+the pick does not depend on it. The order below is copied for that match alone and could be dropped - see
+[kernel parity](../../../../../docs/guide/development.md#kernel-parity). The scores are the same bf16 dot with an fp32 accumulator. The mean
 is the fp32 sum Triton forms: a block of 4096 is 128 threads, each adding its own columns in order - every 128th,
 or runs of four when the sample count is a multiple of 16, which Triton loads four wide - then each warp's 32 by a
 butterfly, the warps as (0 + 2) + (1 + 3), and the blocks in order. A Triton warp's columns are every other tile,

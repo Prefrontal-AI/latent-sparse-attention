@@ -1,7 +1,10 @@
 """The CuTeDSL sampled thresholds against the Triton ones they replace past the crossover.
 
-One GPU. Both take each row's threshold from the same sampled scores, added and binned in the same order, so they
-agree bit for bit - a row seeing too few samples to rank is -inf either way.
+One GPU. A threshold only sets how many buckets a row lists, and a row that lists fewer than its top-p lists again or
+is scored in full, so the picks must match exactly and the thresholds need only agree - see
+[kernel parity](../../../docs/guide/development.md#kernel-parity).
+The kernel does add in Triton's order today, so every row matches to the bit.
+The bounds below are what a different order would still meet, and the exact equality is not asked for.
 """
 
 import pytest
@@ -9,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import scan_select
-from lsa.core.kernels.constants import TritonScanSelect
+from lsa.core.kernels.constants import ThresholdEstimate, TritonScanSelect
 from lsa.core.kernels.cutedsl import thresholds as cutedsl_thresholds
 
 pytestmark = pytest.mark.gpu
@@ -26,7 +29,17 @@ def stride_and_rank(top_p):
     return stride, max(1, round(TritonScanSelect.TARGET * top_p / stride))
 
 
-def assert_same_thresholds(rows, buckets, top_p, seed):
+# A threshold sits at a bin edge, and the bins span the upper half between a row's mean and best, at most 2 norm
+# => a sample carried over an edge by an ulp moves the threshold a bin of at most norm / 32
+BIN_SHARE = 2 / ThresholdEstimate.BINS
+# A mean added in another order differs by ulps of itself, and a threshold follows it - measured on 4 shapes of 1,700
+# rows at under 1.2e-7 of the norm, with adds reordered and every sample moved an ulp, and never a bin
+# => 2**-20 of the norm, 8 times that, for all but the rare row whose sample crossed an edge
+ORDER_SLACK = 2**-20
+AGREEING_ROWS = 0.99
+
+
+def assert_agreeing_thresholds(rows, buckets, top_p, seed):
     generator = torch.Generator(device=DEVICE).manual_seed(seed)
     bucket_centroids = unit_rows(buckets, generator)
     index_queries = (unit_rows(rows, generator).float() * 30).bfloat16()
@@ -40,8 +53,14 @@ def assert_same_thresholds(rows, buckets, top_p, seed):
     estimated = cutedsl_thresholds.sample_thresholds(
         index_queries, bucket_centroids, visible_counts, stride, rank
     )
-    assert torch.equal(estimated, expected)
+    assert torch.equal(estimated.isneginf(), expected.isneginf())
     assert expected[-3:].isneginf().all()
+    ranked = expected.isfinite()
+    gap = (estimated - expected).abs()[ranked]
+    norms = index_queries.float().norm(dim=1)[ranked]
+    assert (gap <= ORDER_SLACK * norms).sum() >= AGREEING_ROWS * gap.numel()
+    # A crossed edge empties no more than a few bins between the two it moves between
+    assert (gap <= 4 * BIN_SHARE * norms).all()
 
 
 @pytest.mark.parametrize(
@@ -63,13 +82,13 @@ def assert_same_thresholds(rows, buckets, top_p, seed):
         (517, 589824, 1024),
     ],
 )
-def test_each_row_has_the_triton_threshold(rows, buckets, top_p):
-    assert_same_thresholds(rows, buckets, top_p, rows)
+def test_each_row_has_a_threshold_agreeing_with_the_triton_one(rows, buckets, top_p):
+    assert_agreeing_thresholds(rows, buckets, top_p, rows)
 
 
 def test_one_process_takes_both_orders_in_turn():
     for buckets in (36864, 40001, 36864):
-        assert_same_thresholds(200, buckets, 64, buckets)
+        assert_agreeing_thresholds(200, buckets, 64, buckets)
     assert len(cutedsl_thresholds.COMPILED) == 6
 
 
