@@ -109,7 +109,7 @@ ASSETS = {
     "PaulGrahamEssays.json": "58e352531a80cef2d22c205dbebfbfd64a8afe55a32434de845f200718756c65",
 }
 # Tried in order - the release first, where it holds the file, and HotpotQA's CMU host is often down, so its hub mirror is the file it serves.
-# The release holds no `hotpotqa.json` until the maintainer uploads it, and a missing asset answers 404, which falls through to the upstream urls.
+# A release asset that cannot be read answers 404, which falls through to the upstream urls
 # `{revision}` is the card's pinned commit
 ASSET_URLS = {
     "english_words.json": (
