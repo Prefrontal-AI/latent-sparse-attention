@@ -18,11 +18,13 @@ from lsa.evaluation.constants import Evaluation, Kernels, Suite
 from lsa.evaluation.run import (
     RUNNERS,
     bound_to_gpus,
+    describe,
     gpu_count,
     hour_limit,
     job_parameters,
     launch_meta,
     node_count,
+    output_line,
     run_experiment,
     run_on_first_task,
     settle_launch,
@@ -48,6 +50,13 @@ run:
   image: /images/sglang.img
   tp: {tp}
 """
+
+
+@pytest.fixture(autouse=True)
+def a_mounted_tmp_path(tmp_path, monkeypatch):
+    # A submission refuses a records root the container does not mount
+    # => each test's directory is mounted as an operator would add one
+    monkeypatch.setenv("LSA_EXTRA_MOUNTS", str(tmp_path))
 
 
 def write(tmp_path, text, name="experiment.yaml"):
@@ -441,3 +450,23 @@ def test_a_pool_worker_logs_itself_by_name_and_a_single_job_does_not(tmp_path, m
     single, worker = launches.read(settle_launch(run).out)
     assert "worker" not in single
     assert worker["worker"] == "55"
+
+
+def test_a_records_root_the_container_does_not_mount_is_refused_before_a_job_is_made(
+    tmp_path, tmp_path_factory, executors
+):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    run = pooled(tmp_path, f"run.output={elsewhere}")
+    with pytest.raises(ValueError, match=f"run.output {re.escape(str(elsewhere))} is outside"):
+        submit([run])
+    with pytest.raises(ValueError, match="outside every directory the container mounts"):
+        submit_pool(pooled(tmp_path, f"run.output={elsewhere}"), 2, SOURCE)
+    assert executors == []
+
+
+def test_a_dry_run_names_the_records_root_or_why_the_submission_would_refuse_it(tmp_path, tmp_path_factory):
+    seen = pooled(tmp_path)
+    refused = pooled(tmp_path, f"run.output={tmp_path_factory.mktemp('elsewhere')}")
+    assert output_line(seen) == f"  output: {tmp_path / 'results'}"
+    assert output_line(refused).startswith("  output: refused at submission - smoke: run.output")
+    assert output_line(refused) in describe(refused, {"gpus_per_node": 8})

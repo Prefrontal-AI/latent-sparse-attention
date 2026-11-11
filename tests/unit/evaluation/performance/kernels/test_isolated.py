@@ -5,6 +5,7 @@ import argparse
 import pytest
 
 from lsa import site, slurm
+from lsa.evaluation.constants import Kernels
 from lsa.evaluation.performance.kernels import isolated
 
 
@@ -210,3 +211,61 @@ def test_b300_glm_dense_read_runs_both_phases_like_the_other_arms():
     experiments = isolated.load_arms("glm53_flash", None, card="b300")
 
     assert [e.data.phase for e in experiments if "_full_" in e.name] == ["prefill", "decode"]
+
+
+def h200_configs(model):
+    return {
+        path.stem
+        for path in (isolated.configs_dir() / model).glob("*.yaml")
+        if not path.name.startswith(("_", "b300_"))
+    }
+
+
+@pytest.mark.parametrize("model", sorted(isolated.ARMS))
+def test_every_arm_a_job_can_run_has_a_config(model):
+    for arm in (*isolated.ARMS[model], *isolated.EXTRA_ARMS[model]):
+        assert (isolated.configs_dir() / model / f"{arm}.yaml").is_file()
+
+
+@pytest.mark.parametrize("model", sorted(isolated.ARMS))
+def test_every_config_left_out_of_the_default_arms_is_listed_with_why(model):
+    default = set(isolated.ARMS[model])
+    extra = set(isolated.EXTRA_ARMS[model])
+    untimed = isolated.UNTIMED_ARMS[model]
+
+    # Each config is in exactly one of the three, so a new one cannot be left out without a word
+    assert not default & extra and not default & set(untimed) and not extra & set(untimed)
+    assert h200_configs(model) == default | extra | set(untimed)
+    assert all(why.strip() for why in untimed.values())
+
+
+@pytest.mark.parametrize("model", sorted(isolated.ARMS))
+def test_an_untimed_config_is_refused_as_an_arm(model):
+    for arm in isolated.UNTIMED_ARMS[model]:
+        with pytest.raises(ValueError, match=f"no arm \\['{arm}'\\]"):
+            isolated.load_arms(model, None, arms=(arm,))
+
+
+def test_the_arms_prefill_in_the_chunk_the_roofline_models():
+    assert isolated.arm_overrides("qwen38_27b", "full", None)[0] == f"data.chunk={Kernels.CHUNK}"
+
+
+def test_a_dry_run_says_whether_the_container_sees_the_records_root(monkeypatch, capsys, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    monkeypatch.setattr(
+        "sys.argv", ["isolated", "qwen38_27b", "--arm", "full", "--output", str(elsewhere), "--dry-run"]
+    )
+    isolated.main()
+
+    assert "output: refused at submission - qwen38_27b_kernels_full" in capsys.readouterr().out
+
+
+def test_a_submission_outside_the_mounts_is_refused_before_the_job(monkeypatch, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.delenv("LSA_EXTRA_MOUNTS", raising=False)
+    monkeypatch.setattr("sys.argv", ["isolated", "qwen38_27b", "--arm", "full", "--output", str(elsewhere)])
+    monkeypatch.setattr(slurm, "executor", lambda *_, **__: pytest.fail("a job was made"))
+
+    with pytest.raises(ValueError, match="outside every directory the container mounts"):
+        isolated.main()

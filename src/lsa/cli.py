@@ -48,7 +48,7 @@ COMMANDS: Commands = {
         ),
         "isolated": Command(
             "lsa.evaluation.performance.kernels.isolated",
-            "time every arm of a model's layer in one job on a node held whole",
+            "time every arm of a model's layer, both phases, in one job on one GPU",
         ),
         "production": Command(
             "lsa.evaluation.run", "time a served model's requests end to end", ("production",)

@@ -1,6 +1,7 @@
 """Time the modules a layer runs besides its attention, inside the image the server uses, as a one-GPU job.
 
     lsa kernels modules configs/evaluation/kernels/glm53_flash/native.yaml --phase decode
+    lsa kernels modules configs/evaluation/kernels/glm53_flash/native.yaml --phase prefill data.checkpoint=<a cut> --dry-run
 
 The measurement is [measure.modules](measure/modules.py), which loads the same truncated checkpoint the
 attention-layer harness loads and times its feed-forward, its mHC boundaries, the embedding, the final norm
@@ -8,6 +9,11 @@ and the head. This builds its command line from a kernel config, runs it in that
 checkout installed the way the harness installs it, and puts the raw file under a run directory of its own.
 
 The job holds one GPU, and the container is started inside it as an overlapping step.
+
+Trailing dotted overrides lay over the config as `lsa evaluate kernels` takes them, and `--phase` pins the config's
+`data.phase` sweep to the phase timed. A config that still yields more than one run is refused rather than cut to its
+first: the timer reads only the image, the checkpoint and the model, so its points would time the same modules again
+or differ in what is timed, and either way the run to time is named by an override.
 """
 
 import argparse
@@ -16,13 +22,13 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from lsa import env, slurm
+from lsa import config_loader, env, slurm
 from lsa.evaluation import config as experiment_config
 from lsa.evaluation.accuracy.records import build_run_id, model_label, records_dir
 from lsa.evaluation.constants import Evaluation
 from lsa.evaluation.performance.kernels.harness import MEASURE_VARIABLES, install_line
 from lsa.sglang.constants import Server
-from lsa.sglang.launch import SglangConfig, cache_variables, checkout_root, container_command
+from lsa.sglang.launch import SglangConfig, cache_variables, checkout_root, container_command, require_mounted
 
 # What the run id names the measurement by, where an attention run names its configuration
 LABEL = "modules"
@@ -116,6 +122,35 @@ def time_modules(experiment: experiment_config.KernelsConfig, phase: str, repeat
     return output
 
 
+def load_experiment(
+    config: str, phase: str, overrides: tuple[str, ...] = ()
+) -> experiment_config.KernelsConfig:
+    """Load the one kernel config whose modules are timed, its phase sweep pinned to the phase timed.
+
+    Args:
+        config: The kernel config's path.
+        phase: `prefill` or `decode`, laid over `data.phase` before the overrides.
+        overrides: Dotted `key=value` assignments, applied last.
+
+    Returns:
+        The config.
+
+    Raises:
+        ValueError: The file yields more than one run, or one that names no truncated checkpoint.
+    """
+    experiments = experiment_config.load(config, [f"data.phase={phase}", *overrides], kind=Evaluation.KERNELS)
+    if len(experiments) > 1:
+        points = "; ".join(" ".join(config_loader.source_of(e)["sweep"]) for e in experiments)
+        raise ValueError(
+            f"{config} yields {len(experiments)} runs and the modules of one are timed - pin a swept key with a "
+            f"trailing override, such as `key=value`, to pick one of: {points}"
+        )
+    experiment = experiments[0]
+    if not isinstance(experiment, experiment_config.KernelsConfig) or not experiment.data.checkpoint:
+        raise ValueError(f"{config}: data.checkpoint names no truncated checkpoint")
+    return experiment
+
+
 def main() -> None:
     """Submit the timing of one phase's modules for the model a kernel config names."""
     parser = argparse.ArgumentParser(
@@ -132,16 +167,24 @@ def main() -> None:
     )
     parser.add_argument("--run-id", default="", help="the run directory to write - default a new one")
     slurm.add_flags(parser)
-    args = parser.parse_args()
+    parser.add_argument("overrides", nargs="*", help="dotted key=value assignments, applied last")
+    # Intermixed, so overrides may follow the flags as well as the config
+    args = parser.parse_intermixed_args()
 
-    experiment = experiment_config.load(args.config, kind=Evaluation.KERNELS)[0]
-    if not isinstance(experiment, experiment_config.KernelsConfig) or not experiment.data.checkpoint:
-        raise ValueError(f"{args.config}: data.checkpoint names no truncated checkpoint")
+    experiment = load_experiment(args.config, args.phase, tuple(args.overrides))
     run_id = args.run_id or build_run_id(
         f"{model_label(experiment.model.repo or experiment.model.name)}__{LABEL}__{args.phase}"
     )
     output = (Path(records_dir(Evaluation.KERNELS, args.results)) / run_id / "modules.json").resolve()
     print(f"{experiment.name}: {args.phase} modules into {output}", flush=True)
+    # The container writes the file
+    # => a dry run says what the submission would refuse
+    try:
+        require_mounted(output.parent, "the modules run directory")
+    except ValueError as refused:
+        if not args.dry_run:
+            raise
+        print(f"refused at submission - {refused}", flush=True)
     slurm.submit(
         args,
         "lsa-modules",

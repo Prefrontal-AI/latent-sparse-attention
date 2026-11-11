@@ -39,9 +39,10 @@ from lsa.core.kernels.triton import scan_select as triton_scan_select
 from lsa.core.kernels.triton.paged import scan_paged
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.core.ward import pool_keys
+from lsa.evaluation.constants import Kernels
 
 # Queries in a served prefill chunk
-CHUNK = 32768
+CHUNK = Kernels.CHUNK
 INDEX_DIM = 64
 BUCKET_SIZE = 8
 BUCKET_CAP = 16

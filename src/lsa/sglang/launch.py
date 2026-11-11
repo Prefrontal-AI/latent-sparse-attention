@@ -287,6 +287,31 @@ def mount_list() -> list[str]:
     return mounts
 
 
+def require_mounted(path: str | Path, what: str) -> None:
+    """Refuse a path the container will not see, before a job waits in the queue to fail on it.
+
+    The path is resolved, as the submission resolves `run.output` before the job is pickled, and the mounts are
+    taken as named, as the container sees them - so a link into a mount is refused when it resolves outside one.
+
+    Args:
+        path: What the container reads or writes, such as a records root.
+        what: What the path is, for the message.
+
+    Raises:
+        ValueError: The resolved path lies under no mount of `mount_list`.
+    """
+    resolved = Path(path).resolve()
+    targets = [mount.partition(":")[2] for mount in mount_list()]
+    if any(resolved.is_relative_to(target) for target in targets):
+        return
+    named = f"{path}, which resolves to {resolved}," if str(resolved) != str(path) else str(path)
+    raise ValueError(
+        f"{what} {named} is outside every directory the container mounts - {', '.join(targets)} - so the job "
+        f"would fail inside it; write under one of them, or add a directory to the site's `mounts` or to "
+        f"{EXTRA_MOUNTS}"
+    )
+
+
 def cache_variables() -> dict[str, str]:
     """Return the one JIT cache the environment must not be left to decide.
 

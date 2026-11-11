@@ -51,6 +51,7 @@ from lsa.evaluation.accuracy.records import build_run_id, records_dir
 from lsa.evaluation.constants import Evaluation, Launches, Pool, Records, Status
 from lsa.sglang.constants import Server
 from lsa.sglang.launch import require_image as require_launch_image
+from lsa.sglang.launch import require_mounted
 
 if TYPE_CHECKING:
     from lsa.evaluation.config import AccuracyConfig, Experiment, KernelsConfig, ProductionConfig
@@ -131,6 +132,38 @@ def require_output(experiment: "Experiment") -> None:
             f"{experiment.name}: the config names no records root - set run.output, which each tree's base "
             "names as `results` or `${root:evaluation}`"
         )
+
+
+def require_mounted_output(experiment: "Experiment") -> None:
+    """Refuse an evaluation whose records root the container will not see, before a job is queued for it.
+
+    The container reads the run directory - the indexer settings the harness or the server is armed with are
+    written there - so a root outside every mount fails inside the job, after its wait in the queue.
+
+    Args:
+        experiment: The evaluation.
+
+    Raises:
+        ValueError: `run.output` is empty, or it resolves outside every directory the container mounts.
+    """
+    require_output(experiment)
+    require_mounted(experiment.run.output, f"{experiment.name}: run.output")
+
+
+def output_line(experiment: "Experiment") -> str:
+    """Return a dry run's line on the records root - where it resolves, or why the submission would refuse it.
+
+    Args:
+        experiment: The evaluation.
+
+    Returns:
+        One indented line.
+    """
+    try:
+        require_mounted_output(experiment)
+    except ValueError as refused:
+        return f"  output: refused at submission - {refused}"
+    return f"  output: {Path(experiment.run.output).resolve()}"
 
 
 @dataclass(frozen=True)
@@ -432,7 +465,7 @@ def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = No
 
     Returns:
         The summary line, followed for a dry run by one indented line each for the tasks and lengths of a scored
-        run, the server's command as the container runs it, and the job's resources.
+        run, the server's command as the container runs it, the records root, and the job's resources.
     """
     from lsa.evaluation.accuracy.data import suites
     from lsa.evaluation.config import AccuracyConfig, KernelsConfig, ProductionConfig
@@ -469,6 +502,7 @@ def describe(experiment: "Experiment", parameters: Mapping[str, Any] | None = No
             lines.append(f"  server: (not resolved in site {site.current()} - {unnamed})")
         else:
             lines.append(f"  server: {shlex.join(argv)}")
+    lines.append(output_line(experiment))
     lines.append("  resources: " + ", ".join(f"{key} {value}" for key, value in parameters.items()))
     return "\n".join(lines)
 
@@ -633,12 +667,12 @@ def submit(
         One submitit job per evaluation, in the order they were given.
 
     Raises:
-        ValueError: An evaluation names no model or no records root, or the parameters are being derived
-            and the evaluations do not agree on them.
+        ValueError: An evaluation names no model or no records root the container mounts, or the parameters
+            are being derived and the evaluations do not agree on them.
     """
     for experiment in experiments:
         require_model(experiment)
-        require_output(experiment)
+        require_mounted_output(experiment)
         require_image(experiment)
 
     executor = slurm.executor(
@@ -707,10 +741,11 @@ def submit_pool(
         One submitit job per worker.
 
     Raises:
-        ValueError: The evaluation names no model or no records root, or a single job is still running the run.
+        ValueError: The evaluation names no model or no records root the container mounts, or a single job is still
+            running the run.
     """
     require_model(experiment)
-    require_output(experiment)
+    require_mounted_output(experiment)
     require_image(experiment)
     experiment.run.output = str(Path(experiment.run.output).resolve())
     out = settle_launch(experiment).out
