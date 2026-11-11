@@ -1,10 +1,12 @@
 """The RULER rendering, on a tokenizer that needs no download and fixtures small enough to render offline."""
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
 
+from lsa.evaluation.accuracy.data import ruler as nvidia
 from lsa.training.native import ruler_data
 from lsa.training.native.benchmark import tasks
 
@@ -137,3 +139,141 @@ def test_ruler_cells_are_refused_for_a_model_with_another_tokenizer():
     tasks.check_ruler_tokenizer(["hellaswag"], "qwen3.5-0.8b")
     with pytest.raises(ValueError, match="mis-sized"):
         tasks.check_ruler_tokenizer(names, "qwen3.5-0.8b")
+
+
+def prepare_args(monkeypatch, *flags):
+    fetched = []
+    submitted = []
+    monkeypatch.setattr(ruler_data, "ensure", lambda root: fetched.append(root))
+    monkeypatch.setattr("lsa.slurm.submit", lambda *call: submitted.append(call))
+    ruler_data.main(["--tasks", "vt", "--lengths", "4096", *flags])
+    return fetched, submitted
+
+
+def test_the_sources_are_fetched_where_the_command_is_typed_by_default(monkeypatch):
+    fetched, submitted = prepare_args(monkeypatch)
+    assert len(fetched) == 1
+    assert submitted[0][-1] is False
+
+
+def test_fetch_in_job_leaves_the_submitting_host_alone(monkeypatch):
+    fetched, submitted = prepare_args(monkeypatch, "--fetch-in-job")
+    assert fetched == []
+    assert submitted[0][-1] is True
+
+
+def test_the_job_fetches_before_it_renders_when_asked(monkeypatch, tmp_path):
+    order = []
+    monkeypatch.setattr(ruler_data, "ensure", lambda root: order.append(("ensure", root)))
+    monkeypatch.setattr(ruler_data, "tokenizer_path", lambda: "tok")
+    monkeypatch.setattr("lm_eval.tasks.ruler.common_utils.get_tokenizer", lambda tokenizer: None)
+    ruler_data.prepare(str(tmp_path), [], [], 1, False, fetch_first=True)
+    assert order[0] == ("ensure", str(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--tasks", "niah_single_9"],
+        ["--lengths", "0"],
+        ["--lengths", "-4"],
+        ["--samples", "0"],
+    ],
+)
+def test_a_bad_command_line_is_refused_before_anything_is_fetched(monkeypatch, flags):
+    def unexpected(*args):
+        raise AssertionError("nothing may be fetched or submitted")
+
+    monkeypatch.setattr(ruler_data, "ensure", unexpected)
+    monkeypatch.setattr("lsa.slurm.submit", unexpected)
+    with pytest.raises(SystemExit) as finished:
+        ruler_data.main(flags)
+    assert finished.value.code == 2
+
+
+RELEASE = "https://github.com/Prefrontal-AI/latent-sparse-attention/releases/download/ruler-sources-v1/"
+
+
+def test_hotpotqa_is_read_from_the_release_first_then_its_upstream_urls():
+    urls = nvidia.ASSET_URLS["hotpotqa.json"]
+    assert urls[0] == RELEASE + "hotpotqa.json"
+    assert urls[1].startswith("http://curtis.ml.cmu.edu/")
+    assert urls[2].startswith("https://huggingface.co/datasets/namlh2004/hotpotqa/")
+
+
+@pytest.fixture
+def fetching(monkeypatch, tmp_path):
+    """`ensure` with every network step but the source download replaced, and a curl that serves chosen urls."""
+    import datasets
+    import huggingface_hub
+
+    monkeypatch.setattr(nvidia, "ensure_nltk", lambda: None)
+    monkeypatch.setattr(ruler_data, "ruler_card", lambda: SimpleNamespace(revision="pinned"))
+    monkeypatch.setattr(ruler_data.assets, "model", lambda name: SimpleNamespace(repo="r", revision="v"))
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda *args, **kwargs: None)
+    monkeypatch.setattr(datasets, "load_dataset", lambda *args, **kwargs: None)
+    served: dict[str, bytes] = {}
+    asked: list[str] = []
+
+    def curl(command, **kwargs):
+        url = command[-1]
+        asked.append(url)
+        if url not in served:
+            return SimpleNamespace(returncode=22)
+        with open(command[command.index("-o") + 1], "wb") as out:
+            out.write(served[url])
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(nvidia.subprocess, "run", curl)
+    return SimpleNamespace(root=str(tmp_path), served=served, asked=asked)
+
+
+def pin(monkeypatch, name, content):
+    import hashlib
+
+    monkeypatch.setitem(nvidia.ASSETS, name, hashlib.sha256(content).hexdigest())
+
+
+def serve_squad(fetching, monkeypatch):
+    fetching.served[RELEASE + "squad.json"] = b"squad"
+    pin(monkeypatch, "squad.json", b"squad")
+
+
+def test_ensure_takes_hotpotqa_from_the_release_when_it_holds_the_file(fetching, monkeypatch):
+    serve_squad(fetching, monkeypatch)
+    fetching.served[RELEASE + "hotpotqa.json"] = b"hotpot"
+    pin(monkeypatch, "hotpotqa.json", b"hotpot")
+    ruler_data.ensure(fetching.root)
+    assert RELEASE + "hotpotqa.json" in fetching.asked
+    assert not any("curtis" in url or "huggingface" in url for url in fetching.asked)
+    with open(ruler_data.source_path(fetching.root, "hotpotqa.json"), "rb") as source:
+        assert source.read() == b"hotpot"
+
+
+def test_ensure_falls_back_to_the_upstream_urls_before_the_release_holds_hotpotqa(fetching, monkeypatch):
+    serve_squad(fetching, monkeypatch)
+    mirror = nvidia.ASSET_URLS["hotpotqa.json"][2]
+    fetching.served[mirror] = b"hotpot"
+    pin(monkeypatch, "hotpotqa.json", b"hotpot")
+    ruler_data.ensure(fetching.root)
+    hotpot = [url for url in fetching.asked if url in nvidia.ASSET_URLS["hotpotqa.json"]]
+    assert hotpot == list(nvidia.ASSET_URLS["hotpotqa.json"])
+
+
+def test_ensure_refuses_a_hotpotqa_that_is_not_the_pinned_file(fetching, monkeypatch):
+    serve_squad(fetching, monkeypatch)
+    fetching.served[RELEASE + "hotpotqa.json"] = b"drifted"
+    pin(monkeypatch, "hotpotqa.json", b"hotpot")
+    with pytest.raises(ValueError, match="not the file the release pins"):
+        ruler_data.ensure(fetching.root)
+
+
+def test_ensure_keeps_a_source_already_under_the_root(fetching, monkeypatch):
+    serve_squad(fetching, monkeypatch)
+    pin(monkeypatch, "hotpotqa.json", b"hotpot")
+    path = ruler_data.source_path(fetching.root, "hotpotqa.json")
+    os.makedirs(os.path.dirname(path))
+    with open(path, "wb") as source:
+        source.write(b"hotpot")
+    ruler_data.ensure(fetching.root)
+    assert not any(url in nvidia.ASSET_URLS["hotpotqa.json"] for url in fetching.asked)

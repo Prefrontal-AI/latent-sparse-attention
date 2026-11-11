@@ -6,7 +6,7 @@ from typing import Any
 
 from lsa import io
 from lsa.evaluation.accuracy import records, tasks
-from lsa.evaluation.accuracy.data import DATA_ROOT, load_manifest, suites
+from lsa.evaluation.accuracy.data import default_data_root, load_manifest, suites
 from lsa.evaluation.accuracy.runner import (
     Log,
     check_schema,
@@ -22,13 +22,13 @@ from lsa.evaluation.constants import Records
 
 
 def regrade(
-    run_dir: str, data_root: str = DATA_ROOT, max_context: int | None = None, log: Log = print
+    run_dir: str, data_root: str | None = None, max_context: int | None = None, log: Log = print
 ) -> dict[str, Any]:
     """Rebuild a record from its sample files, with no server - for a grader change, or a record a stopped run left inconsistent.
 
     Args:
         run_dir: The run directory.
-        data_root: The fixed prompt files.
+        data_root: The fixed prompt files, or None for the default data root.
         max_context: Which LongBench v2 file the run read.
         log: Where progress lines go.
 
@@ -42,6 +42,7 @@ def regrade(
     if old is None:
         raise FileNotFoundError(os.path.join(run_dir, Records.RECORD))
     check_schema(old, os.path.join(run_dir, Records.RECORD))
+    data_root = data_root or default_data_root()
     manifest = load_manifest(data_root)
     results = {}
     for plan_dict in old["run"]["plans"]:

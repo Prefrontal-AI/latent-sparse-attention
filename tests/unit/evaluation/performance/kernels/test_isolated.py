@@ -168,7 +168,7 @@ def test_b300_loads_each_arms_b300_file_in_chunks_of_32k(model):
     assert {e.data.chunk for e in experiments} == {32768}
     assert all(e.run.image == site.load()["images"]["b300"] for e in experiments)
     assert all(
-        isolated.arm_files(model, arm, "b300") == [str(isolated.CONFIGS / model / f"b300_{arm}.yaml")]
+        isolated.arm_files(model, arm, "b300") == [str(isolated.configs_dir() / model / f"b300_{arm}.yaml")]
         for arm in isolated.ARMS[model]
     )
 
@@ -216,7 +216,7 @@ def test_b300_glm_dense_read_runs_both_phases_like_the_other_arms():
 def h200_configs(model):
     return {
         path.stem
-        for path in (isolated.CONFIGS / model).glob("*.yaml")
+        for path in (isolated.configs_dir() / model).glob("*.yaml")
         if not path.name.startswith(("_", "b300_"))
     }
 
@@ -224,7 +224,7 @@ def h200_configs(model):
 @pytest.mark.parametrize("model", sorted(isolated.ARMS))
 def test_every_arm_a_job_can_run_has_a_config(model):
     for arm in (*isolated.ARMS[model], *isolated.EXTRA_ARMS[model]):
-        assert (isolated.CONFIGS / model / f"{arm}.yaml").is_file()
+        assert (isolated.configs_dir() / model / f"{arm}.yaml").is_file()
 
 
 @pytest.mark.parametrize("model", sorted(isolated.ARMS))

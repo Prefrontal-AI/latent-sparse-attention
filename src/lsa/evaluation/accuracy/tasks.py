@@ -24,7 +24,6 @@ from lm_eval.tasks import TaskManager
 
 from lsa import assets
 from lsa.evaluation.accuracy.data import (
-    DATA_ROOT,
     GRAPHWALKS_FILES,
     graphwalks_rows,
     longbench_card,
@@ -377,13 +376,13 @@ def _graphwalks_task(name: str) -> ConfigurableTask:
     )
 
 
-def resolve(name: str, data_root: str = DATA_ROOT, max_context: int | None = None) -> TaskDefinition:
+def resolve(name: str, data_root: str | None = None, max_context: int | None = None) -> TaskDefinition:
     """Resolve a task name - mmlu_pro, gpqa_diamond, math500, aime25, longbench2, graphwalks_<file>, ruler_<task>_<length>
     or papertrail_<sample>_<condition>, with `_nic` for its not-in-corpus questions.
 
     Args:
         name: The task name.
-        data_root: The fixed prompt files.
+        data_root: The fixed prompt files, or None for the default data root.
         max_context: Which LongBench v2 file to read, or None for the context its card prepares.
 
     Returns:

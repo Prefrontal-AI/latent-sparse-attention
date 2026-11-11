@@ -21,10 +21,7 @@ from lsa import env, io, slurm
 from lsa.evaluation.constants import Family
 from lsa.evaluation.performance.kernels.family import model_family
 
-HUB = os.path.join(
-    os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface")),
-    "hub/models--zai-org--GLM-5.3-Flash/snapshots/*/",
-)
+MODEL = "zai-org/GLM-5.3-Flash"
 SIDE_FILES = (
     "tokenizer.json",
     "tokenizer_config.json",
@@ -36,6 +33,24 @@ SIDE_FILES = (
     "merges.txt",
     "vocab.json",
 )
+
+
+def default_snapshot() -> str:
+    """Return the first GLM-5.3-Flash snapshot in the hub cache this process reads.
+
+    The cache is `env.hf_home()`'s - `HF_HOME`, then the site's `hf_home`, then the hub's default.
+
+    Raises:
+        FileNotFoundError: The cache holds no snapshot of the model.
+    """
+    cache = env.hf_home() / "hub" / f"models--{MODEL.replace('/', '--')}" / "snapshots"
+    snapshots = sorted(glob.glob(os.path.join(glob.escape(str(cache)), "*/")))
+    if not snapshots:
+        raise FileNotFoundError(
+            f"no snapshot of {MODEL} under {cache} - fetch it with `hf download {MODEL}`, "
+            "or name a checkpoint with --snapshot"
+        )
+    return snapshots[0]
 
 
 def truncate(config, layers):
@@ -148,6 +163,6 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     slurm.add_flags(parser)
     args = parser.parse_args()
-    snapshot = os.path.abspath(args.snapshot or min(glob.glob(HUB)))
+    snapshot = os.path.abspath(args.snapshot or default_snapshot())
     out = os.path.abspath(args.out)
     slurm.submit(args, "lsa-cut", env.offline_hf(), slurm.CPU, cut, snapshot, out, args.layers, args.weights)

@@ -4,7 +4,7 @@ import pytest
 
 from lsa.evaluation.performance.kernels import isolated, modules
 
-NATIVE = str(isolated.CONFIGS / "glm53_flash" / "native.yaml")
+NATIVE = str(isolated.configs_dir() / "glm53_flash" / "native.yaml")
 
 SWEPT = """
 model:
