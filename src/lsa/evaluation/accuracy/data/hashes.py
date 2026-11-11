@@ -12,12 +12,12 @@ from typing import Any
 
 from lsa import io
 from lsa.evaluation.accuracy import tasks
-from lsa.evaluation.accuracy.data import DATA_ROOT, suites
+from lsa.evaluation.accuracy.data import suites
 
 
 def make_hashes(
     suite_names: list[str] | tuple[str, ...] | None = None,
-    data_root: str = DATA_ROOT,
+    data_root: str | None = None,
     max_context: int | None = None,
     log: Callable[[str], Any] = print,
     pins: str | None = None,
@@ -26,7 +26,7 @@ def make_hashes(
 
     Args:
         suite_names: The suites to cover, every one when None.
-        data_root: The fixed prompt files.
+        data_root: The fixed prompt files, or None for the default data root.
         max_context: Which LongBench v2 file to read, or None for the context its card prepares.
         log: Where progress lines go.
         pins: Which set of pins to fill (`suites.pins_path`), None for the default corpus's.

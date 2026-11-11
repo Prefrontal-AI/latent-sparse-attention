@@ -69,8 +69,8 @@ def prerequisites(tmp_path, monkeypatch):
     monkeypatch.setattr(ruler, "ruler_card", lambda: SimpleNamespace(revision=revision))
     monkeypatch.setattr(ruler, "PATCH", str(patch))
     monkeypatch.setattr(ruler, "ASSETS", hashes)
-    monkeypatch.setattr(ruler, "RULER_NVIDIA", str(checkout))
-    monkeypatch.setattr(ruler, "NLTK_DATA", str(resources))
+    monkeypatch.setattr(ruler, "ruler_nvidia", lambda: str(checkout))
+    monkeypatch.setattr(ruler, "nltk_data", lambda: str(resources))
     return checkout, resources
 
 
@@ -159,7 +159,7 @@ def test_failed_sentence_tokenizers_are_never_published(prerequisites, monkeypat
 
 def test_a_failed_generator_install_is_cleaned_without_publication(prerequisites, tmp_path, monkeypatch):
     destination = tmp_path / "fresh-generator"
-    monkeypatch.setattr(ruler, "RULER_NVIDIA", str(destination))
+    monkeypatch.setattr(ruler, "ruler_nvidia", lambda: str(destination))
 
     def incomplete(path):
         Path(path).mkdir()
@@ -179,7 +179,7 @@ def test_concurrent_generator_publication_preserves_and_checks_the_winner(
 ):
     checkout, _ = prerequisites
     destination = tmp_path / "concurrent-generator"
-    monkeypatch.setattr(ruler, "RULER_NVIDIA", str(destination))
+    monkeypatch.setattr(ruler, "ruler_nvidia", lambda: str(destination))
     monkeypatch.setattr(ruler, "install", lambda path: shutil.copytree(checkout, path))
 
     def publish_winner(path):

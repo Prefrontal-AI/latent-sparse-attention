@@ -33,10 +33,6 @@ from lsa.data import manifests
 from lsa.data.benchmarks import BenchmarkFiles
 from lsa.evaluation.constants import Suite
 
-# The shared root rather than a per-user path, since a directory another user writes to was rewritten
-# under a run once already
-DATA_ROOT = os.environ.get("LSA_EVAL_DATA") or str(paths.benchmarks())
-
 # Each GraphWalks task and the hub file it reads - prompts to 128k tokens, and the long file's 256k and 1M
 # tiers, a task each because a 1M server holds the first and not the second. Read from the hub as it is, so none
 # lives under the data root
@@ -93,19 +89,31 @@ def graphwalks_rows(task: str) -> Any:
     return datasets.load_dataset("parquet", data_files=path, split="train")
 
 
-def ruler_path(ruler_task: str, length: int, data_root: str = DATA_ROOT) -> str:
+def default_data_root() -> str:
+    """Return the root of the fixed prompt files - `LSA_EVAL_DATA`, then the site's shared benchmarks root.
+
+    The shared root rather than a per-user path, since a directory another user writes to was rewritten under a
+    run once already.
+    Read when asked, never on import, since the site is not there in an installed copy.
+    """
+    return os.environ.get("LSA_EVAL_DATA") or str(paths.benchmarks())
+
+
+def ruler_path(ruler_task: str, length: int, data_root: str | None = None) -> str:
     """Return where one RULER task's fixed samples at one length live."""
-    return str(BenchmarkFiles(ruler_card(), data_root).path(task=ruler_task, length=length))
+    files = BenchmarkFiles(ruler_card(), data_root or default_data_root())
+    return str(files.path(task=ruler_task, length=length))
 
 
-def longbench_path(max_context: int, data_root: str = DATA_ROOT) -> str:
+def longbench_path(max_context: int, data_root: str | None = None) -> str:
     """Return where the LongBench v2 prompts prepared for one context limit live."""
-    return str(BenchmarkFiles(longbench_card(), data_root).path(context=max_context))
+    return str(BenchmarkFiles(longbench_card(), data_root or default_data_root()).path(context=max_context))
 
 
-def papertrail_path(sample: str, condition: str, data_root: str = DATA_ROOT) -> str:
+def papertrail_path(sample: str, condition: str, data_root: str | None = None) -> str:
     """Return where one PaperTrail sample's questions under one condition live - a length or a control."""
-    return str(BenchmarkFiles(papertrail_card(), data_root).path(task=sample, condition=condition))
+    files = BenchmarkFiles(papertrail_card(), data_root or default_data_root())
+    return str(files.path(task=sample, condition=condition))
 
 
 def load_manifest(root: str) -> dict[str, dict]:

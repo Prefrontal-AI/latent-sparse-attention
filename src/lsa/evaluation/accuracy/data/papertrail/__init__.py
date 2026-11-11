@@ -38,7 +38,7 @@ import lsa
 from lsa import assets, io
 from lsa.data import manifests
 from lsa.data.tokenizer import load_tokenizer, tokenizer_checkpoint, tokenizer_repo
-from lsa.evaluation.accuracy.data import DATA_ROOT, papertrail_card, papertrail_path
+from lsa.evaluation.accuracy.data import default_data_root, papertrail_card, papertrail_path
 from lsa.evaluation.accuracy.data.papertrail.rebuild import (
     Rebuilt,
     convert_papers,
@@ -250,7 +250,7 @@ def check_kit(directory: Path) -> str:
 
 
 def prepare_papertrail(
-    root: str = DATA_ROOT,
+    root: str | None = None,
     kit: str | None = None,
     cache: str | None = None,
     delay: float = FETCH_DELAY,
@@ -261,7 +261,7 @@ def prepare_papertrail(
     """Rebuild every sample at every condition up to a length, check it, and write each one's files and manifest entry.
 
     Args:
-        root: The data root.
+        root: The data root, or None for the default data root.
         kit: A copy of the kit the card pins, or None for `data/papertrail/kit` in this repository.
         cache: Where the arXiv pages are kept, or None for the data root's.
         delay: Seconds between two requests to arXiv.
@@ -273,6 +273,7 @@ def prepare_papertrail(
         ValueError: The kit has no context for a condition asked for, or a paper or a context differs from the
             benchmark's and `keep_mismatched` is off.
     """
+    root = root or default_data_root()
     card = papertrail_card()
     kit_dir = Path(kit) if kit else KIT
     revision = check_kit(kit_dir)
@@ -332,7 +333,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: The command's parser.
     """
-    parser.add_argument("--root", default=DATA_ROOT)
+    parser.add_argument("--root", default=default_data_root())
     parser.add_argument(
         "--kit",
         default=None,

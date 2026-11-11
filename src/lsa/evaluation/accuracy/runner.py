@@ -36,8 +36,8 @@ from lsa import io
 from lsa.evaluation.accuracy import pool, records, tasks
 from lsa.evaluation.accuracy.client import Client, Messages, user_message
 from lsa.evaluation.accuracy.data import (
-    DATA_ROOT,
     GRAPHWALKS_PROMPT_MAX,
+    default_data_root,
     load_manifest,
     longbench_card,
     ruler_path,
@@ -481,7 +481,7 @@ class Runner:
         lengths: list[int] | None = None,
         samples: int | None = None,
         top_logprobs: int | None = None,
-        data_root: str = DATA_ROOT,
+        data_root: str | None = None,
         max_context: int | None = None,
         resume: bool = True,
         strict_hashes: bool = True,
@@ -511,7 +511,7 @@ class Runner:
             lengths: RULER lengths to run, or None for every length.
             samples: Rows of every RULER task, or None for the grid's count.
             top_logprobs: Alternatives each reply's first token is kept with, or None to keep no logprobs.
-            data_root: The fixed RULER and LongBench files.
+            data_root: The fixed RULER and LongBench files, or None for the default data root.
             max_context: Which LongBench v2 file to read.
             resume: Keep the samples a run directory already holds.
             strict_hashes: Stop on a prompt set whose hash is not the pinned one, rather than warn.
@@ -565,7 +565,7 @@ class Runner:
         self.out = os.path.join(out_root, self.run_id)
         self.note = note
         self.tag = tag
-        self.data_root = data_root
+        self.data_root = data_root or default_data_root()
         self.max_context = max_context or longbench_card().context
         self.resume = resume
         self.strict = strict_hashes
@@ -574,7 +574,7 @@ class Runner:
         self.log = log
         self.contexts = ContextGate()
         self.expected_hashes: dict[str, str] = io.read_json(suites.pins_path(pins), {})
-        self.manifest = load_manifest(data_root)
+        self.manifest = load_manifest(self.data_root)
         self.check_budgets()
         existing: dict[str, Any] = {}
         if resume:
