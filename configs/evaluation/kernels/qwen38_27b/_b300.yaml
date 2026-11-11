@@ -5,7 +5,7 @@
 # servers serve them, since fa3 does not run on sm_103 - the harness picks both by the GPU.
 # The contexts are the layer cards' ladder, the paper's figure reading 512k, 1M and 10M of it; the chunk and window
 # are the base's.
-# The design arms run their CuTeDSL kernels, whose Blackwell paths are the ones written for the B300.
+# The design methods run their CuTeDSL kernels, whose Blackwell paths are the ones written for the B300.
 
 defaults:
   - _image_b300

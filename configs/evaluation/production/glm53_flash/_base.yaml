@@ -12,7 +12,7 @@
 # The context is 1M plus a 4096-token margin, so a 1M prompt and its 256-token answer both fit.
 # The layout is TP=8 / CP=1 / PP=1 on one node, and the MoE runs sglang's stock tensor-parallel runner.
 # Expert parallel 8 on DeepGEMM, which context parallel needs ([_cp8.yaml](_cp8.yaml)), unlocks no mesh here and is not
-# every arm's best: at 1M on one node it took 7-9% off the first token and added 14-15% to every decode step, for
+# every method's best: at 1M on one node it took 7-9% off the first token and added 14-15% to every decode step, for
 # native (42.24 against 45.14 s, 7.39 against 6.33 ms) and flat alike (32.55 against 35.38 s, 7.19 against 6.10 ms)
 # (stock against expert parallel).
 # So the tensor-parallel timings run stock.

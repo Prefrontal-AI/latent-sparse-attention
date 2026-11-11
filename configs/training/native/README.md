@@ -35,9 +35,9 @@ Unlearned 8Q/2KV LSA is expressible with the learned preset by pinning `attentio
 `lsa_mqa8_lr_seeds.yaml` sweeps the long-document MQA LSA peak rates 5e-4/1e-3 and seeds 42/43 at k1024.
 Pin `run.runtime.seed=43` on dense or window presets for the corresponding seed 43 runs; `data.seed` follows it.
 
-# Compose another phase with an arm
+# Compose another phase with a method
 
-Keep the arm preset and override the common recipe fields.
+Keep the method preset and override the common recipe fields.
 For a 100B FineWeb trunk from any long-document preset:
 
 ```bash
@@ -47,9 +47,9 @@ lsa native train configs/training/native/qwen35_0_8b_gpt2/lsa_mqa8.yaml --dry-ru
 For an 18B long-document trunk from an NSA or PISA preset, override `data.name=gpt2 run.optim.steps=17167 run.optim.warmup_steps=859 run.optim.decay_ratio=0.2`.
 Keep `run.optim.schedule=wsd`, global tokens 1048576, and the selected peak rate.
 The long trunk decay-start checkpoint is step 13733; the FineWeb trunk checkpoint is step 94414.
-The provided `pretrain_long.yaml` and `pretrain_fineweb.yaml` compose these same phases with the dense MQA arm.
+The provided `pretrain_long.yaml` and `pretrain_fineweb.yaml` compose these same phases with the dense MQA method.
 
-For a 32k decay from the FineWeb trunk, use the same arm and branch from its own checkpoint:
+For a 32k decay from the FineWeb trunk, use the same method and branch from its own checkpoint:
 
 ```bash
 lsa native train configs/training/native/qwen35_0_8b_gpt2/nsam8_selection.yaml --dry-run attention.select_block_count=32 data.name=gpt2 data.seq_len=32768 data.seed=1042 run.init_from=/absolute/path/to/nsam8/checkpoint/step-94414 run.optim.steps=17548 run.optim.warmup_steps=96 run.optim.decay_ratio=0.97 run.optim.tokens_per_rank=32768 run.optim.tokens_per_step=1048576 run.runtime.activation_checkpoint=full run.checkpoint.decay_start=false
@@ -59,15 +59,15 @@ A 64k branch changes `data.seq_len=65536 run.optim.tokens_per_rank=65536` and ke
 The 128k FineWeb-source recipe changes `data.seq_len=131072 run.optim.tokens_per_rank=131072 run.optim.tokens_per_step=2097152 run.optim.steps=5866 run.optim.warmup_steps=48`, preserving the source 12.3B budget.
 A branch from the long-document 18B trunk uses checkpoint 13733 and `run.optim.steps=3434 run.optim.warmup_steps=96`, global 1048576 at all three lengths.
 The dense MQA examples are `decays.yaml` for the long trunk, `decays_fineweb.yaml` for 32k/64k FineWeb branches, and `decay_fineweb128k.yaml` for 128k.
-These examples never substitute another arm when loading its checkpoint; compose the matching arm or supply its overrides.
+These examples never substitute another method when loading its checkpoint; compose the matching method or supply its overrides.
 
-# FineWeb 128k decays for every arm
+# FineWeb 128k decays for every method
 
-Each arm pretrains on the 100B FineWeb trunk and decays at 128k from its own decay-start checkpoint, step 94414.
+Each method pretrains on the 100B FineWeb trunk and decays at 128k from its own decay-start checkpoint, step 94414.
 The decay presets share `phase/decay128k_fineweb.yaml`: 5866 steps, warmup 48, global tokens 2097152, sequence 131072.
-Pretrain the arm with the preset in the second column, then submit the decay with the preset in the third.
+Pretrain the method with the preset in the second column, then submit the decay with the preset in the third.
 
-| Arm | Pretrain preset | 128k decay preset | Pretrain budget | Decay budget |
+| Method | Pretrain preset | 128k decay preset | Pretrain budget | Decay budget |
 |---|---|---|---|---|
 | Dense | `pretrain_fineweb.yaml` | `decay_fineweb128k.yaml` | all keys | all keys |
 | Window | `pretrain_fineweb_window.yaml` | `decay_fineweb128k_window.yaml` | sink 4, window 1536 | sink 4, window 2560 |
@@ -81,9 +81,9 @@ Resolve any of them with `lsa native train <config> --dry-run`.
 # Released 128k checkpoints
 
 The ten 128k decays of the paper's comparison are released as torchtitan step folders under `training/native/released/<checkpoint>/checkpoint/step-5866`.
-Each `evaluate_released_<arm>.yaml` is the arm's 128k decay preset with its checkpoint in `run.evaluation.checkpoint`, so `evaluate` scores it with no `--checkpoint`:
+Each `evaluate_released_<method>.yaml` is the method's 128k decay preset with its checkpoint in `run.evaluation.checkpoint`, so `evaluate` scores it with no `--checkpoint`:
 
-| Arm | Checkpoint | Preset |
+| Method | Checkpoint | Preset |
 |---|---|---|
 | Dense | `decay128k-dense` | `evaluate_released_dense.yaml` |
 | Window 2,560 and 4,608 | `decay128k-swa-2560`, `decay128k-swa-4608` | `evaluate_released_swa_2560.yaml`, `evaluate_released_swa_4608.yaml` |
@@ -102,7 +102,7 @@ The held-out suite builds a block mask for a whole 128k sequence, which does not
 # DSA matrix
 
 The files under `dense_340m_gpt2/` express the live/detached hidden-state indexer, projected or sliced q/k inputs, 64/32 dim indexers, bias mixing, ReLU, sparse-after-warmup, and KL-on-selection variants.
-The base side-channel arm preserves its historical qkv/output biases; the other variants turn them off.
-`dsa_lr.yaml` sweeps peak rates 1e-4/3e-4/1e-3 and seeds 42/43 on the detached projected 64 dim sparse arm.
+The base side-channel method preserves its historical qkv/output biases; the other variants turn them off.
+`dsa_lr.yaml` sweeps peak rates 1e-4/3e-4/1e-3 and seeds 42/43 on the detached projected 64 dim sparse method.
 The resolved global batch is 1048576, steps 19074, warmup 401, followed by cosine decay to one tenth of the peak.
 A cosine run has no stable-stage checkpoint.

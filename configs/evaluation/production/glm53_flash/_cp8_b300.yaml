@@ -3,7 +3,7 @@
 # [_cp8.yaml](_cp8.yaml)'s layout - TP=1 / CP=8 / DCP=8 / EP=8 on DeepGEMM, contiguous spans, the sparse prefix gather - and
 # its ladder cut to the three contexts the paper's production table reads.
 # The image is the B300 server's at the fork commit that fits its DCP decode in a B300's shared memory, and as on
-# [the TP8 server](_tp8_b300.yaml) FlashInfer's autotune is off for every arm.
+# [the TP8 server](_tp8_b300.yaml) FlashInfer's autotune is off for every method.
 # The block-fp8 dense projections run FlashInfer's trtllm GEMM: on DeepGEMM, sglang's auto choice, the attention's
 # q_b_proj at attention tensor parallel 1 failed to launch while the decode graphs were captured (under CUDA_LAUNCH_BLOCKING), where tensor parallel 8's narrower shards launch - (a), it unlocks the mesh.
 # The prefill reads tilelang, where H200 reads flashmla_sparse: with GLM's pooled index keys sglang resolves

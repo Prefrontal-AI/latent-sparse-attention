@@ -1,4 +1,4 @@
-# Not a run - the long-context phase every arm shares: the trunk's weights at 16,384 tokens, under the arm's attention,
+# Not a run - the long-context phase every method shares: the trunk's weights at 16,384 tokens, under the method's attention,
 # with the decay the trunk left out. The optimiser starts fresh, so a short warmup comes first.
 #
 # One node, one sequence a GPU: 131,072 tokens a step, 8,000 steps, about 1.05B tokens. A quarter of the trunk's

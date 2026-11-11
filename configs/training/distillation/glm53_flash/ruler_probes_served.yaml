@@ -9,13 +9,13 @@
 #         --shards 8
 #         (inside the site's reservation)
 #
-# The designs are the served reads the reference arms are held to. Both read the tree design's sizes, the battery's
+# The designs are the served reads the reference methods are held to. Both read the tree design's sizes, the battery's
 # - window 512, sinks 4, pools of 4, buckets of 8 up to 16, 4,096 keys from the best 1,024 buckets, node buckets of 4 over node
 # cluster blocks of 4,096, a beam of 2,048 from at most 32,768 nodes. `tree` keeps its node centroids in fp8 as the
 # battery serves it, `tree_bf16` in bf16 as the reference scores them.
 #
-# Arms read over the same rows, one list a row - the window and the sinks are in every arm's read as they are in a served one,
-# and every probe metric counts only the keys past them, so no arm is scored on a key every arm holds.
+# Methods read over the same rows, one list a row - the window and the sinks are in every method's read as they are in a served one,
+# and every probe metric counts only the keys past them, so no method is scored on a key every method holds.
 #
 # A0 is the design itself in torch: Ward's buckets and node buckets, the centroid score - held to `tree_bf16` by
 # `agrees_with`. A1 pairs adjacent node buckets, A2 also groups keys into positional runs, A3 ranks node buckets by a
@@ -25,11 +25,11 @@
 # B2 widens its beam; B3 is PISA in the index space, one head, at 1 / tau.
 #
 # `tau` is the temperature a LogSumExp score and B3 read at, the map's own from its sidecar - `lsa distill calibrate-tau` records
-# one for a map that has none, which the battery's map needs, and a read without it refuses to start. `tau_scale` reads an arm
-# once at each multiple of it, as `A3@tau0.5`, `A3@tau1` and `A3@tau2`, so the LogSumExp arms report how much the temperature
-# moves them; an arm's `tau` fixes it instead, and `taus` sweeps explicit ones as `A3@tau=0.05`.
+# one for a map that has none, which the battery's map needs, and a read without it refuses to start. `tau_scale` reads a method
+# once at each multiple of it, as `A3@tau0.5`, `A3@tau1` and `A3@tau2`, so the LogSumExp methods report how much the temperature
+# moves them; a method's `tau` fixes it instead, and `taus` sweeps explicit ones as `A3@tau=0.05`.
 #
-# The torch reference runs on the host, a prompt's buckets and levels built once for every arm that groups alike.
+# The torch reference runs on the host, a prompt's buckets and levels built once for every method that groups alike.
 
 defaults:
   - long_16k_1m_heavy_x_dense_on_native_served
@@ -60,7 +60,7 @@ run:
           serving: {node_centroid_precision: fp8}
         - name: tree_bf16
           indexer: {top_k: 4096, top_p: 1024, top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
-      arms:
+      methods:
         - {name: A0, design: tree, agrees_with: tree_bf16}
         - {name: A1, design: tree, node_cluster_algorithm: position}
         - {name: A2, design: tree, cluster_algorithm: position, node_cluster_algorithm: position}

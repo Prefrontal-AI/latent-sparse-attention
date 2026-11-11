@@ -1,8 +1,8 @@
 # Native 0.8B hybrids at the GPT-2 vocabulary
 
 The runs of the paper's native comparison (Section 4.4), and the configs that score the released checkpoints.
-Every file here overlays `base.yaml`, and `phase/` holds the pre-train and decay overlays the arms share.
-The README at the repository root lists which file trains which arm.
+Every file here overlays `base.yaml`, and `phase/` holds the pre-train and decay overlays the methods share.
+The README at the repository root lists which file trains which method.
 
 ## Presets
 

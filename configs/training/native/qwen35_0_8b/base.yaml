@@ -1,5 +1,5 @@
 # Not a run - what every Qwen3.5-0.8B native run shares: the model from random init, the corpus, where it writes and
-# the held-out pass. `trunk_4k` names it first in its `defaults`, and so does `branch_16k`, which the arms name.
+# the held-out pass. `trunk_4k` names it first in its `defaults`, and so does `branch_16k`, which the methods name.
 #
 # The corpus is Qwen3.5's own nine sources at 65,536 tokens a row, so every sequence is a contiguous span of one long
 # document at any length that divides the row.

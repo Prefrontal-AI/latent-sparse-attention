@@ -1,6 +1,6 @@
 # PISA's block pyramid at LSA's bucket granularity, over the RULER probe set - the leaf block shrinks from 64 keys to 32, 16
 # and 8 at the same 4,096 keys, so the unit a read keeps is the one LSA's buckets are. See `ruler_probes_served.yaml` for the
-# designs and how arms are read and scored; `ruler_probes_fine_blocks_{128k,512k,1m}.yaml` name the caches, one a length.
+# designs and how methods are read and scored; `ruler_probes_fine_blocks_{128k,512k,1m}.yaml` name the caches, one a length.
 #
 #     lsa distill served-read configs/training/distillation/glm53_flash/ruler_probes_fine_blocks_512k.yaml \
 #         --shards 8
@@ -17,7 +17,7 @@ defaults:
 run:
   report:
     served:
-      arms:
+      methods:
         - {name: A0, design: tree, agrees_with: tree_bf16}
         - {name: B3, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 64, keep_count: 64}
         - {name: F32, kind: pisa, space: index, design: tree, tau_scale: [1], block_size: 32, keep_count: 128}

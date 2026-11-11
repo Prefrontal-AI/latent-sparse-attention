@@ -1,5 +1,5 @@
 # D1m - a sliding window of 1,536 keys and 4 sinks on the multi-query shape, 1,540 keys a query, the budget the sparse
-# arms read on this shape match.
+# methods read on this shape match.
 
 defaults:
   - base

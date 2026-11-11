@@ -1,5 +1,5 @@
-# The fine-block arms over the RULER probe set at 128k - the five tasks of `configs/data/targets/glm53_flash/ruler_probes_128k.yaml`,
-# 8 prompts each. See `ruler_probes_fine_blocks.yaml` for the designs, the arms and how they are read and scored.
+# The fine-block methods over the RULER probe set at 128k - the five tasks of `configs/data/targets/glm53_flash/ruler_probes_128k.yaml`,
+# 8 prompts each. See `ruler_probes_fine_blocks.yaml` for the designs, the methods and how they are read and scored.
 #
 #     lsa distill served-read configs/training/distillation/glm53_flash/ruler_probes_fine_blocks_128k.yaml \
 #         --shards 8

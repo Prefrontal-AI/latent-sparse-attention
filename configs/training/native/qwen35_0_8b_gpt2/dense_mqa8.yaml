@@ -1,5 +1,5 @@
 # D0m - dense causal attention on the multi-query shape: eight query heads over one key-value head of 128 dims with no
-# rotation, so one selection serves every head and the index space is the key itself. The ceiling for the sparse arms
+# rotation, so one selection serves every head and the index space is the key itself. The ceiling for the sparse methods
 # read on this shape.
 
 defaults:
