@@ -46,7 +46,7 @@ class Radix:
 
 
 class ThresholdEstimate:
-    """The threshold estimate, which CuTeDSL has to match Triton's bit for bit."""
+    """The threshold estimate, which CuTeDSL matches to Triton's bit for bit though only agreement is required."""
 
     # Samples a Triton program of the histogram adds as one block - the columns an exact pick's program reads at a time
     BLOCK: int = 4096

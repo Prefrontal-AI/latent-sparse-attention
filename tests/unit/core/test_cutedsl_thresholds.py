@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import scan_select
-from lsa.core.kernels.constants import TritonScanSelect
+from lsa.core.kernels.constants import ThresholdEstimate, TritonScanSelect
 from lsa.core.kernels.cutedsl import thresholds as cutedsl_thresholds
 
 pytestmark = pytest.mark.gpu
@@ -31,8 +31,7 @@ def stride_and_rank(top_p):
 
 # A threshold sits at a bin edge, and the bins span the upper half between a row's mean and best, at most 2 norm
 # => a sample carried over an edge by an ulp moves the threshold a bin of at most norm / 32
-BINS = 64
-BIN_SHARE = 2 / BINS
+BIN_SHARE = 2 / ThresholdEstimate.BINS
 # A mean added in another order differs by ulps of itself, and a threshold follows it - measured on 4 shapes of 1,700
 # rows at under 1.2e-7 of the norm, with adds reordered and every sample moved an ulp, and never a bin
 # => 2**-20 of the norm, 8 times that, for all but the rare row whose sample crossed an edge

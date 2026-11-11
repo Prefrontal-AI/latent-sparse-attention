@@ -11,6 +11,7 @@ import pytest
 import torch
 import triton
 
+from lsa.core.kernels.constants import ThresholdEstimate
 from lsa.core.kernels.triton import scan_select as triton_scan_select
 
 pytestmark = pytest.mark.gpu
@@ -37,8 +38,8 @@ def compiled_histogram(sample_count):
         sample_count,
         3,
         10,
-        BINS=64,
-        BLOCK=4096,
+        BINS=ThresholdEstimate.BINS,
+        BLOCK=ThresholdEstimate.BLOCK,
         num_warps=4,
     )
 
