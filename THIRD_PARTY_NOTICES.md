@@ -28,7 +28,7 @@ SOFTWARE.
 
 ## Datasets
 
-This repository ships no text of the datasets below, except the PaperTrail kit, the kernels prompt below and the two RULER haystack files of the release `ruler-sources-v1`.
+This repository ships no text of the datasets below, except the PaperTrail kit, the kernels prompt below and the three RULER source files of the release `ruler-sources-v1`.
 It holds the scripts and lock files a reader assembles them with, and what a reader assembles keeps the licence its owner gave it.
 Each source's card in `src/lsa/assets/datasets/sources` names the hub dataset and the revision it is read at.
 
@@ -58,7 +58,7 @@ The generators are [NVIDIA RULER](https://github.com/NVIDIA/RULER), Apache-2.0, 
 |---|---|---|
 | `PaulGrahamEssays.json` | Paul Graham's essays, as NVIDIA RULER's download script collected them | The essays state no licence. The file is included only to pin the haystack, because the essays change upstream over time and a fresh download no longer matches the haystack the paper's sets were built from |
 | `squad.json` | SQuAD 2.0 dev set, Rajpurkar et al. 2018 | CC BY-SA 4.0 |
-| `hotpotqa.json` | HotpotQA dev distractor set, Yang et al. 2018, fetched from the release `ruler-sources-v1` when it holds the file, and otherwise from the upstream url or from a [hub mirror](https://huggingface.co/datasets/namlh2004/hotpotqa), and checked against a pinned sha256 | CC BY-SA 4.0, as the RULER card states |
+| `hotpotqa.json` | HotpotQA dev distractor set, Yang et al. 2018, read from the release `ruler-sources-v1`, with the upstream url and a [hub mirror](https://huggingface.co/datasets/namlh2004/hotpotqa) as fallbacks, and checked against a pinned sha256 | CC BY-SA 4.0, as the RULER card states |
 
 ### Kernels prompt
 

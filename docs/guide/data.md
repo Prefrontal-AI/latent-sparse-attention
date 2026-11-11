@@ -215,7 +215,7 @@ The clone sits at `$LSA_EVAL_DATA/ruler-nvidia-<first 8 of the patch's sha256>`,
 The patch lets the common-words search run past 4M tokens, and counts a prompt's GLM tokens in pieces cut at spaces its pre-tokenizer never joins to the character before - batched on the cell's share of the cores and cached across the search and the samples - which gives the count one tokenization gives, so every prompt is byte-identical to the unpatched tokenizer's.
 `setup` refuses a haystack source whose sha256 is not the one the files were made from.
 The essays and SQuAD are fetched from release assets of the exact files, with SQuAD's upstream url as a fallback.
-HotpotQA is read from the release asset `hotpotqa.json` when the release holds it, and otherwise from its upstream url and then a hub mirror, and a file whose sha256 is not the pinned one is refused.
+HotpotQA is read from the release asset `hotpotqa.json`, with its upstream url and then a hub mirror as fallbacks, and a file whose sha256 is not the pinned one is refused.
 `lsa native prepare-ruler` takes the same `--fetch-in-job`.
 A cell is one generator process with the card's seed, and `--jobs` runs that many at once.
 A 1M cell takes about five minutes, a 2M cell about three and a 10M cell fifteen to twenty-seven.

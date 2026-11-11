@@ -11,8 +11,7 @@ checkpoint scores about 5 points lower on their files over the seven needle task
 
 Generation is CPU work and runs as one slurm job. A compute node may have no egress, so the sources are fetched where
 the command is typed: the essays and the tokenizer from the hub, SQuAD and HotpotQA from the release `ruler-sources-v1`
-when it holds them and from their upstream urls otherwise (HotpotQA is not in the release yet, so it comes from the
-upstream url or the hub mirror), and the sentence tokenizer.
+and from their upstream urls when it cannot be read, and the sentence tokenizer.
 `--fetch-in-job` moves that into the submitted job, for a site whose compute nodes can reach the network.
 """
 
