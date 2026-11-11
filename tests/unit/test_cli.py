@@ -129,3 +129,12 @@ def test_distill_alone_is_a_group_and_asks_for_a_subcommand(called):
     with pytest.raises(SystemExit):
         cli.main(["distill"])
     assert called == []
+
+
+def test_the_isolated_help_says_what_it_holds_one_gpu_not_a_whole_node():
+    group = cli.COMMANDS["evaluate"]
+    assert isinstance(group, dict)
+    command = group["isolated"]
+    assert isinstance(command, cli.Command)
+    assert "one GPU" in command.about
+    assert "held whole" not in command.about

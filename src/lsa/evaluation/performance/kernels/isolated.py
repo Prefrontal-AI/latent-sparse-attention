@@ -32,13 +32,15 @@ from typing import TYPE_CHECKING, Any
 
 from lsa import env, slurm
 from lsa.evaluation import require_extra
-from lsa.evaluation.constants import Launches
+from lsa.evaluation.constants import Kernels, Launches
 from lsa.sglang.launch import checkout_root
 
 if TYPE_CHECKING:
     from lsa.evaluation.config import KernelsConfig
 
 # The arms of each model, in the order they run - the configs under `configs/evaluation/kernels/<model>/`
+# => the baselines, the two designs and PISA, which the paper's layer figures draw from; every other config is in
+# `EXTRA_ARMS` or `UNTIMED_ARMS`
 ARMS: dict[str, tuple[str, ...]] = {
     "glm53_flash": ("full", "native", "lsa_flat", "lsa_tree", "pisa"),
     "qwen38_27b": ("full", "qsa", "lsa_flat", "lsa_tree", "pisa"),
@@ -48,8 +50,6 @@ ARMS: dict[str, tuple[str, ...]] = {
 GPUS: tuple[str, ...] = ("h200", "b300")
 
 CONFIGS = checkout_root() / "configs" / "evaluation" / "kernels"
-
-CHUNK = 32768
 
 # The phases of a layer, in the order each arm runs them
 PHASES: tuple[str, ...] = ("prefill", "decode")
@@ -67,6 +67,19 @@ MODEL_OVERRIDES: dict[tuple[str, str], tuple[str, ...]] = {
 EXTRA_ARMS: dict[str, tuple[str, ...]] = {
     "glm53_flash": ("pisa_c8", "pisa_c16"),
     "qwen38_27b": ("pisa_c8", "pisa_c16"),
+}
+
+# H200 configs a job never times, each with why - a delta measured on its own, or a layer the paper does not draw
+UNTIMED_ARMS: dict[str, dict[str, str]] = {
+    "glm53_flash": {
+        "lsa_flat_early_budget": "a delta on lsa_flat timed on its own, on B300 as a per-phase arm",
+        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree arm does not - it decodes flat",
+    },
+    "qwen38_27b": {
+        "lsa_tree_descend": "a tree decoding through the beam, which the paper's tree arm does not - it decodes flat",
+        "lsa_fixed": "the fixed design, scored but not drawn in the paper's layer-performance figure",
+        "gdn": "the gated delta net layer, not an attention arm - timed on its own for the whole-model composition",
+    },
 }
 
 # B300 arms whose config is one file per phase, to the file of each phase - the arm needs `--arm` like an extra one
@@ -122,7 +135,7 @@ def arm_overrides(model: str, arm: str, output: str | None, card: str = "h200") 
     Returns:
         The chunk every arm prefills in, the model's own settings on the card, CuTeDSL kernels for a design arm and the output.
     """
-    overrides = [f"data.chunk={CHUNK}", *MODEL_OVERRIDES[(model, card)]]
+    overrides = [f"data.chunk={Kernels.CHUNK}", *MODEL_OVERRIDES[(model, card)]]
     if arm in DESIGN_ARMS:
         overrides.append("model.serving.kernels=cutedsl")
     if output:
@@ -282,6 +295,13 @@ def main() -> None:
             f"image {os.path.basename(experiment.run.image)}",
             flush=True,
         )
+    from lsa.evaluation.run import output_line, require_mounted_output
+
+    for experiment in {experiment.run.output: experiment for experiment in experiments}.values():
+        if args.dry_run:
+            print(output_line(experiment), flush=True)
+        else:
+            require_mounted_output(experiment)
     parameters = job_parameters(experiments, args)
     print(f"job: {parameters}", flush=True)
     if args.dry_run:

@@ -367,6 +367,9 @@ Copy it under the shared root once, `install -D -m 644 data/prompts/gutenberg_30
 `phase` is `prefill` or `decode`, and the two derive different run ids - the phase sits where a served run's suite does - so they are two jobs and two records.
 `contexts` is the ladder, one harness process each, measured in the order given so an interrupted run keeps the short points it already has.
 
+The container reads and writes the run directory, so `run.output` has to resolve under a directory it mounts - the project root, the checkout, the hub cache or one of the site's `mounts`.
+A submission refuses a records root outside them, naming the path and the mounts, and a dry run prints the same refusal on its `output` line.
+
 A context whose samples are already on disk is kept, which is what makes a job that ran out of wall clock finishable rather than restartable - resubmitted with `run.id` pinned to its directory.
 The record is rewritten after every context, so a run that is still climbing is readable.
 
@@ -405,6 +408,7 @@ It runs the same measurement as `lsa evaluate kernels`, once per arm and phase, 
 
 The arms of a model are its dense and native baselines, the two designs and PISA, in that order.
 `--arm` names others instead, such as the two PISA variants, and `--phase` keeps one phase.
+The model's other configs - a delta such as the early budget, a descending decode, a layer the figures do not draw - are never timed here, and `UNTIMED_ARMS` in [isolated.py](../../src/lsa/evaluation/performance/kernels/isolated.py) says why for each.
 `--gpu b300` loads each arm's B300 config beside the H200 one, with that card's image and backends, and refuses an arm that has none rather than falling back to the H200 file.
 Trailing dotted overrides, as `lsa evaluate kernels` takes, apply to every arm and phase and lay over the table's overrides, so they win.
 An arm that fails does not stop the ones after it, and the job lists the failed arms when the last is done.
@@ -452,7 +456,11 @@ The modules every layer runs besides its attention - the feed-forward, the mHC b
 
 ```bash
 lsa kernels modules configs/evaluation/kernels/glm53_flash/native.yaml --phase decode
+lsa kernels modules configs/evaluation/kernels/glm53_flash/native.yaml --phase prefill data.checkpoint=<a cut> --dry-run
 ```
+
+Trailing dotted overrides lay over the config as `lsa evaluate kernels` takes them, and `--phase` pins the config's `data.phase` sweep to the phase timed.
+A config that still yields more than one run is refused with its points listed, since the timer reads only the image, the checkpoint and the model - an override of the swept key picks one.
 
 Composing sums one layer of each kind and the modules between them into a whole-model prefill and decode, each weighted by how many of it the checkpoint config holds.
 It leaves out everything that is not a kernel - host gaps, communication and scheduling.

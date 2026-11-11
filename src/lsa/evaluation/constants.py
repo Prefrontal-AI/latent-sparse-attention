@@ -445,6 +445,9 @@ class Kernels:
     # The two halves of serving, measured apart since a prefill chunk is thousands of query rows and a decode token one
     PHASES: tuple[str, ...] = ("prefill", "decode")
 
+    # Queries in a served prefill chunk, the one every published layer timing prefills in
+    CHUNK: int = 32768
+
     # A decode token's case, the heaviest maintenance it triggers, heaviest first
     # => the design grows its hierarchy on a full page, clusters a closed block, takes a bucket-cache page; the model's indexer closes a pool of four keys
     CASES: tuple[str, ...] = ("hierarchy_growth", "cluster_block_close", "page_allocation", "pool_close")
