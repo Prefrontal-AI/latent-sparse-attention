@@ -25,12 +25,31 @@ bucket whose shaped score against the planes reaches the threshold is still list
 against the planes, as every other shaped read does.
 """
 
+import logging
+
 import torch
 import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
 from lsa.core.kernels.triton.keys import EMPTY, pack_key, unpack_scores
+
+
+@triton.jit
+def _prefix1d(x: tl.tensor, N: tl.constexpr) -> tl.tensor:
+    """The inclusive prefix sums of a 1D int32 tensor of length N.
+
+    triton-ascend miscomputes 1D tl.cumsum (values laid out along the wrong axis), so this reshapes to 2D,
+    cumsums along axis 1, and adds each row's start from a broadcast-compare prefix of the row totals - the one
+    reduction shape the compiler gets right. N must be a power of two.
+    """
+    C: tl.constexpr = 128 if N >= 128 else N
+    R: tl.constexpr = N // C
+    x2 = tl.reshape(x, [R, C])
+    totals = tl.sum(x2, axis=1)
+    lane = tl.arange(0, R)
+    starts = tl.sum((lane[:, None] >= lane[None, :]).to(tl.int32) * totals[None, :], axis=1) - totals
+    return tl.reshape(tl.cumsum(x2, axis=1) + starts[:, None], [R * C])
 from lsa.core.kernels.triton.shape import (
     QUERY_BITS,
     ShapeTable,
@@ -38,7 +57,6 @@ from lsa.core.kernels.triton.shape import (
     _spread,
     add_planes_spread,
     basis_words,
-    plane_gaps,
     sign_query,
 )
 
@@ -85,40 +103,30 @@ def _survivor_words(
     bucket_count: tl.tensor,
     word_count: tl.tensor,
     capacity: tl.tensor,
-    basis: tl.tensor,
-    variances: tl.tensor,
-    floor: tl.tensor,
-    plane_gaps: tl.tensor,
-    deviations: tl.tensor,
     D: tl.constexpr,
     BLOCK_Q: tl.constexpr,
     WORDS: tl.constexpr,
-    SHAPED: tl.constexpr,
-    RHO: tl.constexpr,
-    RHOP: tl.constexpr,
 ) -> None:
     """Scan a block of buckets against each query's threshold and list the words that hold a survivor.
 
-        A survivor is a bucket scoring at or above the threshold, widened by MARGIN.
-    Shaped buckets add their spread
-        against the query's planes, widened by `plane_gaps`.
+    A survivor is a bucket scoring at or above the threshold, widened by MARGIN. The scan runs one dot
+    over the whole group of words - a per-word loop around the dot miscompiles its stores and crashes
+    the compiler together with `tl.atomic_add` (consolidateToTail), so the words of a group pack in one
+    reshape, and the append stays atomic.
 
-        Args:
-            index_queries: Index queries [query_count, D] bf16.
-            bucket_centroids: Bucket centroids [bucket_count, D] bf16.
-            visible_counts: Buckets each query sees [query_count] int32.
-            thresholds: Each query's threshold [query_count] fp32.
-            word_counts: Words each query listed [query_count] int32, added to.
-            survivor_counts: Survivors each query found [query_count] int32, added to.
-            listed_words: Index of each listed word [query_count, capacity] int32.
-            listed_bits: Survivor bits of each listed word [query_count, capacity] int32, one bit a bucket.
-            word_count: Words of 32 buckets a row spans.
-            capacity: Words a row lists at most.
-            basis: Sign directions of the buckets, packed 32 to a word - read only if SHAPED.
-            variances: Variances of the buckets' directions [bucket_count, RHO] fp32 - read only if SHAPED.
-            floor: Variance outside the directions [bucket_count] fp32 - read only if SHAPED.
-            plane_gaps: How far a query's planes project from it along a unit direction [query_count] fp32.
-            deviations: Standard deviations a shaped score adds.
+    Args:
+        index_queries: Index queries [query_count, D] bf16.
+        bucket_centroids: Bucket centroids [bucket_count, D] bf16.
+        visible_counts: Buckets each query sees [query_count] int32.
+        thresholds: Each query's threshold [query_count] fp32.
+        word_counts: Words each query listed [query_count] int32, added to.
+        survivor_counts: Survivors each query found [query_count] int32, added to.
+        listed_words: Index of each listed word [query_count, capacity] int32.
+        listed_bits: Survivor bits of each listed word [query_count, capacity] int32, one bit a bucket.
+        query_count: Queries the tile spans.
+        bucket_count: Buckets the centroids span.
+        word_count: Words of 32 buckets a row spans.
+        capacity: Words a row lists at most.
     """
     rows = tl.program_id(0) * BLOCK_Q + tl.arange(0, BLOCK_Q)
     live = rows < query_count
@@ -128,60 +136,31 @@ def _survivor_words(
     )
     length = tl.load(visible_counts + rows, mask=live, other=0)
     threshold = tl.load(thresholds + rows, mask=live, other=float("inf"))
-    # How far a query's planes may project from the query, along any unit direction
-    gap = tl.load(plane_gaps + rows, mask=live, other=0.0)
     bit = tl.arange(0, 32)
     slots = tl.arange(0, WORDS)
     first = tl.program_id(1) * WORDS
-    packed = tl.zeros([BLOCK_Q, WORDS], dtype=tl.int32)
-    pair = tl.arange(0, 32 * RHOP)
-    direction = pair % RHOP
-    ranks = tl.arange(0, RHOP)
-    for word in range(WORDS):
-        buckets = (first + word) * 32 + bit
-        centroid = tl.load(
-            bucket_centroids + buckets[:, None].to(tl.int64) * D + dims[None, :],
-            mask=buckets[:, None] < bucket_count,
-            other=0.0,
-        )
-        scores = tl.dot(query, tl.trans(centroid))
-        if SHAPED:
-            # One column per (bucket, direction) pair, the signs expanded once and read by every query of the tile
-            pair_bucket = (first + word) * 32 + pair // RHOP
-            pair_valid = (pair_bucket < bucket_count) & (direction < RHO)
-            basis_row = tl.where(pair_valid, pair_bucket.to(tl.int64) * RHO + direction, 0)
-            words = tl.load(
-                basis + basis_row[:, None] * (D // 32) + tl.arange(0, D // 32)[None, :],
-                mask=pair_valid[:, None],
-                other=0,
-            )
-            bits = tl.reshape((words[:, :, None] >> bit[None, None, :]) & 1, [32 * RHOP, D])
-            signs = tl.where(bits != 0, 1.0, -1.0).to(query.dtype)
-            projection = tl.abs(tl.dot(query, tl.trans(signs)) * tl.rsqrt(float(D))) + gap[:, None]
-            projection = tl.where(pair_valid[None, :], projection, 0.0)
-            squared = tl.reshape(projection * projection, [BLOCK_Q, 32, RHOP])
-            inside = buckets < bucket_count
-            shape_floor = tl.load(floor + buckets, mask=inside, other=0.0)
-            shape_variances = tl.load(
-                variances + buckets[:, None].to(tl.int64) * RHO + ranks[None, :],
-                mask=inside[:, None] & (ranks < RHO)[None, :],
-                other=0.0,
-            )
-            # The planes' variance is floor + sum_j (lambda_j - floor) p_j^2, at most this with |p_j| widened by
-            # the gap - and a hair over, past fp32 rounding
-            excess = tl.maximum(shape_variances - shape_floor[:, None], 0.0)
-            variance = shape_floor[None, :] + tl.sum(squared * excess[None, :, :], axis=2)
-            scores += deviations * tl.sqrt(tl.maximum(variance, 0.0)) * SPREAD_SLACK
-        kept = ((buckets[None, :] < length[:, None]) & (scores >= threshold[:, None])).to(tl.int32)
-        # Distinct bits sum to their union
-        mask = tl.sum(kept << bit[None, :], 1)
-        packed = tl.where(slots[None, :] == word, mask[:, None], packed)
+    buckets = first * 32 + slots[:, None] * 32 + bit[None, :]
+    inside = tl.reshape(buckets, [BLOCK_Q * 0 + WORDS * 32]) < bucket_count
+    buckets1d = first * 32 + tl.arange(0, WORDS * 32)
+    centroid = tl.load(
+        bucket_centroids + buckets1d[:, None].to(tl.int64) * D + dims[None, :],
+        mask=buckets1d[:, None] < bucket_count,
+        other=0.0,
+    )
+    scores = tl.dot(query, tl.trans(centroid))
+    kept = ((buckets1d[None, :] < length[:, None]) & (scores >= threshold[:, None])).to(tl.int32)
+    # Distinct bits sum to their union
+    kept2 = tl.reshape(kept, [BLOCK_Q, WORDS, 32])
+    b3 = tl.reshape(
+        tl.arange(0, 32)[None, None, :] + tl.zeros([BLOCK_Q, WORDS, 32], tl.int32), [BLOCK_Q, WORDS, 32]
+    )
+    packed = tl.sum(kept2 << b3, 2)
     kept_count = tl.sum(libdevice.popc(packed), 1)
     # The row's nonzero words, appended where its count says - one atomic a row
     hit = ((packed != 0) & (first + slots[None, :] < word_count)).to(tl.int32)
     count = tl.sum(hit, 1)
-    base = tl.atomic_add(word_counts + rows, count, mask=count > 0, sem="relaxed")
-    tl.atomic_add(survivor_counts + rows, kept_count, mask=kept_count > 0, sem="relaxed")
+    base = tl.atomic_add(word_counts + rows, count, mask=count > 0)
+    tl.atomic_add(survivor_counts + rows, kept_count, mask=kept_count > 0)
     slot = base[:, None] + tl.cumsum(hit, 1) - 1
     at = rows[:, None].to(tl.int64) * capacity + slot
     held = (hit > 0) & (slot < capacity)
@@ -217,13 +196,135 @@ def _survivor_buckets(
         # Nearly every word holds one survivor
         # => peel each word's lowest set bit, as often as the fullest word has bits, not test all 32
         count = libdevice.popc(word)
-        at = filled + tl.cumsum(count, 0) - count
+        at = filled + _prefix1d(count, EXPAND) - count
         for _ in range(tl.max(count, 0)):
             bit = libdevice.ffs(word) - 1
             tl.store(buckets + row * capacity + at, index * 32 + bit, mask=(word != 0) & (at < capacity))
             at += 1
             word = word & (word - 1)
         filled += tl.sum(count, 0)
+
+
+@triton.jit
+def _scan_shaped_words(
+    index_queries: tl.tensor,
+    bucket_centroids: tl.tensor,
+    visible_counts: tl.tensor,
+    thresholds: tl.tensor,
+    basis: tl.tensor,
+    variances: tl.tensor,
+    floor: tl.tensor,
+    planes: tl.tensor,
+    steps: tl.tensor,
+    totals: tl.tensor,
+    word_bits: tl.tensor,
+    query_count: tl.tensor,
+    bucket_count: tl.tensor,
+    word_count: tl.tensor,
+    deviations: tl.tensor,
+    D: tl.constexpr,
+    WORDS: tl.constexpr,
+    DKC: tl.constexpr,
+    RHO: tl.constexpr,
+    RHOP: tl.constexpr,
+    PLANES: tl.constexpr,
+) -> None:
+    # Shaped scan, one row a program: the old survivor scan split apart. This kernel holds the score dot
+    # (fp32, exact) and the spread math and writes every word's survivor bits out - no atomic anywhere,
+    # which is what the dot-plus-atomic compiler crash (upstream #14/#15) forbids. The collect kernel does
+    # the appending. A BLOCK_Q-rows-a-program form was tried first and blew the UB budget - the compiler
+    # inlines _spread once per row (upstream #21's layout blowup) - so rows go one per program. The spread
+    # math matches _score_buckets' SHAPED branch (same _spread, same fp32 order), and the listing condition
+    # scores + deviations * spread >= threshold is the reference scorer's condition on the same fp32 dot,
+    # so the listing is a superset of the buckets the per-query scoring reaches.
+    row = tl.program_id(0).to(tl.int64)
+    dims = tl.arange(0, D)
+    query = tl.load(index_queries + row * D + dims).to(tl.float32)
+    length = tl.load(visible_counts + row)
+    threshold = tl.load(thresholds + row)
+    words = tl.arange(0, D // 32)
+    step_row = tl.load(steps + row * (D // DKC) + words * 32 // DKC)
+    total_row = tl.load(totals + row)
+    planes_row = planes + row * PLANES * (D // 32)
+    slots = tl.arange(0, WORDS)
+    first = tl.program_id(1) * WORDS
+    buckets1d = first * 32 + tl.arange(0, WORDS * 32)
+    bucket_live = buckets1d < bucket_count
+    centroid = tl.load(
+        bucket_centroids + buckets1d[:, None].to(tl.int64) * D + dims[None, :],
+        mask=bucket_live[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    scores = tl.sum(centroid * query[None, :], 1)
+    directions = tl.arange(0, RHOP)
+    kept_dirs = directions < RHO
+    shaped = buckets1d.to(tl.int64)
+    word = tl.load(
+        basis
+        + ((shaped[:, None] * RHO + directions[None, :]) * (D // 32))[:, :, None]
+        + words[None, None, :],
+        mask=bucket_live[:, None, None] & kept_dirs[None, :, None],
+        other=0,
+    )
+    shape_variances = tl.load(
+        variances + shaped[:, None] * RHO + directions[None, :],
+        mask=bucket_live[:, None] & kept_dirs[None, :],
+        other=0.0,
+    )
+    fl = tl.load(floor + shaped, mask=bucket_live, other=0.0)
+    spread = _spread(
+        word,
+        planes_row,
+        step_row,
+        total_row,
+        shape_variances,
+        fl,
+        kept_dirs[None, :],
+        D,
+        PLANES,
+    )
+    total = scores + deviations * spread
+    kept = (bucket_live & (buckets1d < length) & (total >= threshold)).to(tl.int32)
+    kept2 = tl.reshape(kept, [WORDS, 32])
+    b2 = tl.reshape(
+        tl.arange(0, 32)[None, :] + tl.zeros([WORDS, 32], tl.int32), [WORDS, 32]
+    )
+    packed = tl.sum(kept2 << b2, 1)
+    at = first + slots
+    tl.store(
+        word_bits + row * word_count + at,
+        packed,
+        mask=at < word_count,
+    )
+
+
+@triton.jit
+def _collect_words(
+    word_bits: tl.tensor,
+    word_counts: tl.tensor,
+    survivor_counts: tl.tensor,
+    listed_words: tl.tensor,
+    listed_bits: tl.tensor,
+    word_count: tl.tensor,
+    capacity: tl.tensor,
+    EXPAND: tl.constexpr,
+) -> None:
+    # The append half of the shaped scan: no dot in here, so the atomic_add calls that crash next to a dot
+    # are safe. Same append protocol as _survivor_words' tail - one atomic per row per chunk.
+    row = tl.program_id(0).to(tl.int64)
+    slots = tl.arange(0, EXPAND)
+    for start in range(0, word_count, EXPAND):
+        first = start + slots
+        packed = tl.load(word_bits + row * word_count + first, mask=first < word_count, other=0)
+        hit = (packed != 0).to(tl.int32)
+        count = tl.sum(hit, 0)
+        base = tl.atomic_add(word_counts + row, count, mask=count > 0)
+        kept_count = tl.sum(libdevice.popc(packed), 0)
+        tl.atomic_add(survivor_counts + row, kept_count, mask=kept_count > 0)
+        at = base + _prefix1d(hit, EXPAND) - 1
+        held = (hit > 0) & (at < capacity)
+        tl.store(listed_words + row * capacity + at, first, mask=held)
+        tl.store(listed_bits + row * capacity + at, packed, mask=held)
 
 
 @triton.jit
@@ -383,41 +484,6 @@ def shape_arguments(
     )
 
 
-def scan_arguments(index_queries: torch.Tensor, shapes: ShapeTable | None) -> dict[str, object]:
-    """The shape arguments `_survivor_words` takes - stand-ins, never read, for unshaped buckets.
-
-    Args:
-        index_queries: Index queries [R, d] bf16.
-        shapes: The buckets' shapes, or None.
-
-    Returns:
-        The keyword arguments.
-    """
-    if shapes is None:
-        unread = torch.zeros(1, device=index_queries.device)
-        return dict(
-            basis=torch.zeros(1, device=index_queries.device, dtype=torch.int32),
-            variances=unread,
-            floor=unread,
-            plane_gaps=unread,
-            deviations=0.0,
-            SHAPED=False,
-            RHO=0,
-            RHOP=1,
-        )
-    rank = shapes.variances.shape[1]
-    return dict(
-        basis=basis_words(shapes.basis),
-        variances=shapes.variances,
-        floor=shapes.floor,
-        plane_gaps=plane_gaps(index_queries),
-        deviations=shapes.deviations,
-        SHAPED=True,
-        RHO=rank,
-        RHOP=triton.next_power_of_2(max(rank, 1)),
-    )
-
-
 def dense_keys(
     index_queries: torch.Tensor,
     bucket_centroids: torch.Tensor,
@@ -494,6 +560,7 @@ def word_listing(
     thresholds: torch.Tensor,
     capacity: int,
     shapes: ShapeTable | None = None,
+    query_planes: SignQuery | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """List the buckets each row scores at or above its threshold by survivor words, then expand the words.
 
@@ -509,6 +576,60 @@ def word_listing(
         The listing [R, capacity] int32 - a row's first `capacity` survivors, unset after.
         Buckets each row listed [R] int32 - above capacity for a row whose listing overflowed.
     """
+    if shapes is not None:
+        rows, d = index_queries.shape
+        bucket_count = bucket_centroids.shape[0]
+        word_count = triton.cdiv(bucket_count, 32)
+        device = index_queries.device
+        logging.debug("shaped word_listing rows=%d buckets=%d capacity=%d", rows, bucket_count, capacity)
+        sq = query_planes or sign_query(index_queries)
+        rank = shapes.variances.shape[1]
+        word_counts = torch.zeros(rows, device=device, dtype=torch.int32)
+        survivor_counts = torch.zeros(rows, device=device, dtype=torch.int32)
+        listed_words = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        listed_bits = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        buckets = torch.empty(rows, capacity, device=device, dtype=torch.int32)
+        words_per_program = 4
+        word_bits = torch.zeros(rows, word_count, device=device, dtype=torch.int32)
+        _scan_shaped_words[(rows, triton.cdiv(word_count, words_per_program))](
+            index_queries,
+            bucket_centroids,
+            visible_counts,
+            thresholds,
+            basis_words(shapes.basis),
+            shapes.variances,
+            shapes.floor,
+            sq.planes,
+            sq.steps,
+            sq.totals,
+            word_bits,
+            rows,
+            bucket_count,
+            word_count,
+            shapes.deviations,
+            D=d,
+            WORDS=words_per_program,
+            DKC=min(128, d),
+            RHO=rank,
+            RHOP=triton.next_power_of_2(max(rank, 1)),
+            PLANES=QUERY_BITS,
+            num_warps=4,
+        )
+        _collect_words[(rows,)](
+            word_bits,
+            word_counts,
+            survivor_counts,
+            listed_words,
+            listed_bits,
+            word_count,
+            capacity,
+            EXPAND=128,
+            num_warps=4,
+        )
+        _survivor_buckets[(rows,)](
+            word_counts, listed_words, listed_bits, buckets, capacity, EXPAND=128, num_warps=4
+        )
+        return buckets, survivor_counts
     rows, d = index_queries.shape
     bucket_count = bucket_centroids.shape[0]
     word_count = triton.cdiv(bucket_count, 32)
@@ -518,7 +639,7 @@ def word_listing(
     listed_words = torch.empty(rows, capacity, device=device, dtype=torch.int32)
     listed_bits = torch.empty(rows, capacity, device=device, dtype=torch.int32)
     buckets = torch.empty(rows, capacity, device=device, dtype=torch.int32)
-    block_q, words_per_program = 128, 16
+    block_q, words_per_program = 64, 16
     _survivor_words[(triton.cdiv(rows, block_q), triton.cdiv(word_count, words_per_program))](
         index_queries,
         bucket_centroids,
@@ -536,7 +657,6 @@ def word_listing(
         BLOCK_Q=block_q,
         WORDS=words_per_program,
         num_warps=4,
-        **scan_arguments(index_queries, shapes),
     )
     _survivor_buckets[(rows,)](
         word_counts, listed_words, listed_bits, buckets, capacity, EXPAND=128, num_warps=4
@@ -573,7 +693,7 @@ def listed_keys(
     device = index_queries.device
     shifted = thresholds - MARGIN * index_queries.float().norm(dim=1)
     buckets, survivor_counts = word_listing(
-        index_queries, bucket_centroids, visible_counts, shifted, capacity, shapes
+        index_queries, bucket_centroids, visible_counts, shifted, capacity, shapes, query_planes
     )
     keys = torch.full((rows, capacity), EMPTY, device=device, dtype=torch.int64)
     reached = torch.empty(rows, device=device, dtype=torch.int32)
@@ -691,7 +811,7 @@ def _histogram_thresholds(
             tl.minimum(tl.maximum((score - mean) / width, 0.0), BINS - 1.0).to(tl.int32), BINS
         )
     edges = tl.arange(0, BINS)
-    at_or_above = tl.sum(counts, 0) - tl.cumsum(counts, 0) + counts
+    at_or_above = tl.sum(counts, 0) - _prefix1d(counts, BINS) + counts
     top = tl.max(tl.where(at_or_above >= rank, edges, -1), 0)
     # A hair under the edge, so a sampled bucket scored at it again still counts as at or above it
     threshold = tl.where(top > 0, mean + top.to(tl.float32) * width - EDGE_SLACK * norm, -float("inf"))

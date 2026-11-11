@@ -56,15 +56,20 @@ def keep_kernel(
         priority = tl.where(eligible & forced, float("inf"), priority)
     keys = tl.where(live, pack_key(priority, slots), EMPTY_KEY)
     ordered = tl.sort(keys, descending=True)
-    kept_live = (slots < keep) & (ordered != EMPTY_KEY)
-    lowest = ordered_bits(tl.full((WIDTH,), float("-inf"), tl.float32)).to(tl.int64)
-    kept_valid = kept_live & ((ordered >> 32) > lowest)
+    # triton-ascend: any comparison against the sorted keys miscompares (an equal pair takes
+    # the true branch), so the kept lanes are counted instead: every eligible candidate's key
+    # sorts strictly above the -inf fillers, so the first `n` lanes are exactly the kept ones
+    n_eligible = tl.sum((eligible & live).to(tl.int32), 0)
+    kept_valid = slots < tl.minimum(n_eligible, keep)
     kept = tl.load(candidates_ptr + row * width + key_bucket(ordered), mask=kept_valid, other=0)
     if LEAF:
-        blocks = tl.sort(tl.where(kept_valid, kept, NO_BLOCK))
+        # triton-ascend: a tl.where over int64 operands always takes the first branch, so the
+        # empty-marker sort runs in int32 and only the final result is widened
+        marked = tl.where(kept_valid, kept.to(tl.int32), 2147483647)
+        blocks32 = tl.sort(marked)
         tl.store(
             kept_ptr + row * out_width + slots,
-            tl.where(blocks == NO_BLOCK, -1, blocks),
+            tl.where(blocks32 == 2147483647, -1, blocks32).to(tl.int64),
             mask=slots < out_width,
         )
     else:
