@@ -75,8 +75,8 @@ The paper's tables shorten them to Block Sparse (Flat) and (Tree), and these doc
 A record files a run under its attention kind, `attention.kind`: `full`, `block_sparse`, `lsa` or `pisa`.
 A run of `native` takes the kind its checkpoint ships, which the model card states as `attention`, so GLM-5.3-Flash's DSA and the QSA checkpoint are both `block_sparse` and Qwen3.8-27B's own is `full`.
 LSA's designs are told apart by the indexer settings, not the kind.
-The record of a natively trained model, which no server ran, files it under the arm it was trained with - `full`, `lsa`, `pisa`, `nsa` or `window`, where `window` is the sliding window with sinks that native training calls the same.
-Its `attention.config` states `sink_size`, `window_size` and `top_k` for every arm that has them, so the arms read as one set of sizes, beside the arm's own block sizes.
+The record of a natively trained model, which no server ran, files it under the method it was trained with - `full`, `lsa`, `pisa`, `nsa` or `window`, where `window` is the sliding window with sinks that native training calls the same.
+Its `attention.config` states `sink_size`, `window_size` and `top_k` for every method that has them, so the methods read as one set of sizes, beside the method's own block sizes.
 
 The fixed design, one level, is not reported.
 The paper names how a query searches.
@@ -426,7 +426,7 @@ It reads the cached top-k ranking, so it applies to the targets read off that ra
 ## Native training
 
 Native training is training from random initialisation with the sparse attention in the model from step one.
-It is a training regime, and is not the native arm, a model's own sparse attention such as GLM's indexer, which the table of methods above lists as `native`.
+It is a training regime, and is not the native method, a model's own sparse attention such as GLM's indexer, which the table of methods above lists as `native`.
 
 | symbol | concept | code name | config key |
 |---|---|---|---|
@@ -445,16 +445,16 @@ It is a training regime, and is not the native arm, a model's own sparse attenti
 The sizes are LSA's own - `window_size`, `sink_size`, `top_k`, `top_p`, `pool_size`, `bucket_size`, `bucket_cap` - under `attention`, with the block the flat design clusters spelled `block_size` as the cluster block size.
 A bucket with a key in the window or the sinks is read in full, and is not a candidate.
 
-### The arms
+### The methods
 
-`attention.kind` takes `dense`, `window`, `multires`, `lsa`, and with the arms ported from the paper's trainer, `nsa`, `pisa` and `dsa`.
+`attention.kind` takes `dense`, `window`, `multires`, `lsa`, and with the methods ported from the paper's trainer, `nsa`, `pisa` and `dsa`.
 A window with sinks is `window` with `sink_size` above zero.
-The paper's native-training methods are these arms: Full Attention is `dense`, SWA is `window`, NSA is `nsa`, PISA is `pisa` and N-LSA is `lsa`.
+The paper's native-training methods are these: Full Attention is `dense`, SWA is `window`, NSA is `nsa`, PISA is `pisa` and N-LSA is `lsa`.
 The paper's trainer's QSA layer is not a lsa name, since QSA is Qwen3.8's own block sparse attention: its top-$k$ read is `dsa` and its bucket read is `lsa` with an indexer.
 
 | symbol | concept | code name | config key |
 |---|---|---|---|
-| - | what an arm's index vectors are - `none` the model's own position-free query and key, `key_and_query` a projection of the layer's query and key heads, `attention_input` a projection of the layer input, `sliced_key_and_query` a projection of each head's last index dims | `index_input` | `attention.index_input` |
+| - | what a method's index vectors are - `none` the model's own position-free query and key, `key_and_query` a projection of the layer's query and key heads, `attention_input` a projection of the layer input, `sliced_key_and_query` a projection of each head's last index dims | `index_input` | `attention.index_input` |
 | - | how an indexer is trained - `none`, `kl` against the layer's attention, `ste` by the language-model loss through a straight-through score | `index_training` | `attention.index_training` |
 | $d^{(idx)}$ | the dim an indexer writes | `index_dim` | `attention.index_dim` |
 | - | the leading index dims that are rotated | `index_rotary_dim` | `attention.index_rotary_dim` |
@@ -484,9 +484,9 @@ The paper's trainer's QSA layer is not a lsa name, since QSA is Qwen3.8's own bl
 | - | the blocks `pisa` keeps at every level | `level_block_count` | `attention.level_block_count` |
 | - | the newest `pisa` leaf blocks always read | `local_block_count` | `attention.local_block_count` |
 
-`block_size` stays the cluster block size, so the blocks of `nsa` and `pisa` carry their arm's own name.
-`window_size`, `sink_size`, `top_k`, `top_p` and `index_dim` keep their meanings, and `index_keys` and `index_queries` are the index space whichever way an arm builds it.
-The key budget of an arm is the keys a query reads at fine resolution, `top_k` for `dsa` and `lsa`, and `nsa`'s and `pisa`'s selected blocks times their size.
+`block_size` stays the cluster block size, so the blocks of `nsa` and `pisa` carry their method's own name.
+`window_size`, `sink_size`, `top_k`, `top_p` and `index_dim` keep their meanings, and `index_keys` and `index_queries` are the index space whichever way a method builds it.
+The key budget of a method is the keys a query reads at fine resolution, `top_k` for `dsa` and `lsa`, and `nsa`'s and `pisa`'s selected blocks times their size.
 
 ### Data
 
@@ -518,8 +518,8 @@ The mix is the tokens the distillation trains on.
 | $d_h$ | a head's dim | `head_dim` | `model.head_dim` |
 | - | the leading head dims the model rotates, none for a position-free head | `rotary_dim` | `model.rotary_dim` |
 
-A head shape is the flavour's own until a run names one, and the arms read whichever shape the model gives them.
-The multi-query shape is eight query heads over one key-value head of 128 dims and `rotary_dim` 0, and is the `m8` of an arm's name.
+A head shape is the flavour's own until a run names one, and the methods read whichever shape the model gives them.
+The multi-query shape is eight query heads over one key-value head of 128 dims and `rotary_dim` 0, and is the `m8` of a method's name.
 The GPT-2 vocabulary is 50,257 ids with its rows padded to a multiple of 64.
 
 ### Schedule
@@ -567,10 +567,10 @@ A probe is a query whose answer is known, so a selection is scored on the keys i
 | the keys a probe is meant to find, `-1` padded | `target_key_ids` | - | `[Q, N]` int32 |
 | the keys of the line the needle sits on, `-1` padded | `line_key_ids` | - | `[Q, L]` int32 |
 | the rows of each task a prepared selection reads | `source_rows` | `data.prepared.source_rows` | - |
-| an offline arm - a reference read or PISA's selection, scored beside the served designs | `ArmConfig` | `run.report.served.arms` | - |
+| an offline method - a reference read or PISA's selection, scored beside the served designs | `MethodConfig` | `run.report.served.methods` | - |
 | the share of a probe's long-range target keys a read holds | `target_held` | - | `[R]` fp32 |
-| the vectors an arm scored a query against | `scored_vectors` | - | `[R]` int64 |
-| the space a PISA arm reads - the model's own keys and queries, or a design's index space | - | `run.report.served.arms[].space`, `attention` or `index` | - |
+| the vectors a method scored a query against | `scored_vectors` | - | `[R]` int64 |
+| the space a PISA method reads - the model's own keys and queries, or a design's index space | - | `run.report.served.methods[].space`, `attention` or `index` | - |
 | the model's own rotated keys, which a probe extraction keeps under `data.queries.attention` | `attention_keys` | `data.queries.attention` | `[T, kv_head_count, head_dim]` bf16 |
 | each head's own rotated query at a probe | `attention_queries` | `data.queries.attention` | `[Q, query_head_count, head_dim]` bf16 |
 | the layer's softmax scale, recorded beside them, and beside `key` and `head_queries` for the `dense_full` target | `attention_scale` | - | - |

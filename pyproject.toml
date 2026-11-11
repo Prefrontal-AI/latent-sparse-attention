@@ -65,10 +65,10 @@ training = [
     # and slow enough that a step time measured on it describes the wrong stack. Pinned rather than floated
     # for the reason torchtitan is: they must not move under a run.
     "causal-conv1d==1.7.0",
-    # FlashAttention-3, the dense native arm's `varlen` kernel - 65k tokens/s per GPU against flex's 59k on the
+    # FlashAttention-3, the dense native method's `varlen` kernel - 65k tokens/s per GPU against flex's 59k on the
     # 4k trunk. No PyPI wheel and no nvcc here to build one, so a prebuilt wheel for exactly this torch and CUDA
     "flash-attn-3 @ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn_3-3.0.0+cu126torch2.13gite2743ab-cp39-abi3-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    # FlashAttention-2, the read of the sparse arms' window and gated heads, from the same prebuilt index and for the
+    # FlashAttention-2, the read of the sparse methods' window and gated heads, from the same prebuilt index and for the
     # same torch and CUDA as FlashAttention-3 above
     "flash-attn @ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.47/flash_attn-2.8.3+cu126torch2.13-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "flash-linear-attention==0.5.2",
@@ -89,7 +89,7 @@ training = [
     "wandb>=0.30",
 ]
 # FlashAttention-3 and the cu126 FlashAttention-2 wheel carry only sm_80 and sm_90(a) code, so on Blackwell the dense
-# `varlen` arm's kernel is FlashAttention-4, and NSA's window read goes through it too: torchtitan's
+# `varlen` method's kernel is FlashAttention-4, and NSA's window read goes through it too: torchtitan's
 # `get_cuda_flash_attention_impl` activates "FA4" from `flash_attn.cute.interface` on capability 10.0 and up.
 # A pure-Python CuTeDSL package that installs only `flash_attn/cute/`, so it sits beside the FlashAttention-2
 # wheel's files. Pinned exactly because it is a beta, for the reason the pins above are: kernels must not move

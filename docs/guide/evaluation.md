@@ -377,41 +377,42 @@ The record is rewritten after every context, so a run that is still climbing is 
 lsa records rebuild <records>/<run_id>   # rebuild the record from its samples, no GPU
 ```
 
-### Every arm of a layer in one job
+### Every method of a layer in one job
 
 `lsa evaluate isolated` is the driver behind the H200 layer timings of the paper's layer-performance and motivation figures.
-It times every arm of one model's layer, both phases, one after another on one GPU.
-The paper's GLM-5.3-Flash H200 records behind those figures carry its overrides - a 32,768 chunk where the GLM base config sets 8,192, and FlashMLA sparse prefill with FA3 decode on the sparse arms - and Qwen3.8-27B's configs set the same chunk themselves.
+It times every method of one model's layer, both phases, one after another on one GPU.
+The paper's GLM-5.3-Flash H200 records behind those figures carry its overrides - a 32,768 chunk where the GLM base config sets 8,192, and FlashMLA sparse prefill with FA3 decode on the sparse methods - and Qwen3.8-27B's configs set the same chunk themselves.
 
 ```bash
 lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated --dry-run
 lsa evaluate isolated glm53_flash --output $LSA_ROOT/layer-perf/isolated
-lsa evaluate isolated glm53_flash --phase decode --arm pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
+lsa evaluate isolated glm53_flash --phase decode --method pisa_c8 --output $LSA_ROOT/layer-perf/isolated-pisa-c8
 lsa evaluate isolated glm53_flash --gpu b300 --output $LSA_ROOT/layer-perf/isolated-b300
-lsa evaluate isolated glm53_flash --arm full --arm lsa_flat 'data.contexts=[10485760]' --dry-run
+lsa evaluate isolated glm53_flash --method full --method lsa_flat 'data.contexts=[10485760]' --dry-run
 ```
 
-A layer timing compares across arms only when the card behaved the same for all of them.
-One job per arm lands on whichever nodes are free, shares them with other users' jobs, and can be timed on a card another job is heating.
-This is one job that holds one GPU for every arm and phase in turn, so the arms ran on one card and differ in what they are and not in where they ran.
+A layer timing compares across methods only when the card behaved the same for all of them.
+One job per method lands on whichever nodes are free, shares them with other users' jobs, and can be timed on a card another job is heating.
+This is one job that holds one GPU for every method and phase in turn, so the methods ran on one card and differ in what they are and not in where they ran.
 It does not ask for the whole node: on H200 an exclusive rerun moved layer prefill by at most 1.5% against the same timings on a shared node, every method, so the node's other GPUs stay free for other jobs.
 The telemetry each point keeps says what the card did.
 
-It runs the same measurement as `lsa evaluate kernels`, once per arm and phase, with the arms' configs under `configs/evaluation/kernels/<model>/` loaded and these overrides laid over them.
+It runs the same measurement as `lsa evaluate kernels`, once per method and phase, with the methods' configs under `configs/evaluation/kernels/<model>/` loaded and these overrides laid over them.
 
 | override | applies to | why |
 |---|---|---|
-| prefill chunk of 32,768 tokens | every arm, both phases | one chunk for every arm, so the arms differ in the attention and not in the chunking |
-| CuTeDSL kernels | the design's arms, flat and tree | the kernels the published design timings were taken with |
-| FlashMLA sparse prefill and FA3 decode | GLM-5.3-Flash on H200 | the backends the sparse arms of the published GLM records were timed with beyond the config |
-| the records root of `--output` | every arm | all arms of one timing land together |
+| prefill chunk of 32,768 tokens | every method, both phases | one chunk for every method, so the methods differ in the attention and not in the chunking |
+| CuTeDSL kernels | the design's methods, flat and tree | the kernels the published design timings were taken with |
+| FlashMLA sparse prefill and FA3 decode | GLM-5.3-Flash on H200 | the backends the sparse methods of the published GLM records were timed with beyond the config |
+| the records root of `--output` | every method | all methods of one timing land together |
 
-The arms of a model are its dense and native baselines, the two designs and PISA, in that order.
-`--arm` names others instead, such as the two PISA variants, and `--phase` keeps one phase.
-The model's other configs - a delta such as the early budget, a descending decode, a layer the figures do not draw - are never timed here, and `UNTIMED_ARMS` in [isolated.py](../../src/lsa/evaluation/performance/kernels/isolated.py) says why for each.
-`--gpu b300` loads each arm's B300 config beside the H200 one, with that card's image and backends, and refuses an arm that has none rather than falling back to the H200 file.
-Trailing dotted overrides, as `lsa evaluate kernels` takes, apply to every arm and phase and lay over the table's overrides, so they win.
-An arm that fails does not stop the ones after it, and the job lists the failed arms when the last is done.
+The methods of a model are its dense and native baselines, the two designs and PISA, in that order.
+`--method` names others instead, such as the two PISA variants, and `--phase` keeps one phase.
+`--arm`, the flag's name before methods were called methods, still works and is left out of `--help`.
+The model's other configs - a delta such as the early budget, a descending decode, a layer the figures do not draw - are never timed here, and `UNTIMED_METHODS` in [isolated.py](../../src/lsa/evaluation/performance/kernels/isolated.py) says why for each.
+`--gpu b300` loads each method's B300 config beside the H200 one, with that card's image and backends, and refuses a method that has none rather than falling back to the H200 file.
+Trailing dotted overrides, as `lsa evaluate kernels` takes, apply to every method and phase and lay over the table's overrides, so they win.
+A method that fails does not stop the ones after it, and the job lists the failed methods when the last is done.
 
 ### What runs inside the container
 
@@ -556,10 +557,10 @@ lsa records join <paper run> <early budget run> [...] --into results/joined/accu
     --assemble full --supersede <benchmark> --mixed-early-budget --id <run id>                                 # dry run, then --apply
 ```
 
-A record that holds a later arm's runs beside the earlier arm's, where the later arm reads a smaller budget before an early position, is joined with `--mixed-early-budget`.
+A record that holds a later method's runs beside the earlier method's, where the later method reads a smaller budget before an early position, is joined with `--mixed-early-budget`.
 The parts may then differ in the early budget and in no other indexer setting - any other difference still refuses, and so does a pair of parts that both set an early budget but not the same one.
 Each task keeps the indexer settings of the server that scored it, the record's own indexer names the early budget of the last part that sets one, and `run.parts` keeps each part's.
-Say in the run's note which tasks ran under which budget and on which mesh, since the record's own indexer names the later arm alone.
+Say in the run's note which tasks ran under which budget and on which mesh, since the record's own indexer names the later method alone.
 
 The joined directory holds every part's samples, each part's launch log, metadata, server info and log under `parts/<part id>/`, and a launch log of every part's launches with the join's own last, so its status is complete once every task any part planned is scored.
 A part still going is joined only with `--in-progress`, as a snapshot, and `--replace` rebuilds a join written before - so while a battery runs, joining again and syncing `results/joined` keeps one entry per configuration on the shared root.

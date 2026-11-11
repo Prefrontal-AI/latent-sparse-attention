@@ -188,12 +188,13 @@ A needle task's rows are its last 32 positions, aimed at the needle's value toke
 A cwe row's are its list's items, aimed at that word's earlier occurrences, and its last 32 positions, aimed at nothing.
 A target in the window or the sinks is left out of every count, because every read holds them, so `target_held`, `target_any` and `line_held` are over the long-range keys alone.
 
-`run.report.served.arms` names the offline arms read beside the served designs.
-A `reference` arm builds the buckets and node bucket levels of a served design with `lsa.core` at that design's sizes, with the research options, and `agrees_with` also scores how much of a served design's long-range read it holds.
-A `pisa` arm is [PISA](../../src/lsa/baselines/pisa.py) over GLM's own key latent and heads' queries at GLM's softmax scale, or over a design's index keys and index queries as one head at `1 / tau`.
+`run.report.served.methods` names the offline methods read beside the served designs.
+A file or an override that still names the key `run.report.served.arms`, its name before methods were called methods, loads with a warning, and a resume state saved under it still resumes.
+A `reference` method builds the buckets and node bucket levels of a served design with `lsa.core` at that design's sizes, with the research options, and `agrees_with` also scores how much of a served design's long-range read it holds.
+A `pisa` method is [PISA](../../src/lsa/baselines/pisa.py) over GLM's own key latent and heads' queries at GLM's softmax scale, or over a design's index keys and index queries as one head at `1 / tau`.
 
 ```yaml
-arms:
+methods:
   - {name: A0, design: tree, agrees_with: tree_bf16}
   - {name: A2, design: tree, cluster_algorithm: position, node_cluster_algorithm: position}
   - {name: A3, design: tree, node_bucket_score: lse}
@@ -201,9 +202,9 @@ arms:
   - {name: B3, kind: pisa, space: index, design: tree, block_size: 64, keep_count: 64}
 ```
 
-An arm that reads at a temperature - a LogSumExp score, or B3 - takes the map's own from its sidecar, which `lsa distill export` writes and `lsa distill calibrate-tau <config> <map>` records for a map that has none, and the read refuses to start without it.
-`tau` fixes it on an arm, `tau_scale: [0.5, 1, 2]` reads the arm once at each multiple of the map's as arms named `A3@tau0.5`, `A3@tau1` and `A3@tau2`, and `taus: [0.05]` sweeps explicit ones as `A3@tau=0.05`.
-The torch reference runs on the host, so a 1M prompt's buckets are built once for the arms that group alike and each arm is read a row at a time.
+A method that reads at a temperature - a LogSumExp score, or B3 - takes the map's own from its sidecar, which `lsa distill export` writes and `lsa distill calibrate-tau <config> <map>` records for a map that has none, and the read refuses to start without it.
+`tau` fixes it on a method, `tau_scale: [0.5, 1, 2]` reads the method once at each multiple of the map's as methods named `A3@tau0.5`, `A3@tau1` and `A3@tau2`, and `taus: [0.05]` sweeps explicit ones as `A3@tau=0.05`.
+The torch reference runs on the host, so a 1M prompt's buckets are built once for the methods that group alike and each method is read a row at a time.
 `report.md` then adds, beside the tables of every read, one table of a metric by task and length for each kind of query, and the cwe rows split by number of targets and by distance back.
 A cell is the mean over prompts of each prompt's mean, its rows first and its layers next, with its standard error.
 
@@ -290,7 +291,7 @@ A script of your own that builds the FA3 indexer needs `export PATH=$PWD/.venv/b
 The `cuda_sparse` build needs neither.
 The first step of a run waits for the build, and later runs reuse torch's extension cache.
 
-One file is one arm: `base.yaml` holds the model from random initialisation, the corpus and the schedule, and each arm names it and sets `attention`.
+One file is one method: `base.yaml` holds the model from random initialisation, the corpus and the schedule, and each method names it and sets `attention`.
 Dense, a sliding window of the same key budget, multi-resolution attention, the same selection with no summaries, the equal-chunk partition and the flat LSA read lsa serves are the six that ship.
 `data.name` names the corpus by card - `qwen3_5` or `gpt2` for tokenized rows, `fineweb_edu_100bt` for token shards, a source card for text tokenized as it is read - and `data.mixture` replaces it with weighted cards:
 
@@ -320,7 +321,7 @@ lsa native report ${LSA_ROOT}/training/native/benchmark --presets core,ruler-4k
 
 `--tasks` is a preset - `core`, `ruler`, its 13 tasks at 4,096, 8,192 and 16,384, `ruler-4k`, the same 13 at 4,096, and `ruler-32k` past the training length - or a comma-separated list of tasks, with a RULER cell spelled `ruler_<task>_<length>`.
 Every rank holds a full replica and lm-eval hands it a share of each task's requests.
-A run leaves `<records>/<label>/<tasks>/` with a `config.json` naming the checkpoint, its step and the attention, lm-eval's `results.json`, and one row per example under `samples/`, so two arms can be compared example by example with `lsa native report`.
+A run leaves `<records>/<label>/<tasks>/` with a `config.json` naming the checkpoint, its step and the attention, lm-eval's `results.json`, and one row per example under `samples/`, so two methods can be compared example by example with `lsa native report`.
 The RULER files are lm-eval's port of RULER, sized by the GPT-2 tokenizer of the `qwen35_0_8b_gpt2` family as the paper's evaluation did, and prepared once into a root of their own with `lsa native prepare-ruler --lengths 4096 8192 16384`.
 They are for that family only: another tokenizer, such as the Qwen3.5 family's under `configs/training/native/qwen35_0_8b`, would see mis-sized prompts, so score RULER with a config of the GPT-2 family.
 The [native preset README](../../configs/training/native/qwen35_0_8b_gpt2/README.md) says where the files land and why `lsa data prepare ruler` is not the command.
