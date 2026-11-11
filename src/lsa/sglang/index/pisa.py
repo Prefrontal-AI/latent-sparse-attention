@@ -27,6 +27,7 @@ from typing import Any, NamedTuple
 import torch
 
 from lsa.baselines import pisa as reference
+from lsa.core.kernels.constants import TritonBlockScores
 from lsa.core.kernels.triton import block_scores, descend, pyramid
 from lsa.sglang.settings.design import PisaConfig
 
@@ -314,7 +315,7 @@ def level_scores(
         The candidates' scores [rows, width] fp32, meaningless for a candidate that is not eligible.
     """
     children_per_block = config.block_size if level == 1 else config.branching
-    if queries.is_cuda and block_scores.COLUMNS % children_per_block == 0:
+    if queries.is_cuda and TritonBlockScores.COLUMNS % children_per_block == 0:
         if level == 1:
             return block_scores.block_scores(
                 queries,

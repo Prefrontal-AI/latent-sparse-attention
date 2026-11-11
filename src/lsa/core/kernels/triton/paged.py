@@ -8,6 +8,8 @@ import torch
 import triton
 import triton.language as tl
 
+from lsa.core.kernels.constants import TritonPaged
+
 
 @triton.jit
 def _scan_paged_kernel(
@@ -91,8 +93,8 @@ def scan_paged(
         out.stride(0),
         PAGE_SIZE=page_size,
         D=d,
-        DK=min(128, d),
-        ROWS=32,
+        DK=min(TritonPaged.DIM_CHUNK, d),
+        ROWS=TritonPaged.ROWS,
         num_warps=8,
         num_stages=2,
     )

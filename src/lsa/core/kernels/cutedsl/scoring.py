@@ -21,18 +21,7 @@ import cutlass.utils
 import torch
 from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream, make_fake_tensor
 
-# Index dims the kernel takes, and the lanes and dims of each that add one score, as Triton lays a 64-dim dot out
-INDEX_DIM = 64
-GROUP_LANES = 8
-DIMS_PER_LANE = INDEX_DIM // GROUP_LANES
-THREADS = 128
-GROUPS = THREADS // GROUP_LANES
-# Listed buckets a group of lanes has in flight
-IN_FLIGHT = 8
-# The least int64, the key past a row's listed count
-EMPTY = -(2**63)
-# Buckets a CTA of the dense scoring takes, as the Triton dense scoring spans them
-DENSE_SPAN = 8192
+from lsa.core.kernels.constants import DenseScoring, Index, PackedKey, ScoreGroups
 
 
 def pack_key(score: Any, bucket: Any) -> Any:
@@ -60,7 +49,7 @@ class CandidateScoring:
             dense: Score every bucket a row sees, at its own column, rather than the listed ones.
         """
         self.dense = dense
-        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=THREADS)
+        self.barrier = pipeline.NamedBarrier(barrier_id=1, num_threads=ScoreGroups.THREADS)
 
     @cute.jit
     def __call__(
@@ -89,7 +78,7 @@ class CandidateScoring:
 
         spans = 1
         if cutlass.const_expr(self.dense):
-            spans = cute.ceil_div(keys.shape[1], DENSE_SPAN)
+            spans = cute.ceil_div(keys.shape[1], DenseScoring.SPAN)
 
         @cute.struct
         class Storage:
@@ -99,7 +88,7 @@ class CandidateScoring:
 
         self.kernel(
             index_queries, bucket_centroids, buckets, survivor_counts, thresholds, keys, reached, Storage
-        ).launch(grid=(index_queries.shape[0], spans, 1), block=[THREADS, 1, 1], stream=stream)
+        ).launch(grid=(index_queries.shape[0], spans, 1), block=[ScoreGroups.THREADS, 1, 1], stream=stream)
 
     @cute.kernel
     def kernel(
@@ -127,14 +116,14 @@ class CandidateScoring:
         """
         thread, _, _ = cute.arch.thread_idx()
         row, span, _ = cute.arch.block_idx()
-        group = thread // GROUP_LANES
-        member = thread % GROUP_LANES
+        group = thread // ScoreGroups.GROUP_LANES
+        member = thread % ScoreGroups.GROUP_LANES
         # A dense CTA scores its span of the buckets the row sees, each at its own column
         begin = cutlass.Int32(0)
         end = keys.shape[1]
         if cutlass.const_expr(self.dense):
-            begin = span * DENSE_SPAN
-            end = cutlass.min(begin + DENSE_SPAN, keys.shape[1])
+            begin = span * DenseScoring.SPAN
+            end = cutlass.min(begin + DenseScoring.SPAN, keys.shape[1])
         count = cutlass.max(cutlass.min(survivor_counts[row], end), begin)
         threshold = thresholds[row]
 
@@ -142,51 +131,53 @@ class CandidateScoring:
         reached_count = storage.reached_count.get_tensor(cute.make_layout(1))
         if thread == 0:
             reached_count[0] = cutlass.Int32(0)
-        for slot in range(count + thread, end, THREADS):
-            keys[row, slot] = cutlass.Int64(EMPTY)
+        for slot in range(count + thread, end, ScoreGroups.THREADS):
+            keys[row, slot] = cutlass.Int64(PackedKey.EMPTY)
 
-        query_bf16 = cute.make_rmem_tensor(DIMS_PER_LANE, index_queries.element_type)
+        query_bf16 = cute.make_rmem_tensor(ScoreGroups.DIMS_PER_LANE, index_queries.element_type)
         cute.autovec_copy(
-            cute.local_tile(index_queries, (1, DIMS_PER_LANE), (row, member))[0, None], query_bf16
+            cute.local_tile(index_queries, (1, ScoreGroups.DIMS_PER_LANE), (row, member))[0, None], query_bf16
         )
-        query = cute.make_rmem_tensor(DIMS_PER_LANE, cutlass.Float32)
-        for e in cutlass.range_constexpr(DIMS_PER_LANE):
+        query = cute.make_rmem_tensor(ScoreGroups.DIMS_PER_LANE, cutlass.Float32)
+        for e in cutlass.range_constexpr(ScoreGroups.DIMS_PER_LANE):
             query[e] = query_bf16[e].to(cutlass.Float32)
-        listed = cute.make_rmem_tensor(IN_FLIGHT, cutlass.Int32)
+        listed = cute.make_rmem_tensor(ScoreGroups.IN_FLIGHT, cutlass.Int32)
         loaded = cute.make_rmem_tensor(
-            cute.make_layout((IN_FLIGHT, DIMS_PER_LANE), stride=(DIMS_PER_LANE, 1)),
+            cute.make_layout(
+                (ScoreGroups.IN_FLIGHT, ScoreGroups.DIMS_PER_LANE), stride=(ScoreGroups.DIMS_PER_LANE, 1)
+            ),
             bucket_centroids.element_type,
         )
         high = cutlass.Int32(0)
         self.barrier.arrive_and_wait()
 
-        for first in range(begin, count, GROUPS * IN_FLIGHT):
-            for f in cutlass.range_constexpr(IN_FLIGHT):
-                slot = first + f * GROUPS + group
+        for first in range(begin, count, ScoreGroups.GROUPS * ScoreGroups.IN_FLIGHT):
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
+                slot = first + f * ScoreGroups.GROUPS + group
                 listed[f] = cutlass.Int32(-1)
                 if slot < count:
                     if cutlass.const_expr(self.dense):
                         listed[f] = slot
                     else:
                         listed[f] = buckets[row, slot]
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
                 cute.autovec_copy(
                     cute.local_tile(
-                        bucket_centroids, (1, DIMS_PER_LANE), (cutlass.max(listed[f], 0), member)
+                        bucket_centroids, (1, ScoreGroups.DIMS_PER_LANE), (cutlass.max(listed[f], 0), member)
                     )[0, None],
                     loaded[f, None],
                 )
-            for f in cutlass.range_constexpr(IN_FLIGHT):
+            for f in cutlass.range_constexpr(ScoreGroups.IN_FLIGHT):
                 # Triton's lane adds its eight products in turn, then the lanes add by halves
                 score = query[0] * loaded[f, 0].to(cutlass.Float32) + query[1] * loaded[f, 1].to(
                     cutlass.Float32
                 )
-                for e in cutlass.range_constexpr(2, DIMS_PER_LANE):
+                for e in cutlass.range_constexpr(2, ScoreGroups.DIMS_PER_LANE):
                     score = score + query[e] * loaded[f, e].to(cutlass.Float32)
                 for offset in cutlass.range_constexpr(3):
-                    score = score + cute.arch.shuffle_sync_bfly(score, GROUP_LANES // 2 >> offset)
+                    score = score + cute.arch.shuffle_sync_bfly(score, ScoreGroups.GROUP_LANES // 2 >> offset)
                 if (member == 0) & (listed[f] >= 0):
-                    keys[row, first + f * GROUPS + group] = pack_key(score, listed[f])
+                    keys[row, first + f * ScoreGroups.GROUPS + group] = pack_key(score, listed[f])
                     high = high + cutlass.Int32(score >= threshold)
 
         if high > 0:
@@ -211,9 +202,9 @@ def compiled(dense: bool) -> Any:
     rows, bucket_count, capacity, listing_rows, listing_columns = (cute.sym_int32() for _ in range(5))
     bucket_stride, key_stride = cute.sym_int64(), cute.sym_int64()
     arguments = (
-        make_fake_compact_tensor(cutlass.BFloat16, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16),
+        make_fake_compact_tensor(cutlass.BFloat16, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16),
         make_fake_compact_tensor(
-            cutlass.BFloat16, (bucket_count, INDEX_DIM), stride_order=(1, 0), assumed_align=16
+            cutlass.BFloat16, (bucket_count, Index.DIM), stride_order=(1, 0), assumed_align=16
         ),
         make_fake_tensor(
             cutlass.Int32, (listing_rows, listing_columns), stride=(bucket_stride, 1), assumed_align=4
@@ -237,7 +228,7 @@ def supports(index_queries: torch.Tensor, bucket_centroids: torch.Tensor) -> boo
     """
     return (
         index_queries.dtype == bucket_centroids.dtype == torch.bfloat16
-        and index_queries.shape[1] == bucket_centroids.shape[1] == INDEX_DIM
+        and index_queries.shape[1] == bucket_centroids.shape[1] == Index.DIM
         and index_queries.is_contiguous()
         and bucket_centroids.is_contiguous()
         and index_queries.data_ptr() % 16 == 0

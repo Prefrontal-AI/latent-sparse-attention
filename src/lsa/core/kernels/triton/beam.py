@@ -12,11 +12,12 @@ import torch
 import triton
 import triton.language as tl
 
-from lsa.core.kernels.triton.keys import EMPTY, key_bucket, ordered_bits
+from lsa.core.kernels.constants import PackedKey, TritonBeam
+from lsa.core.kernels.triton.keys import key_bucket, ordered_bits
 
-# Node centroids stored in fp8 hold this times the unit row they stand for, to keep small components in range
-NODE_CENTROID_SCALE = 16.0
-EMPTY_KEY: tl.constexpr = tl.constexpr(EMPTY)
+# A jit body reads a global only as a constexpr, never a class attribute
+# => the values it reads are bound here
+EMPTY_KEY: tl.constexpr = tl.constexpr(PackedKey.EMPTY)
 
 
 @triton.jit
@@ -388,7 +389,7 @@ def score_children(
     count, width = children.shape
     if out is None:
         out = torch.empty(count, width, device=index_queries.device, dtype=torch.float32)
-    block = 64
+    block = TritonBeam.BLOCK
     _score_children_kernel[(count, triton.cdiv(width, block))](
         index_queries,
         bucket_centroids,
@@ -621,7 +622,7 @@ def level_candidates(
     count = len(rows)
     out = torch.empty(count, width, device=rows.device, dtype=torch.int32)
     lengths = torch.empty(count, device=rows.device, dtype=torch.int32)
-    block = 1024
+    block = TritonBeam.CANDIDATE_BLOCK
     _level_candidates_kernel[(count, triton.cdiv(width, block))](
         pages,
         made,
@@ -852,7 +853,7 @@ def level_children(
     count = len(rows)
     node_bucket_size = children.shape[1]
     out = torch.empty(count, width * node_bucket_size, device=rows.device, dtype=torch.int32)
-    block = 64
+    block = TritonBeam.BLOCK
     _level_children_kernel[(count, triton.cdiv(width, block))](
         pages,
         made,
@@ -919,7 +920,7 @@ def level_scores(
     candidates = torch.empty(count, width, device=rows.device, dtype=torch.int32)
     scores = torch.empty(count, width, device=rows.device, dtype=torch.float32)
     lengths = torch.empty(count, device=rows.device, dtype=torch.int32)
-    block = 64
+    block = TritonBeam.BLOCK
     _level_scores_kernel[(count, triton.cdiv(width, block) + 1)](
         pages,
         made,
@@ -943,7 +944,7 @@ def level_scores(
         CARRIED=carried.shape[1],
         WIDTH=width,
         BLOCK=block,
-        LENGTH_BLOCK=1024,
+        LENGTH_BLOCK=TritonBeam.LENGTH_BLOCK,
     )
     return candidates, scores, lengths
 
@@ -1156,7 +1157,7 @@ def pick_candidates(
     count = len(rows)
     out = torch.empty(count, width, device=rows.device, dtype=torch.int32)
     lengths = torch.empty(count, device=rows.device, dtype=torch.int32)
-    block = 1024
+    block = TritonBeam.CANDIDATE_BLOCK
     _pick_candidates_kernel[(count, triton.cdiv(width, block))](
         positions,
         rows,
@@ -1301,7 +1302,7 @@ def pick_scores(
     candidates = torch.empty(count, width, device=rows.device, dtype=torch.int32)
     scores = torch.empty(count, width, device=rows.device, dtype=torch.float32)
     lengths = torch.empty(count, device=rows.device, dtype=torch.int32)
-    block = 64
+    block = TritonBeam.BLOCK
     _pick_scores_kernel[(count, triton.cdiv(width, block) + 1)](
         positions,
         rows,
@@ -1324,7 +1325,7 @@ def pick_scores(
         CARRIED=carried.shape[1],
         WIDTH=width,
         BLOCK=block,
-        LENGTH_BLOCK=1024,
+        LENGTH_BLOCK=TritonBeam.LENGTH_BLOCK,
     )
     return candidates, scores, lengths
 

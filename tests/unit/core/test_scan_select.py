@@ -10,9 +10,9 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import scan_select
+from lsa.core.kernels.constants import PackedKey, TritonScanSelect
 from lsa.core.kernels.scan_select import ScanSelect, dense_keys, listed_keys, sample_thresholds
-from lsa.core.kernels.triton import scan_select as triton_scan_select
-from lsa.core.kernels.triton.keys import EMPTY, pack_keys, unpack_ids
+from lsa.core.kernels.triton.keys import pack_keys, unpack_ids
 from lsa.core.kernels.triton.scan_select import dense_scores
 from lsa.core.kernels.triton.shape import ShapeTable
 
@@ -47,7 +47,7 @@ def reference_picks(index_queries, bucket_centroids, visible_counts, top_p):
 def paths_taken(index_queries, bucket_centroids, visible_counts, top_p):
     """Rows that overflowed their buffer and rows short of top_p at their threshold, on the first listing"""
     thresholds = sample_thresholds(index_queries, bucket_centroids, visible_counts, top_p)
-    capacity = round(triton_scan_select.CAPACITY * top_p)
+    capacity = round(TritonScanSelect.CAPACITY * top_p)
     _, survivor_counts, reached = listed_keys(
         index_queries, bucket_centroids, visible_counts, thresholds, capacity
     )
@@ -116,7 +116,7 @@ def test_a_row_tied_past_the_widest_listing_is_scored_in_full():
     index_queries, direction = clustered_queries(rows, generator)
     bucket_centroids = unit_rows(buckets, generator)
     # More identical buckets than WIDE top_p, each scoring above everything else
-    tied = triton_scan_select.WIDE * top_p + 1000
+    tied = TritonScanSelect.WIDE * top_p + 1000
     bucket_centroids[:tied] = direction.bfloat16()
     visible_counts = torch.full((rows,), buckets, device=DEVICE, dtype=torch.int32)
     picked = ScanSelect(rows, top_p)(index_queries, bucket_centroids, visible_counts)
@@ -134,7 +134,7 @@ def test_a_row_short_of_picks_at_its_threshold_is_scored_in_full():
     index_queries, direction = clustered_queries(rows, generator)
     bucket_centroids = unit_rows(buckets, generator)
     # The sample sees only buckets far above the rest, so its threshold leaves too few above it
-    stride = max(1, round(triton_scan_select.TARGET * top_p / triton_scan_select.SAMPLE_RANK))
+    stride = max(1, round(TritonScanSelect.TARGET * top_p / TritonScanSelect.SAMPLE_RANK))
     sampled = torch.arange(0, buckets, stride, device=DEVICE)[:300]
     noise = 0.05 * torch.randn(300, 64, device=DEVICE, generator=generator) / 8
     bucket_centroids[sampled] = F.normalize(direction + noise, dim=-1).bfloat16()
@@ -183,7 +183,7 @@ def test_the_scan_packs_keys_as_the_torch_side_does():
     visible = buckets < visible_counts[:, None]
     assert torch.equal(keys, pack_keys(scores.masked_fill(~visible, 0.0), buckets.masked_fill(~visible, -1)))
     assert torch.equal(unpack_ids(keys), buckets.masked_fill(~visible, -1))
-    assert (keys[~visible] == EMPTY).all()
+    assert (keys[~visible] == PackedKey.EMPTY).all()
 
 
 def test_queries_of_any_norm_list_about_as_many_as_unit_ones():

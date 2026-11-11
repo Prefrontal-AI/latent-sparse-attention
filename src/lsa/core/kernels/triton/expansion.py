@@ -15,6 +15,7 @@ import triton
 import triton.language as tl
 
 from lsa.budget import EarlyBudget
+from lsa.core.kernels.constants import TritonExpansion
 from lsa.core.kernels.triton.keys import key_bucket
 
 
@@ -469,7 +470,7 @@ def expand_by_threshold(
         TOP_P=top_p,
         BUCKET_CAP=bucket_members.shape[1],
         LISTED=triton.next_power_of_2(keys.shape[1]),
-        TILE=128,
+        TILE=TritonExpansion.TILE,
         WINDOW_SIZE=window_size,
         SINK_SIZE=sink_size,
         TOP_K=top_k,

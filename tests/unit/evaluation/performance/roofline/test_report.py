@@ -3,6 +3,7 @@
 import pytest
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.evaluation.performance.roofline import report
 
 
@@ -148,7 +149,7 @@ def test_build_roofline_names_the_b300_and_the_steps_it_runs_in_cutedsl() -> Non
     assert machine["specification"]["hbm_bytes_per_second"] == 8.0e12
     assert machine["specification_source"]
     assert set(machine["cutedsl_steps"]) == {
-        step for step, gpus in dispatch.CUTEDSL.items() if dispatch.B300 in gpus
+        step for step, gpus in dispatch.CUTEDSL.items() if Arch.B300 in gpus
     }
 
 

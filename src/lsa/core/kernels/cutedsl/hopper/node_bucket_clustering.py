@@ -30,32 +30,14 @@ from cutlass.cute.runtime import make_fake_compact_tensor, make_fake_stream
 from cutlass.utils import LayoutEnum
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch, HopperClustering, HopperTileSize, Index, PackedKey
 from lsa.core.kernels.cutedsl.hopper.tile import (
-    INDEX_BITS,
-    INDEX_DIM,
-    MAX_KEY,
-    THREADS,
-    TILE,
-    WARPS,
     HopperTile,
     accumulator_rows_by_columns,
     approximate_sqrt,
     ordered_cost,
     pack_cost_key,
 )
-
-# Open buckets a leader pairs alone from its matrix of costs, a row padded a word against bank conflicts
-TAIL = TILE
-TAIL_STRIDE = TAIL + 1
-# The tail's two warps, whose open counts the last step adds
-TAIL_WARPS = TAIL // 32
-# Rounds between two checks, as the Triton pairing looks
-CHECK = 8
-# Blocks a launch takes at most
-MAX_BLOCKS = 256
-# The workspace's int32 parts, each G words but the last - a block's count of open buckets, whether to stop, the counts
-# at the two alternating checks (two parts), the arrival counter of each block's CTAs, and one counter for the leaders
-COUNTS, STOPS, CHECKS, ARRIVALS, LEADERS = 0, 1, 2, 4, 5
 
 
 class NodeBucketClustering(HopperTile):
@@ -124,7 +106,7 @@ class NodeBucketClustering(HopperTile):
             ctas_per_block: CTAs a block's search is spread over.
             stream: The stream to launch on.
         """
-        mma_tile = (TILE, TILE, INDEX_DIM)
+        mma_tile = (HopperTileSize.TILE, HopperTileSize.TILE, Index.DIM)
         # A stage each for an operand's tf32 rounding and its rest
         row_layout = hopper.make_smem_layout_a(LayoutEnum.ROW_MAJOR, mma_tile, cutlass.TFloat32, 2)
         column_layout = hopper.make_smem_layout_b(LayoutEnum.ROW_MAJOR, mma_tile, cutlass.TFloat32, 2)
@@ -134,12 +116,14 @@ class NodeBucketClustering(HopperTile):
             """Shared memory of a block: the tile, the tail's costs and places, scalars."""
 
             tile: self.tile_storage(row_layout, column_layout)  # type: ignore[valid-type]
-            costs: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, TAIL * TAIL_STRIDE], 16]
-            tail_buckets: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, TAIL], 16]
-            tail_open: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, TAIL], 16]
-            nearest_places: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, TAIL], 16]
-            previous: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, MAX_BLOCKS], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, WARPS], 16]
+            costs: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Int32, HopperClustering.TAIL * HopperClustering.TAIL_STRIDE], 16
+            ]
+            tail_buckets: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperClustering.TAIL], 16]
+            tail_open: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperClustering.TAIL], 16]
+            nearest_places: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperClustering.TAIL], 16]
+            previous: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperClustering.MAX_BLOCKS], 16]
+            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, HopperTileSize.WARPS], 16]
             shared: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 4], 16]
 
         tiled_mma = self.make_tile_mma()
@@ -158,7 +142,12 @@ class NodeBucketClustering(HopperTile):
             column_layout,
             tiled_mma,
             Storage,
-        ).launch(grid=(blocks * ctas_per_block, 1, 1), block=[THREADS, 1, 1], cooperative=True, stream=stream)
+        ).launch(
+            grid=(blocks * ctas_per_block, 1, 1),
+            block=[HopperTileSize.THREADS, 1, 1],
+            cooperative=True,
+            stream=stream,
+        )
 
     @cute.kernel
     def kernel(
@@ -206,23 +195,29 @@ class NodeBucketClustering(HopperTile):
         storage = cutlass.utils.SmemAllocator().allocate(Storage)
         row_splits = storage.tile.rows.get_tensor(row_layout.outer, swizzle=row_layout.inner)
         column_splits = storage.tile.columns.get_tensor(column_layout.outer, swizzle=column_layout.inner)
-        costs = storage.costs.get_tensor(cute.make_layout((TAIL, TAIL), stride=(TAIL_STRIDE, 1)))
-        tail_buckets = storage.tail_buckets.get_tensor(cute.make_layout(TAIL))
-        tail_open = storage.tail_open.get_tensor(cute.make_layout(TAIL))
-        nearest_places = storage.nearest_places.get_tensor(cute.make_layout(TAIL))
-        previous = storage.previous.get_tensor(cute.make_layout(MAX_BLOCKS))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(WARPS))
+        costs = storage.costs.get_tensor(
+            cute.make_layout(
+                (HopperClustering.TAIL, HopperClustering.TAIL), stride=(HopperClustering.TAIL_STRIDE, 1)
+            )
+        )
+        tail_buckets = storage.tail_buckets.get_tensor(cute.make_layout(HopperClustering.TAIL))
+        tail_open = storage.tail_open.get_tensor(cute.make_layout(HopperClustering.TAIL))
+        nearest_places = storage.nearest_places.get_tensor(cute.make_layout(HopperClustering.TAIL))
+        previous = storage.previous.get_tensor(cute.make_layout(HopperClustering.MAX_BLOCKS))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(HopperTileSize.WARPS))
         shared = storage.shared.get_tensor(cute.make_layout(4))
 
         tCrA, tCrB, accumulator, coords = self.tile_views(
             tiled_mma, storage, row_layout, column_layout, thread
         )
 
-        for g in range(thread, blocks, THREADS):
+        for g in range(thread, blocks, HopperTileSize.THREADS):
             previous[g] = buckets
-        for i in range(slot * THREADS + thread, buckets, ctas_per_block * THREADS):
+        for i in range(
+            slot * HopperTileSize.THREADS + thread, buckets, ctas_per_block * HopperTileSize.THREADS
+        ):
             alignments[base + i] = approximate_sqrt(cutlass.max(square[base + i], cutlass.Float32(0.0)))
-        self.wait_for(workspace, ARRIVALS * blocks + block, ctas_per_block)
+        self.wait_for(workspace, HopperClustering.ARRIVALS * blocks + block, ctas_per_block)
 
         count = buckets
         parity = cutlass.Int32(0)
@@ -233,8 +228,8 @@ class NodeBucketClustering(HopperTile):
         running = cutlass.Int32(1)
         built = cutlass.Int32(0)
         while running != 0:
-            if count > TAIL:
-                tiles = cute.ceil_div(count, TILE)
+            if count > HopperClustering.TAIL:
+                tiles = cute.ceil_div(count, HopperTileSize.TILE)
                 participants = cutlass.min(ctas_per_block, tiles)
                 if slot < participants:
                     for row_tile in range(slot, tiles, ctas_per_block):
@@ -257,7 +252,7 @@ class NodeBucketClustering(HopperTile):
                             coords,
                         )
                     block_arrivals = block_arrivals + participants
-                    self.wait_for(workspace, ARRIVALS * blocks + block, block_arrivals)
+                    self.wait_for(workspace, HopperClustering.ARRIVALS * blocks + block, block_arrivals)
                     if slot == 0:
                         kept = self.pair_mutual(
                             partner,
@@ -273,7 +268,7 @@ class NodeBucketClustering(HopperTile):
                             warp_totals,
                         )
                         stop = cutlass.Int32(0)
-                        if (rounds + 1) % CHECK == 0:
+                        if (rounds + 1) % HopperClustering.CHECK == 0:
                             leader_arrivals = leader_arrivals + blocks
                             stop = self.check(
                                 workspace,
@@ -289,11 +284,11 @@ class NodeBucketClustering(HopperTile):
                             )
                             check_parity = 1 - check_parity
                         if thread == 0:
-                            workspace[STOPS * blocks + block] = stop
+                            workspace[HopperClustering.STOPS * blocks + block] = stop
                     block_arrivals = block_arrivals + participants
-                    self.wait_for(workspace, ARRIVALS * blocks + block, block_arrivals)
-                    count = workspace[COUNTS * blocks + block]
-                    running = 1 - workspace[STOPS * blocks + block]
+                    self.wait_for(workspace, HopperClustering.ARRIVALS * blocks + block, block_arrivals)
+                    count = workspace[HopperClustering.COUNTS * blocks + block]
+                    running = 1 - workspace[HopperClustering.STOPS * blocks + block]
                     parity = 1 - parity
                     rounds = rounds + 1
                 else:
@@ -325,7 +320,7 @@ class NodeBucketClustering(HopperTile):
                         partner, base, costs, tail_buckets, tail_open, nearest_places, shared
                     )
                     rounds = rounds + 1
-                    if rounds % CHECK == 0:
+                    if rounds % HopperClustering.CHECK == 0:
                         leader_arrivals = leader_arrivals + blocks
                         stop = self.check(
                             workspace,
@@ -415,9 +410,9 @@ class NodeBucketClustering(HopperTile):
         values = accumulator_rows_by_columns(accumulator)
         row_count = cute.size(values, mode=[0])
         column_count = cute.size(values, mode=[1])
-        first_row = row_tile * TILE
-        tiles = cute.ceil_div(count, TILE)
-        staged = cute.make_rmem_tensor(INDEX_DIM // 2, cutlass.Float32)
+        first_row = row_tile * HopperTileSize.TILE
+        tiles = cute.ceil_div(count, HopperTileSize.TILE)
+        staged = cute.make_rmem_tensor(Index.DIM // 2, cutlass.Float32)
         cute.arch.barrier()
         self.load_split(key_sums, order, base, order_base, first_row, count, staged)
         self.store_split(staged, row_splits)
@@ -440,13 +435,15 @@ class NodeBucketClustering(HopperTile):
 
         # The next tile's key sums load while this one is scored
         for column_tile in range(tiles):
-            first_column = column_tile * TILE
+            first_column = column_tile * HopperTileSize.TILE
             cute.arch.barrier()
             self.store_split(staged, column_splits)
             cute.arch.fence_proxy("async.shared", space="cta")
             cute.arch.barrier()
             if column_tile + 1 < tiles:
-                self.load_split(key_sums, order, base, order_base, first_column + TILE, count, staged)
+                self.load_split(
+                    key_sums, order, base, order_base, first_column + HopperTileSize.TILE, count, staged
+                )
             for c in cutlass.range_constexpr(column_count):
                 column = first_column + coords[0, c][1]
                 column_bucket = cutlass.Int32(0)
@@ -487,7 +484,7 @@ class NodeBucketClustering(HopperTile):
                         column = other_column
             place = first_row + coords[r, 0][0]
             if thread % 4 == 0 and place < count:
-                cost_key = cutlass.Int64(MAX_KEY)
+                cost_key = cutlass.Int64(PackedKey.MAX)
                 if column >= 0:
                     cost_key = pack_cost_key(cost, column)
                 cost_keys[base + place] = cost_key
@@ -528,9 +525,9 @@ class NodeBucketClustering(HopperTile):
         thread, _, _ = cute.arch.thread_idx()
         read_base = parity * blocks * buckets + base
         write_base = (1 - parity) * blocks * buckets + base
-        index_mask = cutlass.Int64((1 << INDEX_BITS) - 1)
+        index_mask = cutlass.Int64((1 << PackedKey.INDEX_BITS) - 1)
         kept = cutlass.Int32(0)
-        for first in range(0, count, THREADS):
+        for first in range(0, count, HopperTileSize.THREADS):
             place = first + thread
             keep = cutlass.Int32(0)
             bucket = cutlass.Int32(0)
@@ -538,10 +535,10 @@ class NodeBucketClustering(HopperTile):
                 bucket = order[read_base + place]
                 cost_key = cost_keys[base + place]
                 mutual = cutlass.Int32(0)
-                if cost_key < cutlass.Int64(MAX_KEY):
+                if cost_key < cutlass.Int64(PackedKey.MAX):
                     best = cutlass.Int32(cost_key & index_mask)
                     back = cost_keys[base + best]
-                    if back < cutlass.Int64(MAX_KEY) and cutlass.Int32(back & index_mask) == place:
+                    if back < cutlass.Int64(PackedKey.MAX) and cutlass.Int32(back & index_mask) == place:
                         mutual = cutlass.Int32(1)
                         partner[base + bucket] = cutlass.Int64(order[read_base + best])
                 keep = 1 - mutual
@@ -550,7 +547,7 @@ class NodeBucketClustering(HopperTile):
                 order[write_base + kept + before] = bucket
             kept = kept + chunk_kept
         if thread == 0:
-            workspace[COUNTS * blocks + block] = kept
+            workspace[HopperClustering.COUNTS * blocks + block] = kept
         return kept
 
     @cute.jit
@@ -585,10 +582,10 @@ class NodeBucketClustering(HopperTile):
             1 to stop, 0 to go on.
         """
         thread, _, _ = cute.arch.thread_idx()
-        checks = (CHECKS + check_parity) * blocks
+        checks = (HopperClustering.CHECKS + check_parity) * blocks
         if thread == 0:
             workspace[checks + block] = count
-        self.wait_for(workspace, LEADERS * blocks, leader_arrivals)
+        self.wait_for(workspace, HopperClustering.LEADERS * blocks, leader_arrivals)
         if thread == 0:
             open_any = cutlass.Int32(0)
             stalled = cutlass.Int32(1)
@@ -653,14 +650,14 @@ class NodeBucketClustering(HopperTile):
         """
         thread, _, _ = cute.arch.thread_idx()
         values = accumulator_rows_by_columns(accumulator)
-        if thread < TAIL:
+        if thread < HopperClustering.TAIL:
             bucket = cutlass.Int32(0)
             if thread < count:
                 bucket = order[order_base + base + thread]
             tail_buckets[thread] = bucket
             tail_open[thread] = cutlass.Int32(thread < count)
         cute.arch.barrier()
-        staged = cute.make_rmem_tensor(INDEX_DIM // 2, cutlass.Float32)
+        staged = cute.make_rmem_tensor(Index.DIM // 2, cutlass.Float32)
         self.load_split(key_sums, order, base, order_base, 0, count, staged)
         self.store_split(staged, row_splits)
         self.store_split(staged, column_splits)
@@ -708,20 +705,20 @@ class NodeBucketClustering(HopperTile):
         """
         thread, _, _ = cute.arch.thread_idx()
         is_open = cutlass.Int32(0)
-        if thread < TAIL:
+        if thread < HopperClustering.TAIL:
             is_open = tail_open[thread]
             pick = cutlass.Int32(-1)
             if is_open != 0:
-                cheapest = cutlass.Int64(MAX_KEY)
-                for column in cutlass.range(TAIL, unroll_full=True):
+                cheapest = cutlass.Int64(PackedKey.MAX)
+                for column in cutlass.range(HopperClustering.TAIL, unroll_full=True):
                     if tail_open[column] != 0 and column != thread:
                         cheapest = cutlass.min(cheapest, pack_cost_key(costs[thread, column], column))
-                if cheapest < cutlass.Int64(MAX_KEY):
-                    pick = cutlass.Int32(cheapest & cutlass.Int64((1 << INDEX_BITS) - 1))
+                if cheapest < cutlass.Int64(PackedKey.MAX):
+                    pick = cutlass.Int32(cheapest & cutlass.Int64((1 << PackedKey.INDEX_BITS) - 1))
             nearest_places[thread] = pick
         cute.arch.barrier()
         still = cutlass.Int32(0)
-        if thread < TAIL:
+        if thread < HopperClustering.TAIL:
             pick = nearest_places[thread]
             still = is_open
             if is_open != 0 and pick >= 0:
@@ -730,13 +727,13 @@ class NodeBucketClustering(HopperTile):
                     still = cutlass.Int32(0)
         cute.arch.barrier()
         open_mask = cute.arch.vote_ballot_sync(still != 0)
-        if thread < TAIL:
+        if thread < HopperClustering.TAIL:
             tail_open[thread] = still
             if thread % 32 == 0:
                 shared[1 + thread // 32] = cutlass.Int32(cute.arch.popc(open_mask))
         cute.arch.barrier()
         count = cutlass.Int32(0)
-        for w in cutlass.range_constexpr(TAIL_WARPS):
+        for w in cutlass.range_constexpr(HopperClustering.TAIL_WARPS):
             count = count + shared[1 + w]
         cute.arch.barrier()
         return count
@@ -763,7 +760,7 @@ class NodeBucketClustering(HopperTile):
         """
         thread, _, _ = cute.arch.thread_idx()
         is_open = cutlass.Int32(0)
-        if thread < TAIL:
+        if thread < HopperClustering.TAIL:
             is_open = tail_open[thread]
         open_mask = cute.arch.vote_ballot_sync(is_open != 0)
         cute.arch.barrier()
@@ -772,7 +769,7 @@ class NodeBucketClustering(HopperTile):
         cute.arch.barrier()
         warp_zero = shared[0]
         cute.arch.barrier()
-        if thread < TAIL and is_open != 0:
+        if thread < HopperClustering.TAIL and is_open != 0:
             place = cutlass.Int32(cute.arch.popc(open_mask & cute.arch.lanemask_lt()))
             if thread >= 32:
                 place = place + warp_zero
@@ -793,7 +790,7 @@ class NodeBucketClustering(HopperTile):
             count: Buckets open.
         """
         thread, _, _ = cute.arch.thread_idx()
-        for place in range(thread, count, THREADS):
+        for place in range(thread, count, HopperTileSize.THREADS):
             mate = place ^ 1
             if mate < count:
                 partner[base + order[order_base + base + place]] = cutlass.Int64(
@@ -814,7 +811,7 @@ def compiled(kernel: type[NodeBucketClustering] = NodeBucketClustering) -> Any:
         return COMPILED[kernel]
     rows, lists, workspace = cute.sym_int32(), cute.sym_int32(), cute.sym_int32()
     arguments = (
-        make_fake_compact_tensor(cutlass.Float32, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16),
+        make_fake_compact_tensor(cutlass.Float32, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16),
         make_fake_compact_tensor(cutlass.Float32, (rows,), assumed_align=4),
         make_fake_compact_tensor(cutlass.Float32, (rows,), assumed_align=4),
         make_fake_compact_tensor(cutlass.Int64, (rows,), assumed_align=8),
@@ -841,10 +838,10 @@ def takes_blocks(key_sums: torch.Tensor, precision: str) -> bool:
     return (
         key_sums.is_cuda
         and precision == "tf32x3"
-        and index_dim == INDEX_DIM
-        and TILE <= buckets <= 1 << INDEX_BITS
+        and index_dim == Index.DIM
+        and HopperTileSize.TILE <= buckets <= 1 << PackedKey.INDEX_BITS
         and buckets & (buckets - 1) == 0
-        and 0 < blocks <= min(MAX_BLOCKS, multiprocessors(key_sums.device))
+        and 0 < blocks <= min(HopperClustering.MAX_BLOCKS, multiprocessors(key_sums.device))
     )
 
 
@@ -857,7 +854,7 @@ def supports(key_sums: torch.Tensor, precision: str) -> bool:
     """
     return (
         key_sums.is_cuda
-        and dispatch.capability(key_sums.device) == dispatch.HOPPER
+        and dispatch.capability(key_sums.device) == Arch.HOPPER
         and takes_blocks(key_sums, precision)
     )
 
@@ -910,7 +907,7 @@ def launch(key_sums: torch.Tensor, kernel: type[NodeBucketClustering]) -> torch.
     order[: blocks * buckets] = torch.arange(buckets, dtype=torch.int32, device=device).repeat(blocks)
     cost_keys = torch.empty(blocks * buckets, dtype=torch.int64, device=device)
     workspace = torch.zeros(5 * blocks + 1, dtype=torch.int32, device=device)
-    ctas_per_block = min(buckets // TILE, multiprocessors(device) // blocks)
+    ctas_per_block = min(buckets // HopperTileSize.TILE, multiprocessors(device) // blocks)
     compiled(kernel)(
         key_sums.view(blocks * buckets, -1),
         square.view(-1),

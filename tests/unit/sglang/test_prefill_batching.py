@@ -12,8 +12,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from lsa.core.kernels.constants import TritonScanSelect
 from lsa.sglang.index import hierarchy as hierarchy_module
-from lsa.sglang.index import selector as selector_module
 from lsa.sglang.index.layer_index import KeyLookup, Shard
 from lsa.sglang.index.selector import Selector
 from lsa.sglang.settings.design import PAGE_SIZE, DesignSettings
@@ -138,7 +138,7 @@ def sets(lists):
 @pytest.fixture(autouse=True)
 def lowered_thresholds(monkeypatch):
     monkeypatch.setattr(hierarchy_module, "GROWTH_BUCKETS", GROWTH_BUCKETS)
-    monkeypatch.setattr(selector_module, "SCAN_SELECT_BUCKETS", FUSED_GATE)
+    monkeypatch.setattr(TritonScanSelect, "SCAN_SELECT_BUCKETS", FUSED_GATE)
 
 
 # Chunks of a request, as [start, stop) - aligned, ragged, inside a page, and across several
@@ -208,7 +208,7 @@ def test_a_read_that_returns_rows_of_prefix_and_chunk_keys_selects_as_the_loop_d
 def test_every_row_picked_in_full_still_selects_as_the_loop_did():
     # A gate of zero sends the early pages through the fused select, whose short rows are scored in full
     pair = Pair(FLAT, 3 * PAGE_SIZE, seed=5)
-    selector_module.SCAN_SELECT_BUCKETS = 0
+    TritonScanSelect.SCAN_SELECT_BUCKETS = 0
     for start, stop in ((0, 100), (100, PAGE_SIZE + 400), (PAGE_SIZE + 400, 3 * PAGE_SIZE)):
         got, want = pair.prefill(1, start, stop)
         assert sets(got) == sets(want)
@@ -219,7 +219,7 @@ def test_runs_read_together_where_only_some_may_miss_a_bucket_are_picked_apart(m
     # With top_p 1024 a query sees fewer buckets than that until its page's end, so the first run's listing may miss and the second's cannot
     indexer = {**FLAT, "top_p": 1024, "top_k": 2048}
     pair = Pair(indexer, 2 * PAGE_SIZE, seed=6)
-    selector_module.SCAN_SELECT_BUCKETS = 0
+    TritonScanSelect.SCAN_SELECT_BUCKETS = 0
     answers = []
     read_missed = Selector.read_missed
 

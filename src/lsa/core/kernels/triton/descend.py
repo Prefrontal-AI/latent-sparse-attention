@@ -11,13 +11,13 @@ import torch
 import triton
 import triton.language as tl
 
-from lsa.core.kernels.triton.keys import EMPTY, key_bucket, ordered_bits, pack_key
+from lsa.core.kernels.constants import PackedKey, TritonDescend
+from lsa.core.kernels.triton.keys import key_bucket, ordered_bits, pack_key
 
-# The empty key, which sorts last
-EMPTY_KEY: tl.constexpr = tl.constexpr(EMPTY)
-
-# A kept slot past the row's blocks, which sorts last at the leaves
-NO_BLOCK: tl.constexpr = tl.constexpr(1 << 40)
+# A jit body reads a global only as a constexpr, never a class attribute
+# => the values it reads are bound here
+EMPTY_KEY: tl.constexpr = tl.constexpr(PackedKey.EMPTY)
+NO_BLOCK: tl.constexpr = tl.constexpr(TritonDescend.NO_BLOCK)
 
 
 @triton.jit

@@ -19,10 +19,10 @@ from typing import NamedTuple
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import TritonBeam
 from lsa.core.kernels.cutedsl import beam as cutedsl_beam
 from lsa.core.kernels.cutedsl import spread
 from lsa.core.kernels.triton import beam
-from lsa.core.kernels.triton.beam import NODE_CENTROID_SCALE
 from lsa.core.kernels.triton.shape import score_shaped_rows
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.sglang.index import hierarchy
@@ -145,7 +145,7 @@ def keep_children(
         rows under level 1 - -1 where a row kept nothing.
     """
     centroids, children = tree.node_centroids[level - 1], tree.children[level - 1]
-    scale = NODE_CENTROID_SCALE if tree.settings.serving.node_centroid_precision == "fp8" else 1.0
+    scale = TritonBeam.NODE_CENTROID_SCALE if tree.settings.serving.node_centroid_precision == "fp8" else 1.0
     kernel = keep_kernel(plan, index_queries, centroids, kernels)
     page_arguments = (
         tree.pages[level - 1],

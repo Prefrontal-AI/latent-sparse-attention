@@ -362,6 +362,8 @@ lsa evaluate kernels configs/evaluation/kernels/glm53_flash/lsa_flat.yaml
 
 The `data` block says what to measure.
 `checkpoint` is a five-layer cut of the model with real weights, which `lsa kernels cut` builds and which makes layer 3 the sparse one; the full checkpoint leaves an H200 nothing for a long KV pool.
+`prompt` is a public-domain book that the harness repeats to each context, and the repository ships it as [`data/prompts/gutenberg_300k.txt`](../../data/prompts/gutenberg_300k.txt) with its sha256.
+Copy it under the shared root once, `install -D -m 644 data/prompts/gutenberg_300k.txt $LSA_ROOT/data/prompts/gutenberg_300k.txt`, and [the directory's readme](../../data/prompts/README.md) has the check.
 `phase` is `prefill` or `decode`, and the two derive different run ids - the phase sits where a served run's suite does - so they are two jobs and two records.
 `contexts` is the ladder, one harness process each, measured in the order given so an interrupted run keeps the short points it already has.
 

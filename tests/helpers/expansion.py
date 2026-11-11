@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core import Buckets, build_buckets, read
+from lsa.core.kernels.constants import PackedKey
 from lsa.core.kernels.scan_select import dense_keys
-from lsa.core.kernels.triton.keys import EMPTY
 
 DEVICE = "cuda"
 POOL, BUCKET, CAP, BLOCK, SINK, WINDOW = 4, 8, 16, 64, 4, 64
@@ -85,8 +85,8 @@ def listing_of(cache, queries, positions, top_p, seed):
     best = keys.topk(3 * top_p, dim=1).values
     generator = torch.Generator(device=DEVICE).manual_seed(seed)
     best = best.gather(1, torch.rand(best.shape, device=DEVICE, generator=generator).argsort(1))
-    best = best.gather(1, (best == EMPTY).int().argsort(dim=1, stable=True))
-    return best, (best != EMPTY).sum(1).int(), keys.topk(top_p, dim=1).values
+    best = best.gather(1, (best == PackedKey.EMPTY).int().argsort(dim=1, stable=True))
+    return best, (best != PackedKey.EMPTY).sum(1).int(), keys.topk(top_p, dim=1).values
 
 
 def oracle(cache, queries, positions, top_p, top_k, early_budget=None):

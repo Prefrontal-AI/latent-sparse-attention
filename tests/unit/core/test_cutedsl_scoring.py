@@ -9,9 +9,9 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import scan_select
+from lsa.core.kernels.constants import PackedKey, TritonScanSelect
 from lsa.core.kernels.cutedsl import bucket_scan, scoring
 from lsa.core.kernels.triton import scan_select as triton_scan_select
-from lsa.core.kernels.triton.keys import EMPTY
 
 pytestmark = pytest.mark.gpu
 
@@ -24,7 +24,7 @@ def unit_rows(count, generator, index_dim=64):
 
 def scored_by_triton(index_queries, bucket_centroids, buckets, survivor_counts, thresholds):
     rows, capacity = buckets.shape
-    keys = torch.full((rows, capacity), EMPTY, device=DEVICE, dtype=torch.int64)
+    keys = torch.full((rows, capacity), PackedKey.EMPTY, device=DEVICE, dtype=torch.int64)
     reached = torch.empty(rows, device=DEVICE, dtype=torch.int32)
     triton_scan_select._score_buckets[(rows,)](
         index_queries,
@@ -36,7 +36,7 @@ def scored_by_triton(index_queries, bucket_centroids, buckets, survivor_counts, 
         reached,
         capacity,
         D=64,
-        BLOCK=triton_scan_select.SCORE_BLOCK,
+        BLOCK=TritonScanSelect.SCORE_BLOCK,
         SPAN=0,
         DENSE=False,
         num_warps=4,
@@ -61,8 +61,8 @@ def test_each_row_has_the_triton_keys(rows, buckets, top_p, norm, capacity_scale
     index_queries = (unit_rows(rows, generator).float() * norm).bfloat16()
     visible_counts = (buckets - torch.arange(rows, device=DEVICE, dtype=torch.int32) % 777).contiguous()
     thresholds = scan_select.sample_thresholds(index_queries, bucket_centroids, visible_counts, top_p)
-    shifted = thresholds - triton_scan_select.MARGIN * index_queries.float().norm(dim=1)
-    capacity = round(triton_scan_select.CAPACITY * top_p * capacity_scale)
+    shifted = thresholds - TritonScanSelect.MARGIN * index_queries.float().norm(dim=1)
+    capacity = round(TritonScanSelect.CAPACITY * top_p * capacity_scale)
     listed, survivor_counts = bucket_scan.scan_buckets(
         index_queries, bucket_centroids, visible_counts, shifted, capacity
     )

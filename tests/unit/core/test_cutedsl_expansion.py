@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from lsa.budget import EarlyBudget
 from lsa.core.kernels import expansion
+from lsa.core.kernels.constants import CuteExpansion
 from lsa.core.kernels.cutedsl import expansion as cutedsl_expansion
 from lsa.core.kernels.scan_select import ScanSelect
 from lsa.core.kernels.triton.keys import pack_keys, unpack_ids
@@ -32,7 +33,7 @@ pytestmark = pytest.mark.gpu
 
 def assert_same_fill(*arguments, **options):
     expected = expansion.expand_by_threshold(*arguments, **options)
-    for threads in (cutedsl_expansion.MANY_ROWS_THREADS, cutedsl_expansion.FEW_ROWS_THREADS):
+    for threads in (CuteExpansion.MANY_ROWS_THREADS, CuteExpansion.FEW_ROWS_THREADS):
         filled = cutedsl_expansion.expand_by_threshold(*arguments, **options, threads=threads)
         assert torch.equal(filled, expected)
     return filled
@@ -161,7 +162,7 @@ def test_a_listing_the_kernel_does_not_take_is_refused():
 
 def test_both_thread_counts_read_the_same_around_the_rows_that_call_for_each():
     cache = make_cache(24, seed=5)
-    limit = cutedsl_expansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
+    limit = CuteExpansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
     for count in (limit, limit + 1):
         queries, positions = queries_at(cache, count, seed=6)
         listed_keys, listed, _ = listing_of(cache, queries, positions, 16, seed=1)
@@ -180,13 +181,13 @@ def test_both_thread_counts_read_the_same_around_the_rows_that_call_for_each():
             SINK,
             64,
         )
-        many = cutedsl_expansion.expand_by_threshold(*arguments, threads=cutedsl_expansion.MANY_ROWS_THREADS)
-        few = cutedsl_expansion.expand_by_threshold(*arguments, threads=cutedsl_expansion.FEW_ROWS_THREADS)
+        many = cutedsl_expansion.expand_by_threshold(*arguments, threads=CuteExpansion.MANY_ROWS_THREADS)
+        few = cutedsl_expansion.expand_by_threshold(*arguments, threads=CuteExpansion.FEW_ROWS_THREADS)
         chosen = cutedsl_expansion.expand_by_threshold(*arguments)
         assert torch.equal(many, few)
         assert torch.equal(chosen, few)
         assert cutedsl_expansion.threads_for(count, DEVICE) == (
-            cutedsl_expansion.FEW_ROWS_THREADS if count <= limit else cutedsl_expansion.MANY_ROWS_THREADS
+            CuteExpansion.FEW_ROWS_THREADS if count <= limit else CuteExpansion.MANY_ROWS_THREADS
         )
 
 
@@ -232,7 +233,7 @@ def picks_of(cache, rows, top_p, seed, holes=0.1):
 
 def assert_same_read(*arguments, **options):
     expected = expansion.expand_in_order(*arguments, **options)
-    for threads in (None, cutedsl_expansion.MANY_ROWS_THREADS, cutedsl_expansion.FEW_ROWS_THREADS):
+    for threads in (None, CuteExpansion.MANY_ROWS_THREADS, CuteExpansion.FEW_ROWS_THREADS):
         read = cutedsl_expansion.expand_in_order(*arguments, **options, threads=threads)
         assert torch.equal(read[0], expected[0])
         assert torch.equal(read[1], expected[1])
@@ -277,12 +278,12 @@ def test_a_row_early_in_the_document_reads_its_picks_as_the_triton_read_does():
 
 def test_both_thread_counts_read_picks_the_same_around_the_rows_that_call_for_each():
     cache = make_cache(24, seed=5)
-    limit = cutedsl_expansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
+    limit = CuteExpansion.ROWS_PER_SM * cutedsl_expansion.multiprocessors(torch.device(DEVICE))
     for count in (limit, limit + 1):
         queries, positions = queries_at(cache, count, seed=6)
         arguments = (picks_of(cache, count, 16, seed=1), cache.bucket_members, positions, WINDOW, SINK, 64)
-        many = cutedsl_expansion.expand_in_order(*arguments, threads=cutedsl_expansion.MANY_ROWS_THREADS)
-        few = cutedsl_expansion.expand_in_order(*arguments, threads=cutedsl_expansion.FEW_ROWS_THREADS)
+        many = cutedsl_expansion.expand_in_order(*arguments, threads=CuteExpansion.MANY_ROWS_THREADS)
+        few = cutedsl_expansion.expand_in_order(*arguments, threads=CuteExpansion.FEW_ROWS_THREADS)
         chosen = cutedsl_expansion.expand_in_order(*arguments)
         assert torch.equal(many[0], few[0]) and torch.equal(many[1], few[1])
         assert torch.equal(chosen[0], few[0]) and torch.equal(chosen[1], few[1])

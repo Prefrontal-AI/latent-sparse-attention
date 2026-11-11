@@ -70,12 +70,12 @@ def memory_admission(chunk, context, indexer, validation_mib, margin_gib, config
         scores = QSA_PREFILL_SCORES_BYTES
         index_gather = 0
     elif indexer == "lsa":
-        from lsa.core.kernels.triton.scan_select import SCAN_SELECT_BUCKETS
+        from lsa.core.kernels.constants import TritonScanSelect
 
         # Dense scores are fp32 for the buckets of a read below the fused select, which writes none, and the
         # centroids a read gathers are bf16 rows - a lone request's centroids are a view, so this is the bound
         buckets = math.ceil(context / config.bucket_size)
-        scores = chunk * min(buckets, SCAN_SELECT_BUCKETS) * 4
+        scores = chunk * min(buckets, TritonScanSelect.SCAN_SELECT_BUCKETS) * 4
         index_gather = buckets * config.index_dim * 2
     else:
         # No index - FA3 and the linear kernels work in place

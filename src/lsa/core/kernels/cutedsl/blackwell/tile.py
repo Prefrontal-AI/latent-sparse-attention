@@ -21,10 +21,8 @@ from cutlass._mlir.dialects import llvm
 from cutlass.cute.nvgpu import tcgen05
 from cutlass.cutlass_dsl import dsl_user_op
 
-from lsa.core.kernels.cutedsl.hopper.tile import THREADS, TILE, HopperTile, accumulator_rows_by_columns
-
-# The named barrier the tensor memory's address is published on - 0 is the CTA's own
-TMEM_BARRIER = 1
+from lsa.core.kernels.constants import BlackwellBucketScan, HopperTileSize
+from lsa.core.kernels.cutedsl.hopper.tile import HopperTile, accumulator_rows_by_columns
 
 
 @dsl_user_op
@@ -72,7 +70,7 @@ class BlackwellTile(HopperTile):
             cute.nvgpu.OperandMajorMode.K,
             cutlass.Float32,
             tcgen05.CtaGroup.ONE,
-            (TILE, TILE),
+            (HopperTileSize.TILE, HopperTileSize.TILE),
         )
 
     def tile_views(
@@ -115,13 +113,17 @@ class BlackwellTile(HopperTile):
         self.start_tiles(thread)
         self.tmem = cutlass.utils.TmemAllocator(
             storage.tile.tmem_address.ptr,
-            barrier_for_retrieve=pipeline.NamedBarrier(barrier_id=TMEM_BARRIER, num_threads=THREADS),
+            barrier_for_retrieve=pipeline.NamedBarrier(
+                barrier_id=BlackwellBucketScan.TMEM_BARRIER, num_threads=HopperTileSize.THREADS
+            ),
             allocator_warp_id=0,
         )
-        self.tmem.allocate(TILE)
+        self.tmem.allocate(HopperTileSize.TILE)
         self.tmem.wait_for_alloc()
         self.tmem_pointer = self.tmem.retrieve_ptr(cutlass.Float32)
-        layout = tiled_mma.make_fragment_C(tiled_mma.partition_shape_C((TILE, TILE))).layout
+        layout = tiled_mma.make_fragment_C(
+            tiled_mma.partition_shape_C((HopperTileSize.TILE, HopperTileSize.TILE))
+        ).layout
         self.dots = cute.make_tensor(self.tmem_pointer, layout)
         dots = self.dots[((None, None), 0, 0)]
         tiled_load = tcgen05.make_tmem_copy(
@@ -135,7 +137,7 @@ class BlackwellTile(HopperTile):
         self.tiled_store = tiled_store
         self.loaded = load_slice.partition_S(dots)
         self.stored = tiled_store.get_slice(thread).partition_D(dots)
-        places = load_slice.partition_D(cute.make_identity_tensor((TILE, TILE)))
+        places = load_slice.partition_D(cute.make_identity_tensor((HopperTileSize.TILE, HopperTileSize.TILE)))
         self.staged = cute.make_rmem_tensor(places.shape, cutlass.Float32)
         # The load's registers in the warpgroup accumulator's modes - the same registers in the same order
         # A warpgroup MMA m64n64 puts, in warp w, lane l, rows 16w + l // 4 and 16w + l // 4 + 8, columns
@@ -147,7 +149,7 @@ class BlackwellTile(HopperTile):
         coords = cute.make_tensor(
             places.iterator, cute.make_layout((flat.shape[0], 1, 1), stride=(flat.stride[0], 0, 0))
         )
-        accumulator = cute.make_rmem_tensor(((2, 2, TILE // 8), 1, 1), cutlass.Float32)
+        accumulator = cute.make_rmem_tensor(((2, 2, HopperTileSize.TILE // 8), 1, 1), cutlass.Float32)
         return tCrA, tCrB, accumulator, accumulator_rows_by_columns(coords)
 
     @cute.jit

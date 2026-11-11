@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from lsa.core.kernels import dispatch, scan_select
+from lsa.core.kernels.constants import SharedBucketScan, TritonScanSelect
 from lsa.core.kernels.cutedsl import bucket_scan
 from lsa.core.kernels.triton import scan_select as triton_scan_select
 
@@ -32,7 +33,7 @@ def anchored_queries(bucket_centroids, rows, generator):
 
 def shifted_thresholds(index_queries, bucket_centroids, visible_counts, top_p):
     thresholds = scan_select.sample_thresholds(index_queries, bucket_centroids, visible_counts, top_p)
-    return thresholds - triton_scan_select.MARGIN * index_queries.float().norm(dim=1)
+    return thresholds - TritonScanSelect.MARGIN * index_queries.float().norm(dim=1)
 
 
 def assert_same_listing(
@@ -66,12 +67,12 @@ def test_each_row_lists_the_buckets_the_survivor_words_list(rows, buckets, top_p
         bucket_centroids,
         visible_counts,
         thresholds,
-        round(triton_scan_select.CAPACITY * top_p),
+        round(TritonScanSelect.CAPACITY * top_p),
     )
     assert counts.float().mean() > top_p
 
 
-@pytest.mark.parametrize("span_tiles", [1, 3, 5, 64, bucket_scan.MAX_SPAN_TILES])
+@pytest.mark.parametrize("span_tiles", [1, 3, 5, 64, SharedBucketScan.MAX_SPAN_TILES])
 def test_a_span_of_any_length_lists_the_same_buckets(span_tiles):
     generator = torch.Generator(device=DEVICE).manual_seed(span_tiles)
     rows, buckets = 200, 70001
@@ -91,12 +92,12 @@ def test_a_row_past_its_shared_slots_appends_the_rest_to_the_global_listing():
     rows, buckets = 256, 20000
     # A repeated text - a run of one centroid that every row ties on, far more than a span's slots
     bucket_centroids = unit_rows(buckets, generator)
-    bucket_centroids[1000 : 1000 + 40 * bucket_scan.ROW_SLOTS] = bucket_centroids[999]
+    bucket_centroids[1000 : 1000 + 40 * SharedBucketScan.ROW_SLOTS] = bucket_centroids[999]
     index_queries = bucket_centroids[999].expand(rows, -1).contiguous()
     visible_counts = torch.full((rows,), buckets, device=DEVICE, dtype=torch.int32)
     thresholds = torch.full((rows,), 0.99, device=DEVICE)
     counts = assert_same_listing(index_queries, bucket_centroids, visible_counts, thresholds, 4096)
-    assert (counts > bucket_scan.ROW_SLOTS).all()
+    assert (counts > SharedBucketScan.ROW_SLOTS).all()
 
 
 def test_an_overflowed_row_counts_every_survivor_and_holds_its_capacity():
@@ -150,7 +151,7 @@ def listing_by_words(index_queries, bucket_centroids, visible_counts, thresholds
     )
 
 
-@pytest.mark.parametrize("span_tiles", [0, -1, bucket_scan.MAX_SPAN_TILES + 1])
+@pytest.mark.parametrize("span_tiles", [0, -1, SharedBucketScan.MAX_SPAN_TILES + 1])
 def test_a_span_the_kernel_does_not_hold_is_refused(span_tiles):
     generator = torch.Generator(device=DEVICE).manual_seed(7)
     bucket_centroids = unit_rows(100, generator)

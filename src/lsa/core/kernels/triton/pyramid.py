@@ -11,11 +11,7 @@ import torch
 import triton
 import triton.language as tl
 
-# Key dims a program pools
-BLOCK_DIM: int = 64
-
-# Summaries of a level pooled at once
-PARENTS: int = 32
+from lsa.core.kernels.constants import TritonPyramid
 
 
 @triton.jit(do_not_specialize=["row", "first", "stop"])
@@ -102,7 +98,7 @@ def lift(
     if stop <= first or widths.shape[0] < 2:
         return
     key_dim = means.shape[2]
-    lift_kernel[(triton.cdiv(key_dim, BLOCK_DIM),)](
+    lift_kernel[(triton.cdiv(key_dim, TritonPyramid.BLOCK_DIM),)](
         means,
         upper,
         widths,
@@ -116,6 +112,6 @@ def lift(
         means.stride(1),
         upper.stride(0),
         BRANCHING=branching,
-        PARENTS=PARENTS,
-        BLOCK_DIM=BLOCK_DIM,
+        PARENTS=TritonPyramid.PARENTS,
+        BLOCK_DIM=TritonPyramid.BLOCK_DIM,
     )

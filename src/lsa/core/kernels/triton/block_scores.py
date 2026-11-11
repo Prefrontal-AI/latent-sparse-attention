@@ -18,17 +18,7 @@ import torch
 import triton
 import triton.language as tl
 
-# Columns a program dots against - a leaf block's keys, or the summaries of a group of upper blocks
-COLUMNS: int = 64
-
-# Key dims accumulated a step
-BLOCK_DIM: int = 64
-
-# Rows a call scores at most - the launch's second dim
-MAX_ROWS: int = 65535
-
-# Fewest heads `tl.dot` takes - fewer are padded with zero queries, whose LogSumExp is dropped
-MIN_HEADS: int = 16
+from lsa.core.kernels.constants import TritonBlockScores
 
 
 @triton.jit
@@ -164,21 +154,25 @@ def block_scores(
             for without the table, or there are more rows than a launch holds.
     """
     leaf = table is not None
-    if COLUMNS % children_per_block != 0:
-        raise ValueError(f"children_per_block must divide {COLUMNS} - got {children_per_block}")
+    if TritonBlockScores.COLUMNS % children_per_block != 0:
+        raise ValueError(
+            f"children_per_block must divide {TritonBlockScores.COLUMNS} - got {children_per_block}"
+        )
     if leaf and row_index is None:
         raise ValueError("a leaf block's keys are read through the table, which needs each request's row")
     row_count, width = candidates.shape
-    if row_count > MAX_ROWS:
-        raise ValueError(f"a call scores at most {MAX_ROWS} rows - got {row_count}, so tile them")
+    if row_count > TritonBlockScores.MAX_ROWS:
+        raise ValueError(
+            f"a call scores at most {TritonBlockScores.MAX_ROWS} rows - got {row_count}, so tile them"
+        )
     head_count, key_dim = queries.shape[1], queries.shape[2]
     scores = torch.empty(row_count, width, dtype=torch.float32, device=queries.device)
     if row_count == 0 or width == 0:
         return scores
     queries = queries if queries.stride(2) == 1 else queries.contiguous()
     candidates = candidates.contiguous()
-    candidate_count = COLUMNS // children_per_block
-    heads = max(MIN_HEADS, triton.next_power_of_2(head_count))
+    candidate_count = TritonBlockScores.COLUMNS // children_per_block
+    heads = max(TritonBlockScores.MIN_HEADS, triton.next_power_of_2(head_count))
     if table is not None:
         child_stride, child_request_stride, child_limit = children.stride(0), 0, 0
         table_row_stride = table.stride(0)
@@ -219,7 +213,7 @@ def block_scores(
         CHILDREN=children_per_block,
         CANDIDATES=candidate_count,
         HEADS=heads,
-        BLOCK_DIM=BLOCK_DIM,
+        BLOCK_DIM=TritonBlockScores.BLOCK_DIM,
         IEEE=children.dtype == torch.float32,
         SPLIT=split,
     )

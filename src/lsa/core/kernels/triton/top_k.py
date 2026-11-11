@@ -29,54 +29,14 @@ import torch
 import triton
 import triton.language as tl
 
-from lsa.core.kernels.triton.keys import EMPTY, ordered_bits, pack_key
+from lsa.core.kernels.constants import PackedKey, ThresholdEstimate, TritonTopK
+from lsa.core.kernels.triton.keys import ordered_bits, pack_key
 
-# Widest a row is listed whole, in k - a sample cannot rank so large a share of a row
-WHOLE = 4
-# Most columns a row samples
-SAMPLE_MOST = 24576
-# Samples a tight listing's estimate must rank - spread is 1 / sqrt(rank)
-# => a listing misses when it falls a third under its target or past its capacity
-TIGHT_RANK = 192
-# Listing (columns expected in k, columns held in k, 1 / share of the rank a bin holds before a split)
-TIGHT = (1.4, 2, 5)
-LOOSE = (2.0, 4, 3)
-SAMPLE_RANK = 256
-LIST_BLOCK = 2048
-SEARCH_BLOCK = 4096
-# Bits of a column id - a row is at most this wide
-ID_BITS = 24
-# Widest a row an exact pick selects where it lies, in columns
-NARROW = 4096
-# Samples an exact pick's wide row can be estimated from, and the listing sizes tried for them, in k
-SAMPLES = (2048, 4096, 8192, 16384)
-TARGETS = (1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.6, 1.7, 1.8, 2.0, 2.25, 2.5, 3.0)
-# Neighbours a sample takes along - a sector costs the same to read as one score
-RUN = 8
-# Standard deviations of the listing's size the estimate must clear its k and its buffer by
-SIGMAS = 4.0
-# Least columns a listing holds when no sample plans it tightly
-LOOSE_CAPACITY = 8192
-# Columns an exact pick's program reads at a time
-BLOCK = 4096
-# Rows under which a row is split across programs, each reading SPLIT_LEAST columns at least
-SPLIT_BELOW = 64
-SPLIT_LEAST = 8192
-SPLIT_MOST = 64
-SPLIT_PROGRAMS = 512
-WARPS = 8
-SELECT_WARPS = 4
-# Columns, warps and loads ahead of a row listed in one program
-# => small programs keep more loads in flight
-ROW_BLOCK = 1024
-ROW_WARPS = 2
-ROW_STAGES = 3
-# Warps an exact pick's estimate runs with
-ESTIMATE_WARPS = 4
-EMPTY_KEY: tl.constexpr = tl.constexpr(EMPTY)
-# Bits of the score word a whole-row search settles a pass, and the columns it reads at a time
-DIGIT_BITS: tl.constexpr = tl.constexpr(4)
-DIGIT_BLOCK: tl.constexpr = tl.constexpr(512)
+# A jit body reads a global only as a constexpr, never a class attribute
+# => the values it reads are bound here
+EMPTY_KEY: tl.constexpr = tl.constexpr(PackedKey.EMPTY)
+DIGIT_BITS: tl.constexpr = tl.constexpr(TritonTopK.DIGIT_BITS)
+DIGIT_BLOCK: tl.constexpr = tl.constexpr(TritonTopK.DIGIT_BLOCK)
 
 
 @triton.jit
@@ -699,9 +659,13 @@ def listing_plan(k: int, columns: int) -> tuple[int, int, int, int]:
         Columns between two samples, the sample's rank the estimate stops at, the columns the listing holds, and the
         share of the rank, as 1 over it, that a bin of the sample may hold before it is split again.
     """
-    least = triton.cdiv(columns, SAMPLE_MOST)
-    target, capacity, refine = TIGHT if round(TIGHT[0] * k / least) >= TIGHT_RANK else LOOSE
-    stride = max(least, round(target * k / SAMPLE_RANK))
+    least = triton.cdiv(columns, TritonTopK.SAMPLE_MOST)
+    target, capacity, refine = (
+        TritonTopK.TIGHT
+        if round(TritonTopK.TIGHT[0] * k / least) >= TritonTopK.TIGHT_RANK
+        else TritonTopK.LOOSE
+    )
+    stride = max(least, round(target * k / TritonTopK.SAMPLE_RANK))
     return stride, max(1, round(target * k / stride)), capacity * k, refine
 
 
@@ -723,18 +687,20 @@ def keep_plan(k: int, columns: int) -> tuple[int, int, float, int]:
         the columns the listing holds - a power of two.
     """
     fallback = (
-        SAMPLES[-1],
-        RUN * math.ceil(columns * RUN / SAMPLES[-1] / RUN),
-        TARGETS[-1],
-        min(triton.next_power_of_2(columns), max(4 * triton.next_power_of_2(k), LOOSE_CAPACITY)),
+        TritonTopK.SAMPLES[-1],
+        TritonTopK.RUN * math.ceil(columns * TritonTopK.RUN / TritonTopK.SAMPLES[-1] / TritonTopK.RUN),
+        TritonTopK.TARGETS[-1],
+        min(triton.next_power_of_2(columns), max(4 * triton.next_power_of_2(k), TritonTopK.LOOSE_CAPACITY)),
     )
-    for samples in SAMPLES:
-        stride = max(RUN, RUN * math.ceil(columns * RUN / samples / RUN))
-        held = min(samples, math.ceil(columns / stride) * RUN)
-        for target in TARGETS:
+    for samples in TritonTopK.SAMPLES:
+        stride = max(
+            TritonTopK.RUN, TritonTopK.RUN * math.ceil(columns * TritonTopK.RUN / samples / TritonTopK.RUN)
+        )
+        held = min(samples, math.ceil(columns / stride) * TritonTopK.RUN)
+        for target in TritonTopK.TARGETS:
             spread = (target * k * held / columns) ** -0.5
-            capacity = triton.next_power_of_2(math.ceil(target * k * (1 + SIGMAS * spread)))
-            if 1 - SIGMAS * spread >= 1 / target and capacity <= 4 * triton.next_power_of_2(k):
+            capacity = triton.next_power_of_2(math.ceil(target * k * (1 + TritonTopK.SIGMAS * spread)))
+            if 1 - TritonTopK.SIGMAS * spread >= 1 / target and capacity <= 4 * triton.next_power_of_2(k):
                 return samples, stride, target, capacity
     return fallback
 
@@ -756,7 +722,7 @@ class TopK:
         """
         self.k = k
         self.exact = exact
-        width = k if exact else WHOLE * k
+        width = k if exact else TritonTopK.WHOLE * k
         self.held = (
             None
             if rows is None
@@ -792,7 +758,7 @@ class TopK:
         """
         rows, columns = scores.shape
         if not self.exact:
-            whole = columns <= WHOLE * self.k
+            whole = columns <= TritonTopK.WHOLE * self.k
             width = columns if whole else listing_plan(self.k, columns)[2]
         else:
             width = min(self.k, columns)
@@ -811,17 +777,17 @@ class TopK:
     def list_superset(self, scores: torch.Tensor, lengths: torch.Tensor) -> None:
         """List every row's best k and room beside them, in no order, into `keys` [R, W] and `counts` [R]."""
         rows, columns = scores.shape
-        whole = columns <= WHOLE * self.k
+        whole = columns <= TritonTopK.WHOLE * self.k
         stride, rank, capacity, refine = (1, 0, columns, 0) if whole else listing_plan(self.k, columns)
         if whole:
-            _pack_scores[(rows, triton.cdiv(columns, LIST_BLOCK))](
+            _pack_scores[(rows, triton.cdiv(columns, TritonTopK.LIST_BLOCK))](
                 scores,
                 lengths,
                 self.keys,
                 scores.stride(0),
                 self.keys.stride(0),
                 columns,
-                BLOCK=LIST_BLOCK,
+                BLOCK=TritonTopK.LIST_BLOCK,
                 num_warps=4,
             )
             self.counts.copy_(lengths)
@@ -835,13 +801,13 @@ class TopK:
             stride,
             rank,
             scores.stride(0),
-            BINS=64,
-            BLOCK=2048,
+            BINS=ThresholdEstimate.BINS,
+            BLOCK=TritonTopK.LIST_BLOCK,
             REFINE=refine,
             num_warps=4,
         )
         self.counts.zero_()
-        _list_scores[(rows, triton.cdiv(columns, LIST_BLOCK))](
+        _list_scores[(rows, triton.cdiv(columns, TritonTopK.LIST_BLOCK))](
             scores,
             lengths,
             thresholds,
@@ -850,7 +816,7 @@ class TopK:
             scores.stride(0),
             self.keys.stride(0),
             capacity,
-            BLOCK=LIST_BLOCK,
+            BLOCK=TritonTopK.LIST_BLOCK,
             num_warps=4,
         )
         _search_rows[(rows,)](
@@ -862,8 +828,8 @@ class TopK:
             self.keys.stride(0),
             capacity,
             K=self.k,
-            BLOCK=SEARCH_BLOCK,
-            ID_BITS=ID_BITS,
+            BLOCK=TritonTopK.SEARCH_BLOCK,
+            ID_BITS=TritonTopK.ID_BITS,
             num_warps=8,
         )
 
@@ -872,7 +838,7 @@ class TopK:
         rows, width = scores.shape
         k = out.shape[1]
         pad = triton.next_power_of_2(k)
-        if width <= NARROW:
+        if width <= TritonTopK.NARROW:
             _select[(rows,)](
                 scores,
                 lengths,
@@ -886,10 +852,10 @@ class TopK:
                 K=k,
                 PAD=pad,
                 TILE=triton.next_power_of_2(width),
-                BLOCK=BLOCK,
+                BLOCK=TritonTopK.BLOCK,
                 LISTED=False,
                 COLUMNS=columns,
-                num_warps=SELECT_WARPS,
+                num_warps=TritonTopK.SELECT_WARPS,
             )
             return
         samples, stride, target, capacity = keep_plan(k, width)
@@ -903,15 +869,25 @@ class TopK:
             stride,
             target,
             SAMPLES=samples,
-            RUN=RUN,
+            RUN=TritonTopK.RUN,
             K=k,
-            num_warps=ESTIMATE_WARPS,
+            num_warps=TritonTopK.ESTIMATE_WARPS,
         )
-        split = rows < SPLIT_BELOW and width >= 2 * SPLIT_LEAST
+        split = rows < TritonTopK.SPLIT_BELOW and width >= 2 * TritonTopK.SPLIT_LEAST
         parts = (
-            min(SPLIT_MOST, max(2, SPLIT_PROGRAMS // rows), triton.cdiv(width, SPLIT_LEAST)) if split else 1
+            min(
+                TritonTopK.SPLIT_MOST,
+                max(2, TritonTopK.SPLIT_PROGRAMS // rows),
+                triton.cdiv(width, TritonTopK.SPLIT_LEAST),
+            )
+            if split
+            else 1
         )
-        block, warps, stages = (BLOCK, WARPS, 1) if split else (ROW_BLOCK, ROW_WARPS, ROW_STAGES)
+        block, warps, stages = (
+            (TritonTopK.BLOCK, TritonTopK.WARPS, 1)
+            if split
+            else (TritonTopK.ROW_BLOCK, TritonTopK.ROW_WARPS, TritonTopK.ROW_STAGES)
+        )
         slice_size = triton.cdiv(triton.cdiv(width, parts), block) * block
         listing = torch.empty(rows, capacity, device=scores.device, dtype=torch.int64)
         totals = torch.empty(rows, device=scores.device, dtype=torch.int32)
@@ -948,10 +924,10 @@ class TopK:
             K=k,
             PAD=pad,
             TILE=capacity,
-            BLOCK=BLOCK,
+            BLOCK=TritonTopK.BLOCK,
             LISTED=True,
             COLUMNS=columns,
-            num_warps=SELECT_WARPS,
+            num_warps=TritonTopK.SELECT_WARPS,
         )
         if not columns:
             _repair[(rows,)](
@@ -965,8 +941,8 @@ class TopK:
                 K=k,
                 PAD=pad,
                 CAPACITY=capacity,
-                BLOCK=BLOCK,
-                num_warps=WARPS,
+                BLOCK=TritonTopK.BLOCK,
+                num_warps=TritonTopK.WARPS,
             )
 
     def best(self) -> torch.Tensor:
@@ -979,8 +955,8 @@ class TopK:
         rows, width = self.keys.shape
         held = min(self.k, width)
         listed = torch.arange(width, device=self.keys.device)[None] < self.counts[:, None]
-        best = torch.full((rows, self.k), EMPTY, device=self.keys.device, dtype=torch.int64)
-        best[:, :held] = self.keys.masked_fill(~listed, EMPTY).topk(held, dim=1).values
+        best = torch.full((rows, self.k), PackedKey.EMPTY, device=self.keys.device, dtype=torch.int64)
+        best[:, :held] = self.keys.masked_fill(~listed, PackedKey.EMPTY).topk(held, dim=1).values
         return best
 
     def __call__(self, scores: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:

@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch
 from lsa.core.kernels.cutedsl import bucket_scan, node_bucket_clustering, ward
 
 CUDA = torch.device("cuda", 0)
@@ -11,7 +12,7 @@ UNNAMED_GPU = (12, 0)
 
 @pytest.mark.parametrize("step", sorted(dispatch.CUTEDSL))
 def test_every_step_runs_cutedsl_on_hopper_when_asked(monkeypatch, step):
-    monkeypatch.setattr(dispatch, "capability", lambda device: dispatch.HOPPER)
+    monkeypatch.setattr(dispatch, "capability", lambda device: Arch.HOPPER)
     assert dispatch.runs_cutedsl(step, "cutedsl", CUDA)
     assert not dispatch.runs_cutedsl(step, "triton", CUDA)
 
@@ -33,14 +34,14 @@ def test_an_unknown_step_is_refused():
 
 @pytest.mark.parametrize("step", sorted(dispatch.CUTEDSL))
 def test_every_step_runs_cutedsl_on_a_b300_when_asked(monkeypatch, step):
-    monkeypatch.setattr(dispatch, "capability", lambda device: dispatch.B300)
+    monkeypatch.setattr(dispatch, "capability", lambda device: Arch.B300)
     assert dispatch.runs_cutedsl(step, "cutedsl", CUDA)
     assert not dispatch.runs_cutedsl(step, "triton", CUDA)
 
 
 def test_a_b200_waits_for_its_tests(monkeypatch):
-    monkeypatch.setattr(dispatch, "capability", lambda device: dispatch.B200)
-    assert dispatch.B200 in dispatch.BLACKWELL
+    monkeypatch.setattr(dispatch, "capability", lambda device: Arch.B200)
+    assert Arch.B200 in Arch.BLACKWELL
     assert not any(dispatch.runs_cutedsl(step, "cutedsl", CUDA) for step in dispatch.CUTEDSL)
 
 

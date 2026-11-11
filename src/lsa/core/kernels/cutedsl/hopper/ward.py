@@ -31,33 +31,14 @@ from cutlass.cutlass_dsl import dsl_user_op
 from cutlass.utils import LayoutEnum
 
 from lsa.core.kernels import dispatch
+from lsa.core.kernels.constants import Arch, HopperTileSize, HopperWard, Index, PackedKey
 from lsa.core.kernels.cutedsl.hopper.tile import (
-    INDEX_DIM,
-    MAX_KEY,
-    THREADS,
-    TILE,
     HopperTile,
     accumulator_rows_by_columns,
     approximate_sqrt,
     ordered_cost,
     pack_cost_key,
 )
-
-# Pools a block may hold - a 512-key window's keys unpooled, whose sums fill most of a CTA's shared memory
-MOST_POOLS = 512
-# At 512 pools the opt-in budget is 227 KB = 232,448 B, and a CTA holds
-#   tiles   rows and columns, [64, 64] fp32 in two splits each                  2 * 32,768 =  65,536 B
-#   sums    512 * (64 + 1 padding) fp32                                                   = 133,120 B
-#   state   square, alignment, size, alive, parent, 5 * 512 * 4                           =  10,240 B
-#   round   best 2 * 512 * 4, cost keys 2 * 512 * 8, mutual 512 * 8                       =  16,384 B
-#   misc    warp totals, tile barrier, tensor memory address                              =      28 B
-# => 225,308 B, 7,140 B under the budget - a four-word padding (8,192 B) would leave 996 B
-# CTAs a cluster may hold - the portable limit
-MOST_CLUSTER_CTAS = 8
-# Words a row of sums is padded by, so a warp reading one dim of 16 pools meets 16 banks, not one
-SUMS_PADDING = 1
-# Dims a run of the squared length adds before the runs are halved
-RUN = 4
 
 COMPILED: dict[tuple[int, int, str], Any] = {}
 MAX_ACTIVE_CLUSTERS: dict[tuple[int, int], int] = {}
@@ -122,7 +103,7 @@ class WardClustering(HopperTile):
             bucket_cap: Most keys a merged bucket may hold.
             stream: The stream to launch on.
         """
-        mma_tile = (TILE, TILE, INDEX_DIM)
+        mma_tile = (HopperTileSize.TILE, HopperTileSize.TILE, Index.DIM)
         row_layout = hopper.make_smem_layout_a(LayoutEnum.ROW_MAJOR, mma_tile, cutlass.TFloat32, 2)
         column_layout = hopper.make_smem_layout_b(LayoutEnum.ROW_MAJOR, mma_tile, cutlass.TFloat32, 2)
         pools = self.pools
@@ -133,7 +114,7 @@ class WardClustering(HopperTile):
 
             tile: self.tile_storage(row_layout, column_layout)  # type: ignore[valid-type]
             sums: cute.struct.Align[
-                cute.struct.MemRange[cutlass.Float32, pools * (INDEX_DIM + SUMS_PADDING)], 16
+                cute.struct.MemRange[cutlass.Float32, pools * (Index.DIM + HopperWard.SUMS_PADDING)], 16
             ]
             square: cute.struct.Align[cute.struct.MemRange[cutlass.Float32, pools], 16]
             alignment: cute.struct.Align[cute.struct.MemRange[cutlass.Float32, pools], 16]
@@ -146,7 +127,9 @@ class WardClustering(HopperTile):
             best: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, 2 * pools], 16]
             cost_keys: cute.struct.Align[cute.struct.MemRange[cutlass.Int64, 2 * pools], 16]
             mutual: cute.struct.Align[cute.struct.MemRange[cutlass.Int64, pools], 16]
-            warp_totals: cute.struct.Align[cute.struct.MemRange[cutlass.Int32, THREADS // 32], 16]
+            warp_totals: cute.struct.Align[
+                cute.struct.MemRange[cutlass.Int32, HopperTileSize.THREADS // 32], 16
+            ]
 
         tiled_mma = self.make_tile_mma()
         self.kernel(
@@ -162,7 +145,7 @@ class WardClustering(HopperTile):
             Storage,
         ).launch(
             grid=(reached.shape[0] * self.cluster_ctas, 1, 1),
-            block=[THREADS, 1, 1],
+            block=[HopperTileSize.THREADS, 1, 1],
             cluster=[self.cluster_ctas, 1, 1],
             stream=stream,
         )
@@ -210,7 +193,7 @@ class WardClustering(HopperTile):
         row_splits = storage.tile.rows.get_tensor(row_layout.outer, swizzle=row_layout.inner)
         column_splits = storage.tile.columns.get_tensor(column_layout.outer, swizzle=column_layout.inner)
         sums = storage.sums.get_tensor(
-            cute.make_layout((pools, INDEX_DIM), stride=(INDEX_DIM + SUMS_PADDING, 1))
+            cute.make_layout((pools, Index.DIM), stride=(Index.DIM + HopperWard.SUMS_PADDING, 1))
         )
         square = storage.square.get_tensor(cute.make_layout(pools))
         alignment = storage.alignment.get_tensor(cute.make_layout(pools))
@@ -220,16 +203,16 @@ class WardClustering(HopperTile):
         best_copies = storage.best.get_tensor(cute.make_layout(2 * pools))
         cost_key_copies = storage.cost_keys.get_tensor(cute.make_layout(2 * pools))
         mutual = storage.mutual.get_tensor(cute.make_layout(pools))
-        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(THREADS // 32))
+        warp_totals = storage.warp_totals.get_tensor(cute.make_layout(HopperTileSize.THREADS // 32))
 
         tCrA, tCrB, accumulator, coords = self.tile_views(
             tiled_mma, storage, row_layout, column_layout, thread
         )
 
-        for i in range(thread, pools * INDEX_DIM, THREADS):
-            sums[i // INDEX_DIM, i % INDEX_DIM] = key_sums[base + i // INDEX_DIM, i % INDEX_DIM]
+        for i in range(thread, pools * Index.DIM, HopperTileSize.THREADS):
+            sums[i // Index.DIM, i % Index.DIM] = key_sums[base + i // Index.DIM, i % Index.DIM]
         cute.arch.barrier()
-        for i in range(thread, pools, THREADS):
+        for i in range(thread, pools, HopperTileSize.THREADS):
             self.measure(sums, square, alignment, i)
             size[i] = sizes[base + i]
             alive[i] = cutlass.Int32(1)
@@ -247,8 +230,8 @@ class WardClustering(HopperTile):
             parity = rounds % 2
             best = cute.make_tensor(best_copies.iterator + parity * pools, cute.make_layout(pools))
             cost_keys = cute.make_tensor(cost_key_copies.iterator + parity * pools, cute.make_layout(pools))
-            for own_tile in cutlass.range_constexpr(share // TILE):
-                row_tile = cluster_cta * (share // TILE) + own_tile
+            for own_tile in cutlass.range_constexpr(share // HopperTileSize.TILE):
+                row_tile = cluster_cta * (share // HopperTileSize.TILE) + own_tile
                 self.cheapest(
                     sums,
                     square,
@@ -273,7 +256,7 @@ class WardClustering(HopperTile):
 
             # A pair that is each other's cheapest, named by its lower pool
             mutual_count = cutlass.Int32(0)
-            for first in range(0, pools, THREADS):
+            for first in range(0, pools, HopperTileSize.THREADS):
                 i = first + thread
                 is_mutual = cutlass.Int32(0)
                 # A block narrower than the CTA leaves threads with no pool
@@ -282,7 +265,7 @@ class WardClustering(HopperTile):
                     if partner >= 0:
                         if best[partner] == i and i < partner:
                             is_mutual = cutlass.Int32(1)
-                    mutual[i] = cutlass.Int64(MAX_KEY)
+                    mutual[i] = cutlass.Int64(PackedKey.MAX)
                     if is_mutual != 0:
                         mutual[i] = cost_keys[i]
                 _, chunk = self.exclusive_sum(is_mutual, warp_totals)
@@ -292,10 +275,10 @@ class WardClustering(HopperTile):
             # The cheapest pairs the block's count leaves room for merge, the lower pool taking the higher
             merges_left = alive_count - bucket_count
             applied = cutlass.min(mutual_count, merges_left)
-            for i in range(thread, pools, THREADS):
+            for i in range(thread, pools, HopperTileSize.THREADS):
                 mine = mutual[i]
                 merging = cutlass.Int32(0)
-                if mine < cutlass.Int64(MAX_KEY):
+                if mine < cutlass.Int64(PackedKey.MAX):
                     merge_order = cutlass.Int32(0)
                     if mutual_count > merges_left:
                         for j in range(pools):
@@ -303,7 +286,7 @@ class WardClustering(HopperTile):
                     merging = cutlass.Int32(merge_order < merges_left)
                 if merging != 0:
                     partner = best[i]
-                    for d in cutlass.range(INDEX_DIM, unroll_full=True):
+                    for d in cutlass.range(Index.DIM, unroll_full=True):
                         sums[i, d] = sums[i, d] + sums[partner, d]
                     self.measure(sums, square, alignment, i)
                     size[i] = size[i] + size[partner]
@@ -316,7 +299,7 @@ class WardClustering(HopperTile):
         # A surviving pool's bucket is numbered by how many survive before it, and a merged pool takes its root's
         best = cute.make_tensor(best_copies.iterator, cute.make_layout(pools))
         seen = cutlass.Int32(0)
-        for first in range(0, pools, THREADS):
+        for first in range(0, pools, HopperTileSize.THREADS):
             i = first + thread
             survives = cutlass.Int32(0)
             if i < pools:
@@ -326,7 +309,7 @@ class WardClustering(HopperTile):
                 best[i] = seen + before
             seen = seen + chunk
         cute.arch.barrier()
-        for i in range(first_own + thread, first_own + share, THREADS):
+        for i in range(first_own + thread, first_own + share, HopperTileSize.THREADS):
             root = i
             while parent[root] != root:
                 root = parent[root]
@@ -354,7 +337,7 @@ class WardClustering(HopperTile):
             cluster_cta: This CTA's index among the cluster CTAs.
         """
         thread, _, _ = cute.arch.thread_idx()
-        for i in range(first_own + thread, first_own + share, THREADS):
+        for i in range(first_own + thread, first_own + share, HopperTileSize.THREADS):
             partner = best[i]
             partner_cost_key = cost_keys[i]
             low_word = cutlass.Int32(partner_cost_key & cutlass.Int64(0xFFFFFFFF))
@@ -383,18 +366,18 @@ class WardClustering(HopperTile):
             alignment: Each pool's length, written for the pool.
             pool: The pool.
         """
-        runs = cute.make_rmem_tensor(INDEX_DIM // RUN, cutlass.Float32)
-        for j in cutlass.range_constexpr(INDEX_DIM // RUN):
-            first = sums[pool, RUN * j]
-            second = sums[pool, RUN * j + 1]
-            third = sums[pool, RUN * j + 2]
-            fourth = sums[pool, RUN * j + 3]
+        runs = cute.make_rmem_tensor(Index.DIM // HopperWard.RUN, cutlass.Float32)
+        for j in cutlass.range_constexpr(Index.DIM // HopperWard.RUN):
+            first = sums[pool, HopperWard.RUN * j]
+            second = sums[pool, HopperWard.RUN * j + 1]
+            third = sums[pool, HopperWard.RUN * j + 2]
+            fourth = sums[pool, HopperWard.RUN * j + 3]
             run = cute.math.fma(first, first, second * second)
             run = cute.math.fma(third, third, run)
             runs[j] = cute.math.fma(fourth, fourth, run)
         # Each run added to the one half the runs along, until one is left
-        for step in cutlass.range_constexpr((INDEX_DIM // RUN).bit_length() - 1):
-            half = INDEX_DIM // RUN // 2 >> step
+        for step in cutlass.range_constexpr((Index.DIM // HopperWard.RUN).bit_length() - 1):
+            half = Index.DIM // HopperWard.RUN // 2 >> step
             for j in cutlass.range_constexpr(half):
                 runs[j] = runs[j] + runs[j + half]
         square[pool] = runs[0]
@@ -413,10 +396,10 @@ class WardClustering(HopperTile):
         # A warp reads one dim of 16 pools, two threads a pool
         # The padded rows put the pools in 16 banks, and the two halves of a pool share one
         # => a 2-way conflict stays, from 32-way unpadded - the halves are 32 words apart, whatever the row stride
-        staged = cute.make_rmem_tensor(INDEX_DIM // 2, cutlass.Float32)
+        staged = cute.make_rmem_tensor(Index.DIM // 2, cutlass.Float32)
         pool = first + thread // 2
-        first_dim = (thread % 2) * (INDEX_DIM // 2)
-        for d in cutlass.range_constexpr(INDEX_DIM // 2):
+        first_dim = (thread % 2) * (Index.DIM // 2)
+        for d in cutlass.range_constexpr(Index.DIM // 2):
             staged[d] = sums[pool, first_dim + d]
         self.store_split(staged, splits)
 
@@ -464,7 +447,7 @@ class WardClustering(HopperTile):
         values = accumulator_rows_by_columns(accumulator)
         row_count = cute.size(values, mode=[0])
         column_count = cute.size(values, mode=[1])
-        first_row = row_tile * TILE
+        first_row = row_tile * HopperTileSize.TILE
         cute.arch.barrier()
         self.stage(sums, first_row, row_splits)
         best_costs = cute.make_rmem_tensor(row_count, cutlass.Int32)
@@ -487,8 +470,8 @@ class WardClustering(HopperTile):
         column_sizes = cute.make_rmem_tensor(column_count, cutlass.Float32)
         # A runtime loop, its state all in registers
         # => the tile's body is compiled once, not once a column tile
-        for column_tile in range(self.pools // TILE):
-            first_column = column_tile * TILE
+        for column_tile in range(self.pools // HopperTileSize.TILE):
+            first_column = column_tile * HopperTileSize.TILE
             cute.arch.barrier()
             self.stage(sums, first_column, column_splits)
             cute.arch.fence_proxy("async.shared", space="cta")
@@ -538,7 +521,7 @@ class WardClustering(HopperTile):
                         column = other_column
             if thread % 4 == 0:
                 row = first_row + coords[r, 0][0]
-                cost_keys[row] = cutlass.Int64(MAX_KEY)
+                cost_keys[row] = cutlass.Int64(PackedKey.MAX)
                 best[row] = cutlass.Int32(-1)
                 if column >= 0:
                     cost_keys[row] = pack_cost_key(cost, column)
@@ -576,9 +559,9 @@ def cluster_ctas_for(pools: int, blocks: int, device: torch.device) -> int:
         device: The GPU.
     """
     cluster_ctas = 1
-    while cluster_ctas * 2 <= min(MOST_CLUSTER_CTAS, pools // TILE) and blocks <= max_active_clusters(
-        device, cluster_ctas * 2
-    ):
+    while cluster_ctas * 2 <= min(
+        HopperWard.MOST_CLUSTER_CTAS, pools // HopperTileSize.TILE
+    ) and blocks <= max_active_clusters(device, cluster_ctas * 2):
         cluster_ctas *= 2
     return cluster_ctas
 
@@ -596,7 +579,7 @@ def compiled(pools: int, cluster_ctas: int, kernel: type[WardClustering] = WardC
         return COMPILED[key]
     rows, blocks = cute.sym_int32(), cute.sym_int32()
     arguments = (
-        make_fake_compact_tensor(cutlass.Float32, (rows, INDEX_DIM), stride_order=(1, 0), assumed_align=16),
+        make_fake_compact_tensor(cutlass.Float32, (rows, Index.DIM), stride_order=(1, 0), assumed_align=16),
         make_fake_compact_tensor(cutlass.Float32, (rows,), assumed_align=4),
         make_fake_compact_tensor(cutlass.Int64, (rows,), assumed_align=8),
         make_fake_compact_tensor(cutlass.Int32, (blocks,), assumed_align=4),
@@ -634,8 +617,8 @@ def takes_blocks(pool_keys: torch.Tensor, precision: str) -> bool:
         pool_keys.is_cuda
         and fits_the_gpu(pool_keys)
         and precision == "tf32x3"
-        and index_dim == INDEX_DIM
-        and TILE <= pools <= MOST_POOLS
+        and index_dim == Index.DIM
+        and HopperTileSize.TILE <= pools <= HopperWard.MOST_POOLS
         and pools & (pools - 1) == 0
     )
 
@@ -649,7 +632,7 @@ def supports(pool_keys: torch.Tensor, precision: str) -> bool:
     """
     return (
         pool_keys.is_cuda
-        and dispatch.capability(pool_keys.device) == dispatch.HOPPER
+        and dispatch.capability(pool_keys.device) == Arch.HOPPER
         and takes_blocks(pool_keys, precision)
     )
 
@@ -696,7 +679,7 @@ def cluster_ward(
     check_sizes(pool_keys, pool_sizes)
     if not supports(pool_keys, "tf32x3"):
         raise ValueError(
-            f"the CuTeDSL Ward merge takes tf32x3 blocks of {TILE} to {MOST_POOLS} pools, a power of two, of 64 "
+            f"the CuTeDSL Ward merge takes tf32x3 blocks of {HopperTileSize.TILE} to {HopperWard.MOST_POOLS} pools, a power of two, of 64 "
             f"index dims, at most one block an SM, on a Hopper GPU - got {tuple(pool_keys.shape)} on {pool_keys.device}"
         )
     return launch(pool_keys, pool_sizes, bucket_count, bucket_cap, WardClustering)
