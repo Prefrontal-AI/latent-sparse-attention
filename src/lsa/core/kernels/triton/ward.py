@@ -46,7 +46,7 @@ def _square_sum(vectors: tl.tensor, BLOCK: tl.constexpr, D: tl.constexpr) -> tl.
 
     Near-tied merge costs turn on a square's last bit, and `tl.sum` rounds as the build lays it out.
     So runs of four dims (second squared, then the first, third and fourth fused in) are added in halves -
-    the order Triton 3.7 compiled `tl.sum` to at d = 64, which the internal snapshot's reads were taken with.
+    the order Triton 3.7 compiled `tl.sum` to at d = 64, which the original implementation's reads were taken with.
     """
     first_third, second_fourth = tl.split(tl.reshape(vectors, [BLOCK, D // 4, 2, 2]))
     first, third = tl.split(first_third)

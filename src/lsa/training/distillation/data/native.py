@@ -202,7 +202,7 @@ def head_queries(attention: Any, x: torch.Tensor, positions: torch.Tensor) -> to
 def key_and_query(attention: Any, x: torch.Tensor, positions: torch.Tensor) -> KeyAndQuery:
     """Make the key and query input of a cached document from its `x` with the layer's own modules.
 
-    What the internal snapshot's probe extraction read off a layer (the adapter's `teacher_view`): the key latent at every
+    What the original implementation's probe extraction read off a layer (the adapter's `teacher_view`): the key latent at every
     position and each head's folded query at the sampled rows.
 
     Args:
@@ -242,9 +242,9 @@ def summed_queries(attention: Any, x: torch.Tensor, positions: torch.Tensor) -> 
 
 
 def latent_bases(attention: Any) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return the bases the internal snapshot's key and query input was distilled in - `L` for the key, `L^-T` for the query.
+    """Return the bases the original implementation's key and query input was distilled in - `L` for the key, `L^-T` for the query.
 
-    `L` factors the metric the key maps impose on the latent, `L L^T = sum_h K_h^T K_h`, and the internal snapshot's cache held
+    `L` factors the metric the key maps impose on the latent, `L L^T = sum_h K_h^T K_h`, and the original implementation's cache held
     `latent @ L` and `summed_query @ L^-T` - the same logits, `q . latent`, in coordinates the concatenated keys make
     orthonormal. A map trained there on the key and query and folded back, `L @ W_K` and `L^-T @ W_Q`, reads the
     plain latent and summed query a server holds.

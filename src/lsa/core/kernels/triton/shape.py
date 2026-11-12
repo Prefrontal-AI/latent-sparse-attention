@@ -7,9 +7,9 @@ never expanded: the query is split once into 8 bit-planes of its int8 levels, an
 basis is a few popcounts. Every kernel here that scores against the planes shares one helper, so a bucket scores
 alike, bit for bit, whichever read scores it.
 
-`add_spread` is the other way, the node buckets' as the internal snapshot scored them: the bits expanded once a tile and
+`add_spread` is the other way, the node buckets' as the original implementation scored them: the bits expanded once a tile and
 multiplied with the bf16 query on the tensor cores. A hierarchy's open node buckets are scored by it and the children
-of its beam by the planes, which is what the internal snapshot's saved reads hold.
+of its beam by the planes, which is what the original implementation's saved reads hold.
 
 A shape is built over every key under a bucket: the residuals about the centroid, their `[index_dim, index_dim]` covariance in bf16
 products summed in fp32, and its leading directions by deflated power iteration, which the sign basis reads no worse

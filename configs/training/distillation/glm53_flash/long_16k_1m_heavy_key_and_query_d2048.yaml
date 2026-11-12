@@ -3,14 +3,14 @@
 #
 # The indexer reads GLM's key latent and every head's query summed, `input: key_and_query` with `query_heads: all`, as
 # the server does under the same setting. Neither is in the cache: the layer's own attention reads them off the cached
-# `x` once a document is on the card. The maps act in the latent bases the internal snapshot distilled in - the key latent carried
+# `x` once a document is on the card. The maps act in the latent bases the original implementation distilled in - the key latent carried
 # by `L`, the summed query by `L^-T`, `L L^T` the metric the key maps impose - start at the PCA of the carried keys, and
 # are saved with the bases folded in, so `lsa distill export` writes what the server reads off the plain latent.
 #
-# The internal snapshot's recipe was the dense target cut to the teacher's 2048 strongest keys under the forward KL, 48,000 steps at
+# The original implementation's recipe was the dense target cut to the teacher's 2048 strongest keys under the forward KL, 48,000 steps at
 # 3e-4, batch 128, steps drawn by token, the temperature calibrated per layer - all kept. What this trainer changes by
-# design: the visibility rule is this cache's (past 4 sinks, at least 512 back, query positions from 516) where the internal
-# snapshot's saw closed 8192-key blocks, the documents stream through the rolling pool, the PCA and the temperature are
+# design: the visibility rule is this cache's (past 4 sinks, at least 512 back, query positions from 516) where the original
+# implementation's saw closed 8192-key blocks, the documents stream through the rolling pool, the PCA and the temperature are
 # taken from a sample of documents rather than one, and the held-out sets are this cache's.
 #
 #     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048.yaml \

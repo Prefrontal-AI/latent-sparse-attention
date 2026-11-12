@@ -1,6 +1,6 @@
 """The generic layer - the part of reading an attention module that is the same for every model.
 
-Everything here runs on CPU against [fake_model](fake_model.py), so it gates in CI with no checkpoint and
+Everything here runs on CPU against [fake_model](../../../helpers/evaluation/adapter/fake_model.py), so it gates in CI with no checkpoint and
 nothing from the evaluation extra installed.
 """
 

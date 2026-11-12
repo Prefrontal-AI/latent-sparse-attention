@@ -1,6 +1,6 @@
 # Not a run - the dense timing on one B300, laid over [full_tp1](full_tp1.yaml) as its last default.
 #
-# The image is [GLM's B300 image](../glm53_flash/b300.yaml).
+# The image is [GLM's B300 image](../glm53_flash/_image_b300.yaml).
 # The dense model runs as sglang ships it on Blackwell, on trtllm_mha at a page of 64, named here so the record says so.
 # Forced onto triton, the backend the LSA methods read through, it decoded a 512k context at 152 ms a token against
 # 11-14 ms for every other method - not a baseline sglang would serve.

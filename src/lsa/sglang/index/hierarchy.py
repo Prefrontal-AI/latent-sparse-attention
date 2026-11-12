@@ -16,7 +16,7 @@ directly, as the window's keys are read at level 0.
 
 Under `node_bucket_shape` a node bucket also keeps the shape of every key beneath it, built as it opens, and the beam
 scores it by its estimated best key - its open node buckets with the bits expanded on the tensor cores, its carried children
-against the query's planes, as the internal snapshot scored them. Level 0 is scored by `bucket_shape` when the design sets one.
+against the query's planes, as the original implementation scored them. Level 0 is scored by `bucket_shape` when the design sets one.
 """
 
 from collections.abc import Callable

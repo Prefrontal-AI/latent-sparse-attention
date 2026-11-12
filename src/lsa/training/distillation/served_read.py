@@ -14,7 +14,7 @@ A design may read a map of its own, `serving.projections`, and the key and the h
 `indexer.input: key_and_query` - the frozen design's input, and the maps distilled on it, re-exported or trained
 here. Those are not in the cache, so they are made from the cached `x` with the layer's own weights, as the native picks are:
 the checkpoint loaded with only the sparse layers' attention, and GLM's key latent `kv_a_layernorm(kv_a(x))` at
-every position and each head's query folded through its key map at the sampled rows - the internal snapshot's extraction of
+every position and each head's query folded through its key map at the sampled rows - the original implementation's extraction of
 its probes. The serving projection reads them as a server does, each of the design's `ranks` tensor-parallel
 ranks summing its own heads and reading its own list - one list of every head under `query_heads: all` - and every
 rank's read is scored against the teacher, whose mass is summed over all the heads, and the ranks averaged. Beside it `<design>_union` scores what the ranks read

@@ -627,7 +627,7 @@ def build_maps(
     would throw away the temperature it was trained under.
 
     Under the key and query the map acts in the layer's latent bases, and starts at the PCA of its key latents
-    carried into the key basis - the internal snapshot's init.
+    carried into the key basis - the original implementation's init.
 
     A document is up to 8.7 GB, so init holds one at a time: it reads each, keeps its sampled rows and lets
     it go, and reads the sample again to calibrate once the map exists.
