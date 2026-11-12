@@ -303,7 +303,7 @@ def build(run_id: str, meta: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     """Fold every result file of a run into its record.
 
     The indexer is read from the settings file the run was served with, because a stock server's
-    `/server_info` cannot say whether the plugin was armed. A deployment is named by the mesh its result
+    `/server_info` cannot say whether the plugin was enabled. A deployment is named by the mesh its result
     reports rather than by its directory.
 
     Args:

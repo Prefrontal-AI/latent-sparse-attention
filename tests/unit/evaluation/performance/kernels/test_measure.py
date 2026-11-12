@@ -403,7 +403,7 @@ def test_only_glm_read_densely_is_built_without_its_indexer(monkeypatch, family,
     assert override["text_config"]["rope_parameters"] == {"factor": 40}
     assert ("index_topk" in override["text_config"]) is nulled
     assert override["text_config"].get("index_topk") is None
-    # The native arm carries no settings block
+    # The native method carries no settings block
     assert "lsa" not in override
 
 
@@ -764,14 +764,14 @@ def served(monkeypatch, generation, family, indexer, **named):
         ),
     ],
 )
-def test_a_baseline_arm_runs_upstream_sglangs_backend_for_the_gpu(
+def test_a_baseline_method_runs_upstream_sglangs_backend_for_the_gpu(
     monkeypatch, generation, family, indexer, backends
 ):
     assert served(monkeypatch, generation, family, indexer) == backends
 
 
 @pytest.mark.parametrize("generation", ["hopper", "blackwell"])
-def test_a_design_arm_reads_the_backends_the_config_names(monkeypatch, generation):
+def test_a_design_method_reads_the_backends_the_config_names(monkeypatch, generation):
     # Ours, so upstream's default does not reach them
     backends = served(monkeypatch, generation, Family.GLM5_NEXT, "lsa")
     assert backends["dsa_prefill_backend"] == backends["dsa_decode_backend"] == "flashmla_sparse"
@@ -791,7 +791,7 @@ def test_a_named_backend_replaces_upstreams_for_one_phase(monkeypatch):
     )
 
 
-def test_a_design_arm_refuses_a_named_backend(monkeypatch):
+def test_a_design_method_refuses_a_named_backend(monkeypatch):
     with pytest.raises(ValueError, match="not a baseline"):
         served(monkeypatch, "hopper", Family.GLM5_NEXT, "pisa", decode_attention_backend="fa3")
 

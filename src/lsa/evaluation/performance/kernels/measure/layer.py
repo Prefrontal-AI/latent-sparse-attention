@@ -88,7 +88,7 @@ def source_hashes():
 
 
 # What upstream sglang picks per GPU generation when no backend is named - `get_default_attn_backend` for the dense
-# layers and the DSA default of `arg_groups/overrides.py` for GLM's bf16 sparse attention. A baseline arm runs in
+# layers and the DSA default of `arg_groups/overrides.py` for GLM's bf16 sparse attention. A baseline method runs in
 # upstream's layout; a deviation is named with `--prefill-attention-backend` / `--decode-attention-backend`
 # (`run.args` in a config) and the record says so.
 UPSTREAM_MLA = {"hopper": ("fa3", "fa3"), "blackwell": ("flashinfer", "flashinfer")}
@@ -128,16 +128,16 @@ def dense_backends(args, upstream):
 def engine_backends(args):
     """Return the attention backend arguments as served, per family and indexer.
 
-    The baseline arms run upstream sglang's per-GPU choice: dense MLA (GLM read densely) on FA3 on Hopper (decode on FlashMLA, which the model requires) and FlashInfer's
+    The baseline methods run upstream sglang's per-GPU choice: dense MLA (GLM read densely) on FA3 on Hopper (decode on FlashMLA, which the model requires) and FlashInfer's
     MLA on Blackwell (GLM's latent runs neither there, see MODEL_REQUIRED_MLA), dense MHA (Qwen) on FA3 and trtllm_mha, and GLM's own sparse attention on FlashMLA's sparse prefill
     with FA3 (Hopper) or trtllm (Blackwell) decode. `--prefill-attention-backend` and `--decode-attention-backend`
-    replace either for those arms. QSA is served with no backend named - the image's QSA backend builds its own for the attention layers
-    and sets their page of 64. The design's arms (LSA, PISA) are ours: GLM reads its selection through the sparse kernels
+    replace either for those methods. QSA is served with no backend named - the image's QSA backend builds its own for the attention layers
+    and sets their page of 64. The design's methods (LSA, PISA) are ours: GLM reads its selection through the sparse kernels
     the run names, and Qwen's list is read on triton (Blackwell) or FA3 at a page of one slot, which the design's backend
     needs - the linear layer is measured in the served model with its own indexer.
 
     Raises:
-        ValueError: The run names a backend for an arm that has none to choose.
+        ValueError: The run names a backend for a method that has none to choose.
     """
     generation = device_generation()
     qwen = checkpoint_family(args.model_path) == Family.QWEN3_5
@@ -148,7 +148,9 @@ def engine_backends(args):
         upstream = UPSTREAM_MLA[generation]
         return dense_backends(args, tuple(r or u for r, u in zip(required, upstream, strict=True)))
     if any(overrides(args)) and (qwen or args.indexer != "native"):
-        raise ValueError(f"the {args.indexer} arm is not a baseline and has no upstream backend to replace")
+        raise ValueError(
+            f"the {args.indexer} method is not a baseline and has no upstream backend to replace"
+        )
     if qwen:
         if args.indexer == "native":
             return {}
@@ -278,7 +280,7 @@ def run(args):
     torch.manual_seed(0)
     os.environ["SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN"] = "1"
     # No server entry point runs here
-    # => load the plugin that arms the design's indexer (LSA or PISA) the way serving does
+    # => load the plugin that enables the design's indexer (LSA or PISA) the way serving does
     if args.indexer in ("lsa", "pisa"):
         from sglang.srt.plugins import load_plugins
 
@@ -299,7 +301,7 @@ def run(args):
         disable_prefill_cuda_graph=True,
         disable_radix_cache=True,
         # FlashInfer's autotune runs on sm_100 and up and forwards a dummy batch with no request ids, which LSA's
-        # maintenance refuses - off on every arm, as every B300 server runs
+        # maintenance refuses - off on every method, as every B300 server runs
         disable_flashinfer_autotune=torch.cuda.get_device_capability()[0] >= 10,
         log_level="warning",
         json_model_override_args=model_override(args),
@@ -873,21 +875,21 @@ def main() -> None:
     parser.add_argument("--phase", choices=("prefill", "decode"), default="prefill")
     parser.add_argument(
         "--prefill-attention-backend",
-        help="replace upstream sglang's per-GPU prefill backend on a baseline arm (full, GLM native) - recorded as an override",
+        help="replace upstream sglang's per-GPU prefill backend on a baseline method (full, GLM native) - recorded as an override",
     )
     parser.add_argument(
         "--decode-attention-backend",
-        help="replace upstream sglang's per-GPU decode backend on a baseline arm (full, GLM native) - recorded as an override",
+        help="replace upstream sglang's per-GPU decode backend on a baseline method (full, GLM native) - recorded as an override",
     )
     parser.add_argument(
         "--dsa-prefill-backend",
         default="tilelang",
-        help="GLM's sparse attention kernel over a prefill's selection, for the LSA and PISA arms",
+        help="GLM's sparse attention kernel over a prefill's selection, for the LSA and PISA methods",
     )
     parser.add_argument(
         "--dsa-decode-backend",
         default="tilelang",
-        help="GLM's sparse attention kernel over a decode's selection, for the LSA and PISA arms",
+        help="GLM's sparse attention kernel over a decode's selection, for the LSA and PISA methods",
     )
     parser.add_argument(
         "--decode-offsets",

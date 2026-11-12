@@ -1,13 +1,13 @@
-"""Compare arms from the records a benchmark left, paired by example.
+"""Compare methods from the records a benchmark left, paired by example.
 
     lsa native report <records> --baseline b16k-dense
 
-Every arm answers the same fixed examples, so a difference is taken example by example and resampled over examples
-rather than over two independent means: the bootstrap draws example ids with replacement, recomputes both arms'
+Every method answers the same fixed examples, so a difference is taken example by example and resampled over examples
+rather than over two independent means: the bootstrap draws example ids with replacement, recomputes both methods'
 statistic on the same draw and keeps the percentile interval of the difference. A perplexity is a ratio of sums, so
 its statistic is recomputed on each draw rather than averaged.
 
-RULER is read by length and by task, and the window arm is read apart: its attention reaches 516 keys, so a cell it
+RULER is read by length and by task, and the window method is read apart: its attention reaches 516 keys, so a cell it
 solves past that reach is a cell that does not test long range.
 """
 
@@ -69,11 +69,11 @@ def resampled(values: np.ndarray, draws: np.ndarray) -> np.ndarray:
 def paired_bootstrap(
     base: np.ndarray, other: np.ndarray, iterations: int = BOOTSTRAP_ITERATIONS, seed: int = BOOTSTRAP_SEED
 ) -> tuple[float, float, float]:
-    """Bootstrap the difference of a statistic between two arms over the same examples.
+    """Bootstrap the difference of a statistic between two methods over the same examples.
 
     Args:
-        base: The reference arm's per-example values, as `statistic` takes them.
-        other: The compared arm's, in the same example order.
+        base: The reference method's per-example values, as `statistic` takes them.
+        other: The compared method's, in the same example order.
         iterations: Resamples drawn.
         seed: Seed of the draws, so a table is the same every time it is made.
 
@@ -112,7 +112,7 @@ def shared_ids(*tables: dict[int, dict[str, Any]]) -> list[int]:
     """Return the example ids every table holds with the same prompt, ascending.
 
     Args:
-        *tables: Sample rows by id, one per arm.
+        *tables: Sample rows by id, one per method.
 
     Returns:
         The ids a pair can be made from.
@@ -156,18 +156,18 @@ def table(header: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def core_tables(arms: dict[str, Path], baseline: str, names: list[str]) -> str:
-    """Render the core tasks - each arm's score, and its paired difference from the baseline.
+def core_tables(methods: dict[str, Path], baseline: str, names: list[str]) -> str:
+    """Render the core tasks - each method's score, and its paired difference from the baseline.
 
     Args:
-        arms: Each arm's run directory.
-        baseline: The arm the others are compared with.
+        methods: Each method's run directory.
+        baseline: The method the others are compared with.
         names: The tasks to report.
 
     Returns:
         Two markdown tables.
     """
-    tables = {arm: collect(folder, names) for arm, folder in arms.items()}
+    tables = {method: collect(folder, names) for method, folder in methods.items()}
     present = [name for name in names if all(name in found for found in tables.values())]
     scores, differences = [], []
     for name in present:
@@ -175,98 +175,98 @@ def core_tables(arms: dict[str, Path], baseline: str, names: list[str]) -> str:
         ids = shared_ids(*(found[name] for found in tables.values()))
         base = values_of(tables[baseline][name], ids, metric)
         row, difference = [f"{name} ({metric})"], [f"{name} ({metric})"]
-        for arm in arms:
-            values = values_of(tables[arm][name], ids, metric)
+        for method in methods:
+            values = values_of(tables[method][name], ids, metric)
             row.append(format_cell(statistic(values)))
-            if arm != baseline:
+            if method != baseline:
                 delta, low, high = paired_bootstrap(base, values)
                 difference.append(format_cell(delta, (low, high)))
         scores.append(row)
         differences.append(difference)
-    others = [arm for arm in arms if arm != baseline]
+    others = [method for method in methods if method != baseline]
     return "\n\n".join(
         [
-            table(["task", *arms], scores),
+            table(["task", *methods], scores),
             f"Paired difference from {baseline}, 95% interval over examples:",
             table(["task", *others], differences),
         ]
     )
 
 
-def ruler_tables(arms: dict[str, Path], baseline: str, names: list[str]) -> str:
-    """Render RULER by length and by task, with the window arm's reach marked.
+def ruler_tables(methods: dict[str, Path], baseline: str, names: list[str]) -> str:
+    """Render RULER by length and by task, with the window method's reach marked.
 
     Args:
-        arms: Each arm's run directory.
-        baseline: The arm the others are compared with.
+        methods: Each method's run directory.
+        baseline: The method the others are compared with.
         names: The RULER cells to report.
 
     Returns:
         Markdown tables: the score by length, its paired difference from the baseline, and the score by task.
     """
-    tables = {arm: collect(folder, names) for arm, folder in arms.items()}
+    tables = {method: collect(folder, names) for method, folder in methods.items()}
     cells = [name for name in names if all(name in found for found in tables.values())]
     lengths = tasks.lengths_of(cells)
     by_length, difference_by_length = [], []
     for length in lengths:
         members = [name for name in cells if tasks.parse_ruler(name)[1] == length]
         pooled = {
-            arm: np.concatenate(
+            method: np.concatenate(
                 [
-                    values_of(tables[arm][name], shared_ids(*(tables[a][name] for a in arms)), "score")
+                    values_of(tables[method][name], shared_ids(*(tables[a][name] for a in methods)), "score")
                     for name in members
                 ]
             )
-            for arm in arms
+            for method in methods
         }
         row, difference = [str(length)], [str(length)]
-        for arm in arms:
-            row.append(format_cell(statistic(pooled[arm])))
-            if arm != baseline:
-                delta, low, high = paired_bootstrap(pooled[baseline], pooled[arm])
+        for method in methods:
+            row.append(format_cell(statistic(pooled[method])))
+            if method != baseline:
+                delta, low, high = paired_bootstrap(pooled[baseline], pooled[method])
                 difference.append(format_cell(delta, (low, high)))
         by_length.append(row)
         difference_by_length.append(difference)
     by_task = []
     for name in cells:
-        ids = shared_ids(*(tables[arm][name] for arm in arms))
+        ids = shared_ids(*(tables[method][name] for method in methods))
         by_task.append(
             [
                 name[len(tasks.RULER_PREFIX) :],
                 *(
-                    format_cell(statistic(values_of(tables[arm][name], ids, "score")), digits=2)
-                    for arm in arms
+                    format_cell(statistic(values_of(tables[method][name], ids, "score")), digits=2)
+                    for method in methods
                 ),
             ]
         )
-    others = [arm for arm in arms if arm != baseline]
+    others = [method for method in methods if method != baseline]
     return "\n\n".join(
         [
-            table(["length", *arms], by_length),
+            table(["length", *methods], by_length),
             f"Paired difference from {baseline}, 95% interval over examples:",
             table(["length", *others], difference_by_length),
             "By task:",
-            table(["task_length", *arms], by_task),
+            table(["task_length", *methods], by_task),
         ]
     )
 
 
-def leakage_table(arm: Path, reference: Path | None, names: list[str]) -> str:
-    """Render the window arm's RULER score by task and length, beside a reference arm's.
+def leakage_table(method: Path, reference: Path | None, names: list[str]) -> str:
+    """Render the window method's RULER score by task and length, beside a reference method's.
 
-    The window arm reads 516 keys per attention layer, so a prompt longer than the key budget (1,540 tokens) is not
+    The window method reads 516 keys per attention layer, so a prompt longer than the key budget (1,540 tokens) is not
     within its reach, and a cell it solves is a cell its recurrent layers or the prompt's own regularity solve - not
     a test of long-range attention. Every RULER length here is past that budget.
 
     Args:
-        arm: The window arm's run directory.
-        reference: Another arm's, shown beside it, or None.
+        method: The window method's run directory.
+        reference: Another method's, shown beside it, or None.
         names: The RULER cells to report.
 
     Returns:
-        A markdown table of mean score per task and length, and the share of cells the window arm scores above zero.
+        A markdown table of mean score per task and length, and the share of cells the window method scores above zero.
     """
-    window = collect(arm, names)
+    window = collect(method, names)
     other = collect(reference, names) if reference else {}
     cells = [name for name in names if name in window]
     rows = []
@@ -279,12 +279,12 @@ def leakage_table(arm: Path, reference: Path | None, names: list[str]) -> str:
         if name in other:
             row.append(format_cell(statistic(values_of(other[name], sorted(other[name]), "score")), digits=2))
         rows.append(row)
-    header = ["task_length", arm.parent.name] + ([reference.parent.name] if reference else [])
+    header = ["task_length", method.parent.name] + ([reference.parent.name] if reference else [])
     solved = sum(statistic(values_of(window[name], sorted(window[name]), "score")) > 0 for name in cells)
     return "\n\n".join(
         [
             table(header, rows),
-            f"The window arm scores above zero on {solved} of {len(cells)} cells, every one past 1,540 tokens.",
+            f"The window method scores above zero on {solved} of {len(cells)} cells, every one past 1,540 tokens.",
         ]
     )
 
@@ -296,32 +296,32 @@ def report(
 
     Args:
         records_root: The records root.
-        baseline: The label of the arm the others are compared with.
-        preset_names: The presets to report, each a directory beside the arms' checkpoints.
-        window: The label of the window arm, whose RULER scores are also shown as the leakage check.
+        baseline: The label of the method the others are compared with.
+        preset_names: The presets to report, each a directory beside the methods' checkpoints.
+        window: The label of the window method, whose RULER scores are also shown as the leakage check.
 
     Returns:
         Markdown.
     """
     sections = []
     for preset in preset_names:
-        arms = {
+        methods = {
             path.parent.name: path
             for path in sorted(Path(records_root).glob(f"*/{preset}"))
             if (path / records.RESULTS).exists()
         }
-        if baseline not in arms:
+        if baseline not in methods:
             continue
         names = tasks.expand(preset)
         body = (
-            ruler_tables(arms, baseline, names)
+            ruler_tables(methods, baseline, names)
             if tasks.is_ruler(names[0])
-            else core_tables(arms, baseline, names)
+            else core_tables(methods, baseline, names)
         )
         sections.append(f"## {preset}\n\n{body}")
-        if window is not None and window in arms and tasks.is_ruler(names[0]):
+        if window is not None and window in methods and tasks.is_ruler(names[0]):
             sections.append(
-                f"### Leakage check - {window}\n\n{leakage_table(arms[window], arms[baseline], names)}"
+                f"### Leakage check - {window}\n\n{leakage_table(methods[window], methods[baseline], names)}"
             )
     return "\n\n".join(sections)
 
@@ -330,8 +330,10 @@ def main() -> None:
     """Print the comparison tables of a records root."""
     parser = argparse.ArgumentParser(description="Paired comparison of benchmark records")
     parser.add_argument("records", help="the records root")
-    parser.add_argument("--baseline", default="b16k-dense", help="the arm the others are compared with")
-    parser.add_argument("--window", default="b16k-window", help="the window arm, for the RULER leakage check")
+    parser.add_argument("--baseline", default="b16k-dense", help="the method the others are compared with")
+    parser.add_argument(
+        "--window", default="b16k-window", help="the window method, for the RULER leakage check"
+    )
     parser.add_argument("--presets", default="core,ruler", help="presets to report, comma-separated")
     args = parser.parse_args()
     print(report(args.records, args.baseline, args.presets.split(","), args.window))

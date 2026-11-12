@@ -29,7 +29,7 @@ So only the entries of positive mass are teacher keys, and only they are counted
 | `target_held` | share of a probe's long-range target keys the read holds - a needle's value tokens, or a cwe word's earlier occurrences |
 | `target_any` | share of probes with a long-range target whose read holds at least one of them |
 | `line_held` | share of the long-range keys of the needle's sentence the read holds, on a needle task |
-| `agreement` | share of a served design's long-range keys a reference arm also holds, for an arm that names a design to agree with |
+| `agreement` | share of a served design's long-range keys a reference method also holds, for a method that names a design to agree with |
 
 `far_mass` asks what the internal snapshot's targets asked - its cache saw only keys in coarse blocks of 8192 that closed
 before the query's own, so a read that spends its budget on keys a few thousand back scores well on `mass` and

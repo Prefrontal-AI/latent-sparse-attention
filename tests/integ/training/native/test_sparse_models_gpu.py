@@ -9,7 +9,7 @@ pytestmark = [pytest.mark.gpu, pytest.mark.cluster]
 
 
 @pytest.mark.parametrize("kind", ["nsa", "pisa"])
-def test_sparse_arm_trains_three_accumulated_steps(tmp_path, kind):
+def test_sparse_method_trains_three_accumulated_steps(tmp_path, kind):
     experiment = native.NativeConfig(
         attention=native.AttentionConfig(kind=kind, window_size=512),
         model=native.ModelConfig(

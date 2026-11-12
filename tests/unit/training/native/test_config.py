@@ -52,7 +52,7 @@ def test_sizes_that_do_not_nest_are_refused():
         AttentionConfig(pool_size=3)
 
 
-def test_the_dense_and_window_arms_do_not_care_about_the_buckets():
+def test_the_dense_and_window_methods_do_not_care_about_the_buckets():
     assert AttentionConfig(kind="window", bucket_size=7, window_size=1540, sink_size=0).window_size == 1540
 
 
@@ -120,7 +120,7 @@ def test_a_held_out_set_must_be_whole_batches_on_every_rank():
     EvaluationConfig(every=0, sequences=3).check_ranks(8, 1)
 
 
-def test_the_lsa_arm_reads_no_summaries_and_clusters_with_ward():
+def test_the_lsa_method_reads_no_summaries_and_clusters_with_ward():
     with pytest.raises(ValueError, match="lsa"):
         AttentionConfig(kind="lsa")
     with pytest.raises(ValueError, match="lsa"):

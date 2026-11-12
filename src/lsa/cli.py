@@ -48,7 +48,7 @@ COMMANDS: Commands = {
         ),
         "isolated": Command(
             "lsa.evaluation.performance.kernels.isolated",
-            "time every arm of a model's layer, both phases, in one job on one GPU",
+            "time every method of a model's layer, both phases, in one job on one GPU",
         ),
         "production": Command(
             "lsa.evaluation.run", "time a served model's requests end to end", ("production",)
@@ -99,7 +99,7 @@ COMMANDS: Commands = {
             "render the RULER files the native benchmark reads, as the paper did",
         ),
         "report": Command(
-            "lsa.training.native.benchmark.report", "pair the arms of benchmark records, with an interval"
+            "lsa.training.native.benchmark.report", "pair the methods of benchmark records, with an interval"
         ),
     },
     "probe": Command("lsa.evaluation.adapter.probe", "screen a checkpoint before running anything on it"),

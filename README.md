@@ -120,8 +120,8 @@ python -m sglang.launch_server --model-path Qwen/Qwen3.8-27b --tp 1 \
 LSA selects keys for a prefill on the host, which a CUDA graph cannot capture, so without the flag the server crashes during startup.
 Decode is still captured.
 
-The plugin registers through SGLang's `sglang.srt.plugins` entry point and arms itself from the `lsa` block.
-The server log prints `armed` when it does.
+The plugin registers through SGLang's `sglang.srt.plugins` entry point and enables itself from the `lsa` block.
+The server log prints `enabled` when it does.
 Without that line, the server is running the checkpoint's own attention.
 The line appears before startup finishes, so wait for `/health` and send a request:
 
@@ -199,10 +199,10 @@ The configs prefixed `b300_` measure on B300.
 
 ### Native training (Section 4.4)
 
-The native arms pre-train a 24-layer hybrid model on 100B tokens of FineWeb-Edu at 4k, then decay at 128k on 12B tokens of LongDocs, each arm from its own checkpoint.
-Each sparse arm reads about 2,560 keys per query in the decay.
+The native methods pre-train a 24-layer hybrid model on 100B tokens of FineWeb-Edu at 4k, then decay at 128k on 12B tokens of LongDocs, each method from its own checkpoint.
+Each sparse method reads about 2,560 keys per query in the decay.
 
-| Arm | Pre-train | 128k decay |
+| Method | Pre-train | 128k decay |
 |---|---|---|
 | Full Attention | `pretrain_fineweb.yaml` | `decay_fineweb128k.yaml` |
 | SWA | `pretrain_fineweb_window.yaml` | `decay_fineweb128k_window.yaml` |
@@ -268,7 +268,7 @@ lsa distill inject --model qwen38_27b --maps "$LSA_ROOT/models/maps/qwen38_27b__
 A native checkpoint is a torchtitan step folder of 2.3 GB, split in two parts below the 2 GiB limit of a release asset.
 There is one for each of the ten 128k decays of the comparison:
 
-| Arm | Checkpoints | Configs under `configs/training/native/qwen35_0_8b_gpt2/` |
+| Method | Checkpoints | Configs under `configs/training/native/qwen35_0_8b_gpt2/` |
 |---|---|---|
 | Full Attention | `decay128k-dense` | `evaluate_released_dense.yaml` |
 | SWA, window 2,560 and 4,608 | `decay128k-swa-2560`, `decay128k-swa-4608` | `evaluate_released_swa_2560.yaml`, `evaluate_released_swa_4608.yaml` |

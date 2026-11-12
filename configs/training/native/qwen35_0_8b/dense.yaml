@@ -1,4 +1,4 @@
-# A0 - dense causal attention at 16,384, from the trunk. The reference every other arm is read against.
+# A0 - dense causal attention at 16,384, from the trunk. The reference every other method is read against.
 
 defaults:
   - branch_16k

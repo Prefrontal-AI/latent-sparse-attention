@@ -76,7 +76,7 @@ A 4096-sample block is summed four wide when the sample count is a multiple of 1
 ### Where it applies
 
 No kernel here is read by training.
-The distillation arms and the cached teacher maps read through `lsa.core`, the torch reference, and the teacher's attention kernel.
+The distillation methods and the cached teacher maps read through `lsa.core`, the torch reference, and the teacher's attention kernel.
 A teacher cache therefore never depends on a CuTeDSL or Triton bit, and nothing below is about it.
 
 | Step | Output | Read by | Held to Triton | Why |

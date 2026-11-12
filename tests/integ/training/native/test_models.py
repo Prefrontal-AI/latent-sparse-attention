@@ -23,7 +23,7 @@ def attentions(spec):
     return [layer.attention for layer in spec.model.layers if layer.attention is not None]
 
 
-def test_the_dense_arm_leaves_torchtitans_own_attention_in_place():
+def test_the_dense_method_leaves_torchtitans_own_attention_in_place():
     built = model_spec(experiment("dense"))
     assert attentions(built)
     assert all(
@@ -36,7 +36,7 @@ def test_the_dense_arm_leaves_torchtitans_own_attention_in_place():
     [("window", {}), ("multires", {}), ("lsa", {"coarse": False})],
     ids=["window", "multires", "lsa"],
 )
-def test_every_full_attention_layer_gets_the_arm_and_the_recurrent_layers_are_untouched(kind, knobs):
+def test_every_full_attention_layer_gets_the_method_and_the_recurrent_layers_are_untouched(kind, knobs):
     built = model_spec(experiment(kind, **knobs))
     layers = built.model.layers
     full = attentions(built)
@@ -59,7 +59,7 @@ def test_the_text_model_has_no_vision_tower():
     assert model_spec(experiment("dense")).model.vision_encoder is None
 
 
-def test_the_arms_differ_in_the_attention_alone():
+def test_the_methods_differ_in_the_attention_alone():
     dense, multires = model_spec(experiment("dense")), model_spec(experiment("multires"))
     assert dense.model.dim == multires.model.dim
     assert len(dense.model.layers) == len(multires.model.layers)
@@ -122,7 +122,7 @@ def test_a_head_shape_is_the_flavours_until_a_run_names_one():
     assert layer.attention.rotary_dim == 0
 
 
-def test_the_lsa_arm_reads_the_rotation_the_model_has():
+def test_the_lsa_method_reads_the_rotation_the_model_has():
     shaped = model_spec(experiment("lsa", model={"rotary_dim": 0}, coarse=False)).model
     inner = [layer.attention.inner_attention for layer in shaped.layers if layer.attention]
     assert {attention.rotary_dim for attention in inner} == {0}

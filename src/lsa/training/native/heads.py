@@ -70,7 +70,7 @@ class HeadShapeAttention(Qwen35Attention):
 
         Args:
             x_TD: Tokens [T, model_dim].
-            attention_masks: torchtitan's masks, which the dense arm reads.
+            attention_masks: torchtitan's masks, which the dense method reads.
             positions: Each token's position in its sequence [T], for the rotation.
 
         Returns:

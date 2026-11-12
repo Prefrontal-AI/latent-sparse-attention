@@ -17,7 +17,7 @@ reads, for each query, three sets of keys and mixes them by gates:
   The block holding the first key and the two blocks nearest the query - the one holding it and the one before - are
   always selected, the rest are the highest-scoring earlier blocks, select_block_count in all.
   The selected read is softmax attention over every key of the selected blocks that is not after the query.
-- The window: attention over the window_size most recent keys, which is the window arm and not part of these functions.
+- The window: attention over the window_size most recent keys, which is the window method and not part of these functions.
 
 Equation 9, for a stride d dividing both the compression block l and the selection block l': cut the keys into
 sub-blocks of d keys.

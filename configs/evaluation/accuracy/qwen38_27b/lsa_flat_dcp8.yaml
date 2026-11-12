@@ -13,7 +13,7 @@
 #
 # The server is the dense baseline's with the flat configuration's three flags: a page of one token, an eager
 # prefill, and both backends named - fa3 prefills, and triton decodes, the one the image shards a grouped-query pool
-# for at decode. The plugin arms both and reads through FlashAttention's paged kernel on either.
+# for at decode. The plugin enables both and reads through FlashAttention's paged kernel on either.
 # The prefill chunk is the flat configuration's 32,768, so a chunk is indexed as on one card.
 
 defaults:

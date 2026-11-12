@@ -1,7 +1,7 @@
-"""The offline arms of a selection study, read over a probe cache at test size on a CPU and written as records and tables.
+"""The offline methods of a selection study, read over a probe cache at test size on a CPU and written as records and tables.
 
-The served kernels need a GPU, so the designs the arms read at are not served here - an arm reads a design's sizes - and
-the one test that holds a reference arm to the served read is marked `gpu`.
+The served kernels need a GPU, so the designs the methods read at are not served here - a method reads a design's sizes - and
+the one test that holds a reference method to the served read is marked `gpu`.
 """
 
 import json
@@ -12,8 +12,8 @@ import pytest
 import torch
 
 from lsa.io import read_json
-from lsa.training.distillation import arms, served_read
-from lsa.training.distillation.config import ArmConfig, DocumentSet, ServedDesign, load
+from lsa.training.distillation import methods, served_read
+from lsa.training.distillation.config import DocumentSet, MethodConfig, ServedDesign, load
 from lsa.training.distillation.data.cache import Document, layer_path, write
 from tests.helpers.training.distillation.data import fake_attention, fake_probes
 
@@ -45,7 +45,7 @@ run:
       designs:
         - name: tree
           indexer: {{top_k: 64, top_p: 16, top_level: 2, node_bucket_size: 4, node_cluster_block_size: 16, beam_width: 32}}
-      arms:
+      methods:
         - {{name: A0, design: tree}}
         - {{name: A1, design: tree, node_cluster_algorithm: position}}
         - {{name: A2, design: tree, cluster_algorithm: position, node_cluster_algorithm: position}}
@@ -62,8 +62,8 @@ LAYER = 0
 @pytest.fixture
 def small(monkeypatch):
     """Levels that grow inside a 4,096 key document - pages of 512 keys and a level taken at once"""
-    monkeypatch.setattr(arms, "PAGE_SIZE", 512)
-    monkeypatch.setattr(arms, "GROWTH_BUCKETS", 0)
+    monkeypatch.setattr(methods, "PAGE_SIZE", 512)
+    monkeypatch.setattr(methods, "GROWTH_BUCKETS", 0)
 
 
 def identity_map(path):
@@ -90,17 +90,27 @@ def a_run(tmp_path, model="glm53_flash", make=fake_probes.blob):
     return experiment
 
 
-def test_the_arms_are_named_in_the_config_and_read_at_a_served_designs_sizes(tmp_path):
+def test_the_methods_are_named_in_the_config_and_read_at_a_served_designs_sizes(tmp_path):
     experiment = a_run(tmp_path)
     served = experiment.run.report.served
-    assert [arm.name for arm in served.arms] == ["A0", "A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"]
-    assert served.arms[0].kind == "reference" and served.arms[6].kind == "pisa"
+    assert [method.name for method in served.methods] == [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "B1",
+        "B2",
+        "B3",
+    ]
+    assert served.methods[0].kind == "reference" and served.methods[6].kind == "pisa"
     tree = served.settings(experiment.model.indexer)["tree"].indexer
     assert (tree.window_size, tree.sink_size, tree.top_level, tree.at("beam_width", 2)) == (64, 4, 2, 32)
 
 
 @pytest.mark.parametrize(
-    ("arm", "message"),
+    ("method", "message"),
     [
         (dict(kind="pisa", space="index"), "names none"),
         (dict(kind="reference"), "names none"),
@@ -110,23 +120,23 @@ def test_the_arms_are_named_in_the_config_and_read_at_a_served_designs_sizes(tmp
         (dict(kind="tree"), "kind"),
     ],
 )
-def test_an_arm_that_names_nothing_it_can_read_is_refused(arm, message):
+def test_a_method_that_names_nothing_it_can_read_is_refused(method, message):
     with pytest.raises(ValueError, match=message):
-        ArmConfig(name="x", **arm)
+        MethodConfig(name="x", **method)
 
 
-def test_an_arm_that_names_a_design_the_run_does_not_serve_is_refused():
+def test_a_method_that_names_a_design_the_run_does_not_serve_is_refused():
     from lsa.training.distillation.config import ServedConfig
 
     with pytest.raises(ValueError, match="not served designs"):
-        ServedConfig(designs=[ServedDesign(name="flat")], arms=[ArmConfig(name="A0", design="tree")])
+        ServedConfig(designs=[ServedDesign(name="flat")], methods=[MethodConfig(name="A0", design="tree")])
     with pytest.raises(ValueError, match="share a name"):
-        ServedConfig(designs=[ServedDesign(name="flat")], arms=[ArmConfig(name="flat", design="flat")])
+        ServedConfig(designs=[ServedDesign(name="flat")], methods=[MethodConfig(name="flat", design="flat")])
 
 
 @pytest.fixture
 def scored(tmp_path, small):
-    """Every arm's record of one needle prompt, and the document it was read from"""
+    """Every method's record of one needle prompt, and the document it was read from"""
     experiment = a_run(tmp_path)
     served = experiment.run.report.served
     designs = served.settings(experiment.model.indexer)
@@ -143,13 +153,15 @@ def scored(tmp_path, small):
         served.rows,
         fake_attention.attention(),
         False,
-        arms.ArmSet(served.arms, designs, {name: space.projections for name, space in spaces.items()}),
+        methods.MethodSet(
+            served.methods, designs, {name: space.projections for name, space in spaces.items()}
+        ),
         "needle",
     )
     return record, document
 
 
-def test_every_arm_is_read_over_the_same_rows_and_scored_beside_the_exact_read(scored):
+def test_every_method_is_read_over_the_same_rows_and_scored_beside_the_exact_read(scored):
     record, _ = scored
     assert list(record["means"]) == [
         "exact",
@@ -170,7 +182,7 @@ def test_every_arm_is_read_over_the_same_rows_and_scored_beside_the_exact_read(s
         means = record["means"][name]
         assert 0.0 <= means["mass"] <= 1.0
         assert means["scored_vectors"] > 0
-        # Every arm reads the window and the sinks, so no read is shorter than they are
+        # Every method reads the window and the sinks, so no read is shorter than they are
         assert means["ids_read"] >= fake_probes.WINDOW
 
 
@@ -211,13 +223,13 @@ def test_an_lse_score_reads_each_vector_beneath_what_it_ranks_so_it_costs_more(s
     assert record["means"]["A5"]["scored_vectors"] > record["means"]["A3"]["scored_vectors"]
 
 
-def test_the_structures_of_an_arm_are_built_once_per_grouping_at_the_sizes_of_its_design(tmp_path):
+def test_the_structures_of_a_method_are_built_once_per_grouping_at_the_sizes_of_its_design(tmp_path):
     experiment = a_run(tmp_path)
     indexer = experiment.run.report.served.settings(experiment.model.indexer)["tree"].indexer
     document = Document(
         layer_path(tmp_path / "cache", "ruler", "eval", "needle0", LAYER), experiment.model.indexer
     )
-    structures = arms.Structures(document.key)
+    structures = methods.Structures(document.key)
     ward = structures.buckets(indexer, "ward")[1]
     positional = structures.buckets(indexer, "position")[1]
     assert structures.buckets(indexer, "ward")[1] is ward
@@ -228,7 +240,7 @@ def test_the_structures_of_an_arm_are_built_once_per_grouping_at_the_sizes_of_it
     assert structures.hierarchy(indexer, "ward", "position") is levels
 
 
-def test_a_logit_scale_is_the_attentions_unless_the_arm_names_its_own(tmp_path, small):
+def test_a_logit_scale_is_the_attentions_unless_the_method_names_its_own(tmp_path, small):
     experiment = a_run(tmp_path)
     document = Document(
         layer_path(tmp_path / "cache", "ruler", "eval", "needle0", LAYER),
@@ -236,22 +248,27 @@ def test_a_logit_scale_is_the_attentions_unless_the_arm_names_its_own(tmp_path, 
         native=True,
     )
     rows = torch.arange(len(document.query_positions))
-    arm_set = arms.ArmSet(
-        [ArmConfig(name="B1", kind="pisa", block_size=16, keep_count=8)],
+    method_set = methods.MethodSet(
+        [MethodConfig(name="B1", kind="pisa", block_size=16, keep_count=8)],
         experiment.run.report.served.settings(experiment.model.indexer),
         {},
     )
     inputs = served_read.key_and_query_of(document, rows, None, "maps.pt")
     with pytest.raises(ValueError, match="no logit scale"):
-        arms.read_arms(arm_set, {}, document, rows, lambda: inputs, None)
-    read = arms.read_arms(arm_set, {}, document, rows, lambda: inputs, 0.25)["B1"]
+        methods.read_methods(method_set, {}, document, rows, lambda: inputs, None)
+    read = methods.read_methods(method_set, {}, document, rows, lambda: inputs, 0.25)["B1"]
     assert read.selected_key_ids.shape[0] == len(rows)
 
 
-def test_a_swept_arm_is_read_once_at_each_multiple_of_the_maps_temperature_and_each_named_one(tmp_path):
+def test_a_swept_method_is_read_once_at_each_multiple_of_the_maps_temperature_and_each_named_one(tmp_path):
     experiment = a_run(tmp_path)
-    arm = ArmConfig(name="A3", design="tree", node_bucket_score="lse", tau_scale=[0.5, 1, 2], taus=[0.3])
-    names = [(v.name, v.tau, v.scale) for v in arms.expand_arms([arm, ArmConfig(name="A0", design="tree")])]
+    method = MethodConfig(
+        name="A3", design="tree", node_bucket_score="lse", tau_scale=[0.5, 1, 2], taus=[0.3]
+    )
+    names = [
+        (v.name, v.tau, v.scale)
+        for v in methods.expand_methods([method, MethodConfig(name="A0", design="tree")])
+    ]
     assert names == [
         ("A3@tau0.5", None, 0.5),
         ("A3@tau1", None, 1),
@@ -260,13 +277,13 @@ def test_a_swept_arm_is_read_once_at_each_multiple_of_the_maps_temperature_and_e
         ("A0", None, 1.0),
     ]
     with pytest.raises(ValueError, match="reads at none"):
-        arms.expand_arms([ArmConfig(name="A0", design="tree", tau_scale=[2])])
+        methods.expand_methods([MethodConfig(name="A0", design="tree", tau_scale=[2])])
     with pytest.raises(ValueError, match="sets tau and sweeps one"):
-        ArmConfig(name="A3", design="tree", node_bucket_score="lse", tau=0.1, tau_scale=[2])
-    assert experiment.run.report.served.arms[4].tau_scale == [0.5, 2]
+        MethodConfig(name="A3", design="tree", node_bucket_score="lse", tau=0.1, tau_scale=[2])
+    assert experiment.run.report.served.methods[4].tau_scale == [0.5, 2]
 
 
-def test_an_arm_reads_at_the_temperature_of_its_maps_sidecar_and_a_map_without_one_says_how_to_calibrate(
+def test_a_method_reads_at_the_temperature_of_its_maps_sidecar_and_a_map_without_one_says_how_to_calibrate(
     tmp_path,
 ):
     experiment = a_run(tmp_path)
@@ -284,14 +301,18 @@ def test_an_arm_reads_at_the_temperature_of_its_maps_sidecar_and_a_map_without_o
             maps[LAYER], served_read.key_and_query_of(document, rows, None, "m"), 1
         )
     }
-    arm = ArmConfig(name="A3", design="tree", node_bucket_score="lse")
+    method = MethodConfig(name="A3", design="tree", node_bucket_score="lse")
     held = {"tree": spaces["tree"].projections}
     inputs = lambda: None  # noqa: E731
-    read = arms.read_arms(arms.ArmSet([arm], designs, held), indexed, document, rows, inputs, None)
+    read = methods.read_methods(
+        methods.MethodSet([method], designs, held), indexed, document, rows, inputs, None
+    )
     assert list(read) == ["A3"]
     Path(spaces["tree"].projections).with_suffix(".json").unlink()
     with pytest.raises(ValueError, match="lsa distill calibrate-tau"):
-        arms.read_arms(arms.ArmSet([arm], designs, held), indexed, document, rows, inputs, None)
+        methods.read_methods(
+            methods.MethodSet([method], designs, held), indexed, document, rows, inputs, None
+        )
 
 
 def test_a_shard_writes_the_records_and_the_tables_with_the_error_over_prompts(tmp_path, small, monkeypatch):
@@ -341,7 +362,7 @@ def refuse_attention(*args, **kwargs):
 
 
 @pytest.mark.gpu
-def test_the_reference_arm_of_the_design_reads_what_the_served_design_reads(tmp_path):
+def test_the_reference_method_of_the_design_reads_what_the_served_design_reads(tmp_path):
     experiment = a_run(tmp_path)
     length = 1 << 16
     rows = [40000, 50000, 60000, 65000, length - 1]
@@ -350,7 +371,7 @@ def test_the_reference_arm_of_the_design_reads_what_the_served_design_reads(tmp_
     served = experiment.run.report.served
     tree = {"top_k": 64, "top_p": 16, "top_level": 2, "node_bucket_size": 4, "node_cluster_block_size": 256}
     served.designs = [ServedDesign(name="tree", indexer={**tree, "beam_width": 32})]
-    served.arms = [ArmConfig(name="A0", design="tree", agrees_with="tree")]
+    served.methods = [MethodConfig(name="A0", design="tree", agrees_with="tree")]
     designs = served.settings(experiment.model.indexer)
     spaces = served_read.design_spaces(experiment, designs)
     maps = served_read.load_map(experiment.model.space.init, [LAYER], "cuda:0", "key_and_query")
@@ -364,7 +385,9 @@ def test_the_reference_arm_of_the_design_reads_what_the_served_design_reads(tmp_
         served.rows,
         fake_attention.attention(),
         True,
-        arms.ArmSet(served.arms, designs, {name: space.projections for name, space in spaces.items()}),
+        methods.MethodSet(
+            served.methods, designs, {name: space.projections for name, space in spaces.items()}
+        ),
         "needle",
     )
     agreed = record["means"]["A0"]["agreement"]
@@ -384,8 +407,10 @@ def grouped(tmp_path):
 
 def test_pisa_on_a_grouped_query_cache_reads_one_list_a_kv_head_and_each_holds_the_needle(grouped):
     rows = torch.arange(len(grouped.query_positions))
-    arm = ArmConfig(name="B1", kind="pisa", block_size=16, keep_count=8)
-    read = arms.read_arms(arms.ArmSet([arm], {}, {}), {}, grouped, rows, pisa_reads_no_latent, None)["B1"]
+    method = MethodConfig(name="B1", kind="pisa", block_size=16, keep_count=8)
+    read = methods.read_methods(
+        methods.MethodSet([method], {}, {}), {}, grouped, rows, pisa_reads_no_latent, None
+    )["B1"]
     assert grouped.native_key_ids is None
     assert read.selected_key_ids.shape[:2] == (len(rows), fake_probes.KV_HEADS)
     for kv_head in range(fake_probes.KV_HEADS):
@@ -397,22 +422,24 @@ def test_pisa_on_a_grouped_query_cache_reads_one_list_a_kv_head_and_each_holds_t
 
 def test_a_read_a_kv_head_is_scored_each_list_averaged_and_their_union(grouped):
     rows = torch.arange(len(grouped.query_positions))
-    arm = ArmConfig(name="B1", kind="pisa", block_size=16, keep_count=8)
-    read = arms.read_arms(arms.ArmSet([arm], {}, {}), {}, grouped, rows, pisa_reads_no_latent, None)["B1"]
+    method = MethodConfig(name="B1", kind="pisa", block_size=16, keep_count=8)
+    read = methods.read_methods(
+        methods.MethodSet([method], {}, {}), {}, grouped, rows, pisa_reads_no_latent, None
+    )["B1"]
     metrics = served_read.ranked_row_metrics(grouped, rows, read.selected_key_ids, "B1")
     assert set(metrics) == {"B1", "B1_union"}
     assert torch.allclose(metrics["B1"]["target_held"][fake_probes.KINDS.index(1)], torch.tensor(1.0))
 
 
-def test_the_attention_space_reads_at_the_recorded_scale_unless_the_arm_names_its_own(grouped):
+def test_the_attention_space_reads_at_the_recorded_scale_unless_the_method_names_its_own(grouped):
     rows = torch.arange(2)
-    arm = ArmConfig(name="B1", kind="pisa")
-    keys, queries, scale = arms.attention_inputs(arm, grouped, rows, pisa_reads_no_latent, None)
+    method = MethodConfig(name="B1", kind="pisa")
+    keys, queries, scale = methods.attention_inputs(method, grouped, rows, pisa_reads_no_latent, None)
     assert keys.shape == (fake_probes.LENGTH, fake_probes.KV_HEADS, fake_probes.HEAD_DIM)
     assert queries.shape == (2, fake_probes.GROUPED_HEADS, fake_probes.HEAD_DIM)
     assert scale == fake_probes.ATTENTION_SCALE
-    named = ArmConfig(name="B1", kind="pisa", logit_scale=0.5)
-    assert arms.attention_inputs(named, grouped, rows, pisa_reads_no_latent, None)[2] == 0.5
+    named = MethodConfig(name="B1", kind="pisa", logit_scale=0.5)
+    assert methods.attention_inputs(named, grouped, rows, pisa_reads_no_latent, None)[2] == 0.5
 
 
 def pisa_reads_no_latent():

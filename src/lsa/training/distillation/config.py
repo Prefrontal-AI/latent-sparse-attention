@@ -382,39 +382,39 @@ class ServedDesign:
 
 
 @dataclass
-class ArmConfig:
-    """One offline arm `lsa distill served-read` scores beside the served designs - a reference read or PISA's selection.
+class MethodConfig:
+    """One offline method `lsa distill served-read` scores beside the served designs - a reference read or PISA's selection.
 
-    A `reference` arm builds the buckets and the levels of a served design `design` with `lsa.core`, at that design's
-    sizes and over its index keys, with the research options below. A `pisa` arm selects blocks the way
+    A `reference` method builds the buckets and the levels of a served design `design` with `lsa.core`, at that design's
+    sizes and over its index keys, with the research options below. A `pisa` method selects blocks the way
     [PISA](../../baselines/pisa.py) does, over the model's own keys and the heads' queries when its `space` is
     `attention` - GLM's key latent, or each key-value head's rotated keys from a cache extracted under
     `queries.attention`, one selection a key-value head as the paper makes it - or over the index keys and index queries
     of `design` as one head when it is `index`. The model's own space reads at the layer's softmax scale unless
     `logit_scale` names another.
-    Every arm's read is its long-range keys, then the window and the sinks, so the arms are scored as the designs are.
+    Every method's read is its long-range keys, then the window and the sinks, so the methods are scored as the designs are.
 
     `tau` is the temperature a LogSumExp score and PISA's index-space logits are read at, 1 / `tau` the logit scale.
     Left out it is the map's own, from its sidecar (`lsa distill calibrate-tau` records one for a map that has none).
-    `tau_scale` reads the arm once at each multiple of that, and `taus` once at each temperature, as arms named
+    `tau_scale` reads the method once at each multiple of that, and `taus` once at each temperature, as methods named
     `<name>@tau<scale>` and `<name>@tau=<tau>`.
-    An arm that names `agrees_with` also scores how much of that design's long-range read it holds.
+    A method that names `agrees_with` also scores how much of that design's long-range read it holds.
     """
 
     name: str
-    kind: str = Served.ARM_REFERENCE
-    # The served design whose sizes and space a reference arm reads, and whose space a PISA arm reads in the index space
+    kind: str = Served.METHOD_REFERENCE
+    # The served design whose sizes and space a reference method reads, and whose space a PISA method reads in the index space
     design: str | None = None
     agrees_with: str | None = None
     tau: float | None = None
     tau_scale: list[float] = field(default_factory=list)
     taus: list[float] = field(default_factory=list)
-    # A reference arm's research options
+    # A reference method's research options
     cluster_algorithm: str = "ward"
     node_cluster_algorithm: str = "ward"
     node_bucket_score: str = "centroid"
     bucket_score: str = "centroid"
-    # A PISA arm's shape - the paper's C, K and g, the blocks kept above the leaves, the logit scale, and the forced blocks
+    # A PISA method's shape - the paper's C, K and g, the blocks kept above the leaves, the logit scale, and the forced blocks
     space: str = Served.SPACE_ATTENTION
     block_size: int = 64
     keep_count: int = 64
@@ -424,17 +424,17 @@ class ArmConfig:
     forced_blocks: bool = True
 
     def __post_init__(self) -> None:
-        """Reject an arm that names nothing it can read.
+        """Reject a method that names nothing it can read.
 
         Raises:
-            ValueError: The kind, a space, an algorithm or a score is unknown, a reference arm or a PISA arm in the
+            ValueError: The kind, a space, an algorithm or a score is unknown, a reference method or a PISA method in the
                 index space names no design, or a size or the temperature is not positive.
         """
-        section = f"report.served arm {self.name!r}"
-        if self.kind not in Served.ARM_KINDS:
-            raise ValueError(f"{section} kind must be one of {Served.ARM_KINDS} - got {self.kind!r}")
-        if self.space not in Served.ARM_SPACES:
-            raise ValueError(f"{section} space must be one of {Served.ARM_SPACES} - got {self.space!r}")
+        section = f"report.served method {self.name!r}"
+        if self.kind not in Served.METHOD_KINDS:
+            raise ValueError(f"{section} kind must be one of {Served.METHOD_KINDS} - got {self.kind!r}")
+        if self.space not in Served.METHOD_SPACES:
+            raise ValueError(f"{section} space must be one of {Served.METHOD_SPACES} - got {self.space!r}")
         for name in ("cluster_algorithm", "node_cluster_algorithm"):
             if getattr(self, name) not in CLUSTER_ALGORITHMS:
                 raise ValueError(
@@ -445,7 +445,7 @@ class ArmConfig:
                 raise ValueError(
                     f"{section} {name} must be one of {BUCKET_SCORES} - got {getattr(self, name)!r}"
                 )
-        if self.design is None and (self.kind == Served.ARM_REFERENCE or self.space == Served.SPACE_INDEX):
+        if self.design is None and (self.kind == Served.METHOD_REFERENCE or self.space == Served.SPACE_INDEX):
             raise ValueError(f"{section} reads a design's sizes or space and names none - set design")
         config_loader.require_positive(self, section, "block_size", "keep_count", "branching")
         for name in ("tau", "logit_scale", "beam_width"):
@@ -472,27 +472,27 @@ class ServedConfig:
     rows: int = Report.SERVED_ROWS
     # Keep each scored row's position and metrics in a `lsa distill served-read` record, to split the rows afterwards
     per_row: bool = False
-    # Offline arms read beside the designs, by `lsa distill served-read` - see `ArmConfig`
-    arms: list[ArmConfig] = field(default_factory=list)
+    # Offline methods read beside the designs, by `lsa distill served-read` - see `MethodConfig`
+    methods: list[MethodConfig] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Reject a served read that reads nothing, two designs or arms of one name, or an arm that names a design that is not there.
+        """Reject a served read that reads nothing, two designs or methods of one name, or a method that names a design that is not there.
 
         Raises:
-            ValueError: `rows` is not positive, two designs or arms share a name, or an arm names an unknown design.
+            ValueError: `rows` is not positive, two designs or methods share a name, or a method names an unknown design.
         """
         config_loader.require_positive(self, "report.served", "rows")
         names = [design.name for design in self.designs]
         if len(set(names)) != len(names):
             raise ValueError(f"two served designs share a name - {sorted(names)}")
-        arm_names = [arm.name for arm in self.arms]
-        if len(set(arm_names)) != len(arm_names) or set(arm_names) & set(names):
-            raise ValueError(f"two served reads share a name - {sorted(arm_names)} beside {sorted(names)}")
-        for arm in self.arms:
-            unknown = {name for name in (arm.design, arm.agrees_with) if name is not None} - set(names)
+        method_names = [method.name for method in self.methods]
+        if len(set(method_names)) != len(method_names) or set(method_names) & set(names):
+            raise ValueError(f"two served reads share a name - {sorted(method_names)} beside {sorted(names)}")
+        for method in self.methods:
+            unknown = {name for name in (method.design, method.agrees_with) if name is not None} - set(names)
             if unknown:
                 raise ValueError(
-                    f"report.served arm {arm.name!r} names {sorted(unknown)}, which are not served designs"
+                    f"report.served method {method.name!r} names {sorted(unknown)}, which are not served designs"
                 )
 
     def settings(self, run_indexer: IndexerConfig) -> dict[str, DesignSettings]:
@@ -690,4 +690,6 @@ def load(path: str | Path, overrides: list[str] | None = None) -> list[DistillCo
     Returns:
         One `DistillConfig` per run, in sweep order.
     """
-    return config_loader.load(DistillConfig, path, overrides, name_path="run.name")
+    return config_loader.load(
+        DistillConfig, path, overrides, name_path="run.name", renamed=Served.RENAMED_KEYS
+    )

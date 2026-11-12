@@ -80,12 +80,12 @@ def test_a_released_n_lsa_preset_names_its_checkpoint_and_the_keys_it_reads(keys
 )
 def test_a_released_baseline_preset_names_its_checkpoint_and_the_budget_it_reads(preset, kind, budget):
     [config] = load(CONFIGS / f"evaluate_released_{preset}.yaml")
-    arm = preset.replace("_", "-")
+    method = preset.replace("_", "-")
     assert config.attention.kind == kind
     for key, value in budget.items():
         assert getattr(config.attention, key) == value
     assert config.data.seq_len == 131072
-    assert config.run.name == f"released-decay128k-{arm}_seq_len131072"
+    assert config.run.name == f"released-decay128k-{method}_seq_len131072"
     assert config.scored_checkpoint().endswith(
-        f"training/native/released/decay128k-{arm}/checkpoint/step-5866"
+        f"training/native/released/decay128k-{method}/checkpoint/step-5866"
     )

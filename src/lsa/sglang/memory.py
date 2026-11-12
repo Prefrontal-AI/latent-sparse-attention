@@ -84,7 +84,7 @@ ROWS_GROWTH: int = 2
 CONTEXT_ALLOWANCE: int = 64
 
 # The request the selection probe grows - one row of its own request table
-PROBE_REQUEST: str = "lsa-lsa-memory-probe"
+PROBE_REQUEST: str = "lsa-memory-probe"
 
 # Bytes of the element types the structures are built from
 BF16: int = 2
@@ -596,7 +596,7 @@ def report(result: Any, self: Any, *args: Any, **kwargs: Any) -> None:
     uncounted = COUNTED["budget"] // native_cell // page * page if native_cell else 0
     COUNTED.update(slots=slots, uncounted=uncounted)
     print(
-        f"lsa-lsa: memory - {counted.slot:.1f} B a slot a sparse layer (index keys {counted.index_keys:.1f}, "
+        f"lsa: memory - {counted.slot:.1f} B a slot a sparse layer (index keys {counted.index_keys:.1f}, "
         f"buckets {counted.buckets:.1f}, hierarchy {counted.hierarchy:.1f}, graph tree {counted.graph_tree:.1f}) x {counted.layers} layers = "
         f"{counted.cell} B a slot beside sglang's {native_cell}, {counted.fixed / 2**30:.2f} GiB fixed, {counted.shared / 2**30:.2f} GiB shared and "
         f"{counted.transient / 2**30:.2f} GiB of one layer's selection at its peak; "
@@ -625,7 +625,7 @@ def check_built(layer: int, built: int, slots: int) -> None:
     counted: Share | None = COUNTED.get("share")
     if counted is None:
         print(
-            f"lsa-lsa: memory - layer {layer}'s index took {built / 2**20:.1f} MiB that sglang's KV pool sizing "
+            f"lsa: memory - layer {layer}'s index took {built / 2**20:.1f} MiB that sglang's KV pool sizing "
             "never counted - this pool configurator is not hooked, so lower --mem-fraction-static by what the "
             "sparse layers hold",
             flush=True,
@@ -634,7 +634,7 @@ def check_built(layer: int, built: int, slots: int) -> None:
     # The first layer built also built what the layers share
     accounted = (counted.cell * slots + counted.fixed) / max(counted.layers, 1) + counted.shared
     print(
-        f"lsa-lsa: memory - layer {layer}'s index took {built / 2**20:.1f} MiB when built, "
+        f"lsa: memory - layer {layer}'s index took {built / 2**20:.1f} MiB when built, "
         f"{accounted / 2**20:.1f} MiB counted a layer over {slots} slots",
         flush=True,
     )
@@ -658,7 +658,7 @@ def report_held(keys: int, held: dict[str, int]) -> None:
     rest = sum(held.values()) - centroids
     parts = ", ".join(f"{name} {count / keys:.2f}" for name, count in held.items())
     print(
-        f"lsa-lsa: memory - a request of {keys} keys held {centroids / keys:.2f} B a key a layer of centroids and "
+        f"lsa: memory - a request of {keys} keys held {centroids / keys:.2f} B a key a layer of centroids and "
         f"{rest / keys:.2f} of the rest of its index ({parts})",
         flush=True,
     )

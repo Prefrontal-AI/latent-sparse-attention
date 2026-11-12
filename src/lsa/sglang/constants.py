@@ -10,18 +10,18 @@ class Banner:
     """What a server prints about itself, the only thing a reader outside the process sees."""
 
     # Printed once every target resolved and every hook is registered
-    READY: str = "lsa-lsa: armed"
+    READY: str = "lsa: enabled"
 
-    # Printed once an indexer is actually built, which is the thing `armed` does not prove
+    # Printed once an indexer is actually built, which is the thing `enabled` does not prove
     # => `lsa.sglang.launch` refuses a server whose log never carries both
-    BUILT: str = "lsa-lsa: indexing"
+    BUILT: str = "lsa: indexing"
 
     # Printed once a decode context-parallel group checks its index after every forward
-    CHECKING: str = "lsa-lsa: checking the decode group's index"
+    CHECKING: str = "lsa: checking the decode group's index"
 
     # Printed once an index is built with the server's prefix cache on, and once a request first takes a prefix's index
-    SHARING: str = "lsa-lsa: sharing cached prefixes' index"
-    TAKEN: str = "lsa-lsa: a request took a cached prefix's index"
+    SHARING: str = "lsa: sharing cached prefixes' index"
+    TAKEN: str = "lsa: a request took a cached prefix's index"
 
 
 class Plugin:

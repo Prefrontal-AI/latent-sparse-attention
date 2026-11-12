@@ -109,24 +109,26 @@ def memory(module, pool, parameters):
     return result
 
 
-def armed_indexer(layer_id):
-    """Return the design's indexer the plugin armed for a dense Qwen layer, or raise when it armed none."""
+def enabled_indexer(layer_id):
+    """Return the design's indexer the plugin enabled for a dense Qwen layer, or raise when it enabled none."""
     from lsa.sglang.models.qwen3_5 import backend
 
-    if layer_id not in backend.ARMED:
-        raise ValueError(f"The plugin armed no indexer for layer {layer_id} - armed {sorted(backend.ARMED)}")
-    return backend.ARMED[layer_id]
+    if layer_id not in backend.ENABLED:
+        raise ValueError(
+            f"The plugin enabled no indexer for layer {layer_id} - enabled {sorted(backend.ENABLED)}"
+        )
+    return backend.ENABLED[layer_id]
 
 
-def armed_pisa_indexer(layer_id):
-    """Return the PISA indexer the plugin armed for a dense Qwen layer, or raise when it armed none."""
+def enabled_pisa_indexer(layer_id):
+    """Return the PISA indexer the plugin enabled for a dense Qwen layer, or raise when it enabled none."""
     from lsa.sglang.models.qwen3_5 import pisa
 
-    if layer_id not in pisa.ARMED:
+    if layer_id not in pisa.ENABLED:
         raise ValueError(
-            f"The plugin armed no PISA indexer for layer {layer_id} - armed {sorted(pisa.ARMED)}"
+            f"The plugin enabled no PISA indexer for layer {layer_id} - enabled {sorted(pisa.ENABLED)}"
         )
-    return pisa.ARMED[layer_id]
+    return pisa.ENABLED[layer_id]
 
 
 def qsa_indexer(layer):
@@ -300,12 +302,12 @@ class Variant:
             self.module = layer.linear_attn if self.family == Family.QWEN3_5 else layer.self_attn
             self.indexer = None
         elif self.family == Family.QWEN3_5:
-            # The design's indexer is the one the plugin armed on the backend, PISA's the one it armed beside it, QSA's
+            # The design's indexer is the one the plugin enabled on the backend, PISA's the one it enabled beside it, QSA's
             # the one the layer built
             self.indexer = (
-                armed_indexer(layer.attn.layer_id)
+                enabled_indexer(layer.attn.layer_id)
                 if self.lsa
-                else armed_pisa_indexer(layer.attn.layer_id)
+                else enabled_pisa_indexer(layer.attn.layer_id)
                 if self.pisa
                 else qsa_indexer(layer)
                 if self.qsa
@@ -317,7 +319,7 @@ class Variant:
             self.indexer = self.module.indexer
         if self.kind == "sparse" and (self.indexer is None or self.module.skip_topk):
             raise ValueError("The sparse layer needs its indexer")
-        # `armed` does not prove `reached` - a hook that failed to apply leaves the checkpoint's own indexer
+        # `enabled` does not prove `reached` - a hook that failed to apply leaves the checkpoint's own indexer
         # here and every number would be recorded under the design's label
         if self.kind == "sparse" and self.lsa is not bool(getattr(self.indexer, "is_lsa", False)):
             raise ValueError(

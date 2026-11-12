@@ -21,19 +21,19 @@ def test_step_named_refuses_an_unknown_name() -> None:
         workloads.step_named("nothing")
 
 
-def test_launcher_refuses_an_unknown_arm() -> None:
+def test_launcher_refuses_an_unknown_language() -> None:
     with pytest.raises(ValueError, match="unknown kernels"):
         workloads.launcher(workloads.STEPS[0], LONG_CONTEXT, "cuda")
 
 
-def test_the_arms_are_both_languages() -> None:
+def test_the_kernels_are_both_languages() -> None:
     assert workloads.KERNELS == ("cutedsl", "triton")
 
 
 @pytest.mark.gpu
 @pytest.mark.parametrize("kernels", workloads.KERNELS)
 @pytest.mark.parametrize("step", workloads.STEPS, ids=lambda step: step.name)
-def test_step_launches_under_each_arm(step: workloads.Step, kernels: str) -> None:
+def test_step_launches_in_each_language(step: workloads.Step, kernels: str) -> None:
     context = SHORT_CONTEXT if step.name == "short-context listing" else LONG_CONTEXT
     launch = workloads.launcher(step, context, kernels)
     assert launch is not None

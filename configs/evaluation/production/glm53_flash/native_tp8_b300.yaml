@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 # Decode runs on trtllm, sglang's Blackwell DSA bf16 decode default.
-# The LSA arms keep flashmla_sparse in _tp8_b300.yaml: their read is our design.
+# The LSA methods keep flashmla_sparse in _tp8_b300.yaml: their read is our design.
 # The KV cache is already spelled "bf16", which trtllm accepts ("bfloat16" it does not).
 # `serve` is _tp8_b300.yaml's but for `dsa-decode-backend`.
 

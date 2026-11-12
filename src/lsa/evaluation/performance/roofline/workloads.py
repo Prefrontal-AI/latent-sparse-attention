@@ -1,10 +1,10 @@
 """Inputs shaped as one served chunk of 32,768 queries sees them, and the call that launches each step once on them.
 
 Every step of [dispatch](../../../core/kernels/dispatch.py)'s table has a launcher here, plus a bf16 GEMM through
-cuBLAS that anchors the roofline. A launcher is built for a context and a `kernels` arm, `cutedsl` or `triton`, and
+cuBLAS that anchors the roofline. A launcher is built for a context and a `kernels` language, `cutedsl` or `triton`, and
 returns a callable that runs the step in that language on the same inputs, or None where the step does not serve at
-that context - the short-context listing above 32,768 buckets. The CuTeDSL arm calls the kernels' modules directly. The Triton
-arm calls the public front door with `kernels: triton` where there is one, and the Triton module where there is not.
+that context - the short-context listing above 32,768 buckets. The CuTeDSL launcher calls the kernels' modules directly. The Triton
+launcher calls the public front door with `kernels: triton` where there is one, and the Triton module where there is not.
 
 The inputs are synthetic: unit centroids, queries anchored near a few of them, and one request's pages in a random
 order. The flat scan's state is built through the CuTeDSL kernels themselves, so the listing holds what a real
@@ -745,7 +745,7 @@ def launcher(step: Step, context: int, kernels: str) -> Launch | None:
         ValueError: The language is neither.
     """
     if kernels not in KERNELS:
-        raise ValueError(f"unknown kernels {kernels!r} - the arms are {', '.join(KERNELS)}")
+        raise ValueError(f"unknown kernels {kernels!r} - the languages are {', '.join(KERNELS)}")
     return step.build(context, kernels)
 
 

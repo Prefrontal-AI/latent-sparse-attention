@@ -106,6 +106,44 @@ def test_an_override_beats_the_file_and_its_parents(tmp_path):
     assert built.plain.width == 99
 
 
+# A key renamed under its parent, as a caller names it to the loader
+RENAMED = (("plain.size", "width"),)
+
+
+def test_a_renamed_key_is_read_under_its_old_name_with_a_warning(tmp_path):
+    path = write(tmp_path, "old.yaml", "plain:\n  size: 16\n")
+    with pytest.warns(FutureWarning, match=r"plain\.size is an old name - set plain\.width"):
+        (built,) = config_loader.load(Outer, path, renamed=RENAMED)
+    assert built.plain.width == 16
+
+
+def test_a_renamed_key_is_read_under_its_old_name_on_the_command_line(tmp_path):
+    path = write(tmp_path, "new.yaml", "name: run\n")
+    with pytest.warns(FutureWarning):
+        (built,) = config_loader.load(Outer, path, ["plain.size=24"], renamed=RENAMED)
+    assert built.plain.width == 24
+
+
+def test_a_sweep_over_a_renamed_key_keeps_the_names_its_runs_had(tmp_path):
+    """A run's name is its output directory, so the old spelling still names it"""
+    path = write(tmp_path, "grid.yaml", "name: grid\nsweep:\n  plain.size: [16, 32]\n")
+    with pytest.warns(FutureWarning):
+        runs = config_loader.load(Outer, path, renamed=RENAMED)
+    assert [(run.name, run.plain.width) for run in runs] == [("grid_size16", 16), ("grid_size32", 32)]
+
+
+def test_a_key_set_under_both_its_names_is_refused(tmp_path):
+    path = write(tmp_path, "both.yaml", "plain:\n  size: 16\n  width: 32\n")
+    with pytest.raises(ValueError, match="sets plain.size and its new name width"):
+        config_loader.load(Outer, path, renamed=RENAMED)
+
+
+def test_without_the_rename_the_old_name_is_an_unknown_field(tmp_path):
+    path = write(tmp_path, "old.yaml", "plain:\n  size: 16\n")
+    with pytest.raises(ValueError, match=r"Inner has no field \['size'\]"):
+        config_loader.load(Outer, path)
+
+
 def test_a_sweep_takes_the_product_and_names_each_run(tmp_path):
     path = write(
         tmp_path,

@@ -23,7 +23,7 @@ def run_context(monkeypatch: pytest.MonkeyPatch, mode: str) -> tuple[list[dict[s
 
     monkeypatch.setattr(profile.torch.cuda, "synchronize", lambda: None)
     monkeypatch.setattr(profile.torch.cuda, "empty_cache", lambda: None)
-    monkeypatch.setattr(workloads, "launcher", lambda step, context, arm: launch)
+    monkeypatch.setattr(workloads, "launcher", lambda step, context, kernels: launch)
     monkeypatch.setattr(profile, "time_launch", count("time", (1.0, 1.0)))
     monkeypatch.setattr(profile, "graph_timings", count("graph", {"1": 2.0}))
     monkeypatch.setattr(profile, "profile_launch", count("profile", None))

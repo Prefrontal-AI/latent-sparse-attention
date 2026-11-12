@@ -1,6 +1,6 @@
-"""The flat LSA arm - no indexer - answers as it did before an indexer could be asked for.
+"""The flat LSA method - no indexer - answers as it did before an indexer could be asked for.
 
-The golden file holds the read, the output and the gradients of the arm on small seeded inputs, taken from the code as it
+The golden file holds the read, the output and the gradients of the method on small seeded inputs, taken from the code as it
 was when `index_input` did not exist.
 Every tensor must match the original read bitwise in the same process.
 The saved cross-machine fixture retains a tolerance for the CPU's summation order.
@@ -44,7 +44,7 @@ def small(**changes):
 
 
 def compute(name: str, legacy: bool = False) -> dict[str, torch.Tensor]:
-    """Run the arm on seeded inputs and return what it read, produced and handed back."""
+    """Run the method on seeded inputs and return what it read, produced and handed back."""
     config = small(**CASES[name])
     generator = torch.Generator().manual_seed(11)
     q = torch.randn(2 * LENGTH, HEADS, HEAD_DIM, generator=generator).requires_grad_()
@@ -75,7 +75,7 @@ def compute(name: str, legacy: bool = False) -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
-def test_the_flat_arm_reads_and_answers_as_it_did(name):
+def test_the_flat_method_reads_and_answers_as_it_did(name):
     got = compute(name)
     legacy = compute(name, legacy=True)
     want = torch.load(GOLDEN)[name]

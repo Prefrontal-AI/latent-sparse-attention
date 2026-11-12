@@ -1,4 +1,4 @@
-# The window arm on the FineWeb trunk, 1,536 keys and 4 sinks.
+# The window method on the FineWeb trunk, 1,536 keys and 4 sinks.
 defaults:
   - window_mqa8
   - phase/pretrain_fineweb@_global_

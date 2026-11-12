@@ -389,7 +389,7 @@ def trainer_config(experiment: NativeConfig, check_corpora: bool = True) -> Nati
         activation_checkpoint=_activation_checkpoint(run.runtime.activation_checkpoint),
         compile=_compile(run.runtime.compile),
         # torchtitan takes model initialisation off this and defaults it to None, which makes every run from
-        # random init a different random model and every comparison between arms a comparison of two models
+        # random init a different random model and every comparison between methods a comparison of two models
         debug=DebugConfig(seed=run.runtime.seed),
     )
 

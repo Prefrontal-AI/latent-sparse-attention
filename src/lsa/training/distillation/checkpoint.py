@@ -18,11 +18,11 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from lsa.config_loader import run_provenance
+from lsa.config_loader import declared_defaults, rename_keys, run_provenance
 from lsa.core import RotaryLayout
 from lsa.sglang.settings.design import QSAConfig
 from lsa.training.data.targets import read_manifest
-from lsa.training.distillation.constants import Results
+from lsa.training.distillation.constants import Results, Served
 from lsa.training.distillation.data.cache import (
     cached_layers,
     recorded_rotary,
@@ -280,6 +280,9 @@ def read_resume(path: Path, experiment: "DistillConfig", shard: list[int] | None
     if not path.exists():
         return None
     state: dict[str, Any] = torch.load(path, map_location="cpu", weights_only=False)
+    # A state saved before a key was renamed holds the key's old name
+    # => read it under the new one, so the run still resumes
+    rename_keys(state["run"], Served.RENAMED_KEYS, declared_defaults(type(experiment)), str(path))
     if state["run"] != asdict(experiment) or state["shard"] != shard:
         raise ValueError(
             f"{experiment.run.name}: {path} was written by another configuration than this one - a resumed run must "

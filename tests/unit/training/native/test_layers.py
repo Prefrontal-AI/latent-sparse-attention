@@ -93,7 +93,7 @@ def test_with_nothing_selected_the_summaries_stand_in_for_every_bucket_beyond_th
     assert shares["coarse_mass_share_far"] > 0.1
 
 
-def test_a_query_in_the_first_block_reads_dense_attention_in_every_arm(inputs):
+def test_a_query_in_the_first_block_reads_dense_attention_in_every_method(inputs):
     for changes in ({}, {"coarse": False}, {"top_k": 0}):
         result = multires_attention(*inputs, small(**changes), SCALE)
         assert torch.allclose(result.context[:, :, :16], dense(*inputs)[:, :, :16], atol=1e-12)

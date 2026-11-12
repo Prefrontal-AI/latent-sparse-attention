@@ -30,10 +30,10 @@ def test_source_token_budgets_resolve_by_ceil(name, tokens, warmup_tokens, globa
 
 
 @pytest.mark.parametrize(
-    "arm", ["nsam8", "nsam8_selection", "pisam8", "pisam8_historical_budgets", "pisam8_window_budgets"]
+    "method", ["nsam8", "nsam8_selection", "pisam8", "pisam8_historical_budgets", "pisam8_window_budgets"]
 )
-def test_nsa_and_pisa_select_the_source_fineweb_trunk(arm):
-    for config in load(CONFIGS / f"qwen35_0_8b_gpt2/{arm}.yaml"):
+def test_nsa_and_pisa_select_the_source_fineweb_trunk(method):
+    for config in load(CONFIGS / f"qwen35_0_8b_gpt2/{method}.yaml"):
         assert config.data.name == "fineweb_edu_100bt"
         assert (config.run.optim.steps, config.run.optim.warmup_steps, config.run.optim.decay_ratio) == (
             95368,
@@ -94,7 +94,7 @@ def test_onehead_summaries_and_indexer_preserve_source_shapes(name):
         ("pretrain_fineweb_lsa", "decay_fineweb128k_lsa", {"kind": "lsa", "top_k": 2048}),
     ],
 )
-def test_each_arm_decays_at_128k_from_its_own_pretrain(pretrain, decay, knobs):
+def test_each_method_decays_at_128k_from_its_own_pretrain(pretrain, decay, knobs):
     (trunk,) = load(CONFIGS / f"qwen35_0_8b_gpt2/{pretrain}.yaml")
     (branch,) = load(CONFIGS / f"qwen35_0_8b_gpt2/{decay}.yaml")
     assert trunk.run.init_from is None

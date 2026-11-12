@@ -1,13 +1,13 @@
-"""Qwen3.5 with its full-attention layers swapped for the arm a run names.
+"""Qwen3.5 with its full-attention layers swapped for the method a run names.
 
 Qwen3.5 is a torchtitan model whose full-attention layers - one in four, the rest are GatedDeltaNet - take their
 kernel from a config field. A native run changes that field and nothing else: the projections, the norms, the
-partial RoPE, the output gate and the recurrent layers are the model's own, so the arms differ in the attention
+partial RoPE, the output gate and the recurrent layers are the model's own, so the methods differ in the attention
 and in nothing a reader has to hunt for.
 
 Two flavours are the same model family at the GPT-2 vocabulary: the hybrid at Qwen3.5-0.8B's shape with tied
 embeddings, and a 340M model of nothing but plain attention and SwiGLU. A run may also name the full-attention
-layers' head shape, which is how the multi-query shape the sparse arms were compared on is asked for.
+layers' head shape, which is how the multi-query shape the sparse methods were compared on is asked for.
 """
 
 import math
@@ -179,7 +179,7 @@ def parallelize_plain(model: nn.Module, *, parallelize: Callable[..., nn.Module]
 def model_spec(experiment: NativeConfig) -> ModelSpec:
     """Build the model this run trains, text-only when it asks for that, with its attention swapped in.
 
-    Dense attention keeps torchtitan's own attention, on the kernel the run names, so that arm is the model as
+    Dense attention keeps torchtitan's own attention, on the kernel the run names, so that method is the model as
     published.
 
     Args:

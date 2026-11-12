@@ -207,7 +207,7 @@ class QueryConfig:
     model that ships one - the keys its attention actually reads, beside the dense target.
 
     `attention` also keeps the model's own rotated keys at every position and each head's query at the sampled ones,
-    with the layer's softmax scale - what an offline PISA arm on a model with key-value heads reads.
+    with the layer's softmax scale - what an offline PISA method on a model with key-value heads reads.
 
     `targets` replaces the random draw with the positions a prepared prompt itself names and keeps, beside each, the keys
     that position is meant to find - `ruler` reads them off a RULER row, and `train`, `density` and `seed` then

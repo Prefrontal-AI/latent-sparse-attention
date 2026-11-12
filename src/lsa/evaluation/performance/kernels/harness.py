@@ -58,7 +58,7 @@ def harness_args(experiment: "KernelsConfig", settings: Path | None, context: in
     Args:
         experiment: The kernel run - the variant to time from `model.attention`, the truncated checkpoint and
             what to measure from `data`, the devices it is sharded over from `run.tp`.
-        settings: The written design settings, which an LSA or PISA run is armed with.
+        settings: The written design settings, which an LSA or PISA run is enabled with.
         context: The context to measure at.
         output: Where the raw file goes - the harness suffixes it per chunk or token.
 
@@ -66,13 +66,13 @@ def harness_args(experiment: "KernelsConfig", settings: Path | None, context: in
         The argv, starting at the interpreter.
 
     Raises:
-        ValueError: The run is armed with a selector and has no settings written for it.
+        ValueError: The run is enabled with a selector and has no settings written for it.
     """
     kernels = experiment.data
     attention = experiment.model.attention
     selects = attention in (Attention.LSA, Attention.PISA)
     if selects and settings is None:
-        raise ValueError(f"a {attention} kernel run is armed with written settings and was handed none")
+        raise ValueError(f"a {attention} kernel run is enabled with written settings and was handed none")
     argv = [
         "python",
         "-m",

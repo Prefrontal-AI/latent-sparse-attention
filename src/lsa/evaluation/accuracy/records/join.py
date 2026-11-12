@@ -26,7 +26,7 @@ earlier part's, and `--drop <task or benchmark>` leaves tasks out of the joined 
 left-out tasks' samples stay under `parts/<part id>/` and the part's summary names them. `--id <run id>` gives
 the joined run an id of its own rather than the base's, as when the parts' names predate the one the run goes by.
 
-`--mixed-early-budget` lets the parts differ in the indexer's early budget - a later arm that reads fewer keys
+`--mixed-early-budget` lets the parts differ in the indexer's early budget - a later method that reads fewer keys
 before a position, beside an earlier one that did not - and in no other indexer setting. Each task keeps the
 indexer settings of the server that scored it, the record's own indexer names the early budget of the last part
 that sets one, and `run.parts` keeps each part's. The parts that set an early budget set the same one.
@@ -80,7 +80,7 @@ INDEXER_SERVING_KNOBS: tuple[str, ...] = (
     "spare_contexts",
 )
 
-# The one indexer setting `--mixed-early-budget` lets parts differ in - the early budget a later arm adds
+# The one indexer setting `--mixed-early-budget` lets parts differ in - the early budget a later method adds
 EARLY_BUDGET = "early_budget"
 
 

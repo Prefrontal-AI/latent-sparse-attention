@@ -106,7 +106,7 @@ def context_length(seq_len: int, names: list[str]) -> int:
 def titan_backbone(built: "EvaluationModel", parallelism: Any) -> "Backbone":
     """Split a model built for evaluation into the hidden-state forward and the output projection.
 
-    The sparse arms read a sequence as the blocks their layers were built with, so each forward sets the length of
+    The sparse methods read a sequence as the blocks their layers were built with, so each forward sets the length of
     the batch it is given on every such layer first. The forward is the evaluation's own - torchtitan's input
     preparation and the context it runs under - so a score here is a score of the model as it was trained.
 
@@ -160,7 +160,7 @@ def load_backbone(experiment: "NativeConfig", checkpoint: str) -> "Backbone":
     runs batches of its own shapes, and a sharded model gathers its parameters in lockstep.
 
     Args:
-        experiment: The experiment, whose attention is the arm.
+        experiment: The experiment, whose attention is the method.
         checkpoint: The torchtitan step folder.
 
     Returns:
@@ -237,7 +237,7 @@ def benchmark(
     """Run a checkpoint through tasks and write its records, from every rank of a job.
 
     Args:
-        experiment: The experiment, whose attention is the arm.
+        experiment: The experiment, whose attention is the method.
         checkpoint: The torchtitan step folder.
         names: The tasks, as `tasks.expand` returns them.
         preset: What the tasks are called in the records.

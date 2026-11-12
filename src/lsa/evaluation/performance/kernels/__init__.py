@@ -8,7 +8,7 @@ truncated checkpoint it loads.
 |---|---|
 | [harness](harness.py) | run the attention-layer harness in the container, one process per context, and rewrite the record after each |
 | [modules](modules.py) | run the module timer in the container, as a one-GPU job - `lsa kernels modules` |
-| [isolated](isolated.py) | time every arm of one model's layer, both phases, in one job on a node held whole - `lsa evaluate isolated` |
+| [isolated](isolated.py) | time every method of one model's layer, both phases, in one job on a node held whole - `lsa evaluate isolated` |
 | [record](record.py) | build a run's record from the harness's raw files |
 | [compose](compose.py) | sum one layer of each kind and the modules between them into a whole model - `lsa kernels compose` |
 | [show](show.py) | a record as a table - what `lsa records show` prints |

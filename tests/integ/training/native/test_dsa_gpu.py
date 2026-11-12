@@ -1,4 +1,4 @@
-"""Exercise DSA's KL parity and train the 340M arm through torchtitan."""
+"""Exercise DSA's KL parity and train the 340M method through torchtitan."""
 
 import pytest
 import torch

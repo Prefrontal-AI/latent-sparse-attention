@@ -2,9 +2,9 @@
 
     ncu --profile-from-start off --nvtx python -m lsa.evaluation.performance.roofline.profile --contexts 262144
 
-Each step is built for each `kernels` arm, called once to compile and warm, timed with the profiler stopped - and with `--graph` replayed from a captured CUDA graph, at each `--batch` for a step that batches, as `graph_median_us` by batch - then
+Each step is built in each `kernels` language, called once to compile and warm, timed with the profiler stopped - and with `--graph` replayed from a captured CUDA graph, at each `--batch` for a step that batches, as `graph_median_us` by batch - then
 called once more between a profiler start and stop and inside an NVTX range named `step@context@kernels`. The range
-is how the report tells which step and which arm a kernel belongs to.
+is how the report tells which step and which language a kernel belongs to.
 
 Under `ncu` every launch pays for the tool's hook, profiled or not, so a timing taken there reads hundreds of
 microseconds too long. `--mode time` runs the timings alone, outside `ncu`, and `--mode profile` runs the profiled calls alone, inside it.
@@ -144,22 +144,22 @@ def profile_context(
     Args:
         steps: The steps asked for.
         context: Tokens in the request.
-        kernels: The arms to profile each step in, `cutedsl` and `triton`.
+        kernels: The languages to profile each step in, `cutedsl` and `triton`.
         repeats: Timed calls per step.
         final: Whether this is the last context, where the steps that do not follow it run.
         batches: Batches to time a graph replay at, or None for no graph timing.
         mode: `time` for the timings alone, `profile` for the profiled calls alone, `both` for each.
 
     Returns:
-        One timing row per step and arm that ran, none in `profile` mode.
+        One timing row per step and language that ran, none in `profile` mode.
     """
     rows = []
     for step in steps:
         if not step.follows_context and not final:
             continue
-        for arm in kernels:
-            launch = workloads.launcher(step, context, arm)
-            name = f"{step.name}@{context}@{arm}"
+        for language in kernels:
+            launch = workloads.launcher(step, context, language)
+            name = f"{step.name}@{context}@{language}"
             if launch is None:
                 print(f"{name}: not served", flush=True)
                 continue
@@ -178,14 +178,14 @@ def profile_context(
                 "step": step.name,
                 "stage": step.stage,
                 "context": context,
-                "kernels": arm,
+                "kernels": language,
                 "follows_context": step.follows_context,
                 "median_ms": median_ms,
                 "min_ms": min_ms,
                 "repeats": repeats,
             }
             if batches is not None:
-                row["graph_median_us"] = graph_timings(step, context, arm, repeats, batches)
+                row["graph_median_us"] = graph_timings(step, context, language, repeats, batches)
             rows.append(row)
             del launch
             torch.cuda.empty_cache()
@@ -208,7 +208,11 @@ def main() -> None:
     parser.add_argument("--steps", nargs="+", default=["all"], help="step names, or all")
     parser.add_argument("--timings", type=Path, required=True, help="where the timings JSON goes")
     parser.add_argument(
-        "--kernels", nargs="+", choices=workloads.KERNELS, default=list(workloads.KERNELS), help="the arms"
+        "--kernels",
+        nargs="+",
+        choices=workloads.KERNELS,
+        default=list(workloads.KERNELS),
+        help="the languages",
     )
     parser.add_argument("--mode", choices=MODES, default="both", help="what to run - see the module doc")
     parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS)

@@ -27,12 +27,17 @@ It is composed into every file as the `site` node, so a config names an image as
 `site=local` on the command line picks another site for that run.
 The node is for interpolation only - it is taken out before the schema is built, so no schema declares it.
 
+A key that was renamed is still read under its old name, with a warning, when the caller names the rename -
+a file or a command line written before it keeps working, and a file that sets both names is refused.
+
 Every config `load` returns remembers where it came from - the file, its point of the sweep and the overrides
 - so the metadata a run writes beside its outputs can name the file that reproduces it, rather than only the
 values the file resolved to. It is not a field: a file cannot set it, and `asdict` does not see it.
 """
 
 import os
+import warnings
+from collections.abc import Sequence
 from dataclasses import MISSING, asdict, dataclass, fields, is_dataclass
 from itertools import product
 from pathlib import Path
@@ -139,7 +144,12 @@ def _named(path: Path) -> str:
 
 
 def load[Config: DataclassInstance](
-    schema: type[Config], path: str | Path, overrides: list[str] | None = None, *, name_path: str = "name"
+    schema: type[Config],
+    path: str | Path,
+    overrides: list[str] | None = None,
+    *,
+    name_path: str = "name",
+    renamed: Sequence[tuple[str, str]] = (),
 ) -> list[Config]:
     """Read a config file and return the runs it describes.
 
@@ -152,14 +162,15 @@ def load[Config: DataclassInstance](
         path: Path to the yaml.
         overrides: Dotted `key=value` assignments applied after everything else.
         name_path: Field the sweep suffixes, such as `run.name`.
+        renamed: Old dotted keys and the name each has now under the same parent, read under either.
 
     Returns:
         One `schema` per experiment, in sweep order.
 
     Raises:
         FileNotFoundError: There is no file at `path`.
-        ValueError: The composition failed, a sweep key names no value, or the merged config fails its own
-            validation.
+        ValueError: The composition failed, a sweep key names no value, a renamed key is set under both its
+            names, or the merged config fails its own validation.
     """
     given = list(overrides or [])
     site_name, overrides = _split_site(given)
@@ -168,7 +179,8 @@ def load[Config: DataclassInstance](
 
     sweep = _take_sweep(file_config)
     # Defaults come from the dataclasses themselves, so there is one statement of what a field defaults to
-    defaults = OmegaConf.create(declared_defaults(schema))
+    declared = declared_defaults(schema)
+    defaults = OmegaConf.create(declared)
     override_config = OmegaConf.from_dotlist(overrides or [])
     # A swept key the command line pins is swept over that value alone, so the run is named for what it ran
     pinned = {assignment.split("=", 1)[0].strip() for assignment in overrides or []}
@@ -191,10 +203,49 @@ def load[Config: DataclassInstance](
                 raise ValueError(f"{path}: sweep name {name_path!r} must be a string")
             OmegaConf.update(merged, name_path, name + _name_suffix(assignment))
             values = _resolved(merged, path, site_name)
+        for old, new in rename_keys(values, renamed, declared, str(path)):
+            warnings.warn(f"{path}: {old} is an old name - set {new}", FutureWarning, stacklevel=2)
         built = construct(schema, values)
         object.__setattr__(built, SOURCE, Source(_named(Path(path)), list(assignment), given))
         configs.append(built)
     return configs
+
+
+def rename_keys(
+    values: dict[str, Any], renamed: Sequence[tuple[str, str]], defaults: dict[str, Any], where: str
+) -> list[tuple[str, str]]:
+    """Move every key spelled by its old name to the name it has now, in place.
+
+    A key keeps its parent, so `a.b.old` renamed `new` is `a.b.new`.
+
+    Args:
+        values: A config as nested mappings - a file's merged values, or a run's `asdict` saved before the rename.
+        renamed: Old dotted keys and the name each has now.
+        defaults: What the schema declares, to tell a new key a layer set from one it only defaults.
+        where: What the values came from, for the message.
+
+    Returns:
+        Each dotted key found under its old name, with the dotted key it moved to.
+
+    Raises:
+        ValueError: A key is set under both its old name and its new one.
+    """
+    found = []
+    for old, new_name in renamed:
+        *parents, old_name = old.split(".")
+        node: Any = values
+        default: Any = defaults
+        for part in parents:
+            node = node.get(part) if isinstance(node, dict) else None
+            default = default.get(part) if isinstance(default, dict) else None
+        if not isinstance(node, dict) or old_name not in node:
+            continue
+        declared = default.get(new_name) if isinstance(default, dict) else None
+        if node.get(new_name, declared) != declared:
+            raise ValueError(f"{where} sets {old} and its new name {new_name} - set {new_name} alone")
+        node[new_name] = node.pop(old_name)
+        found.append((old, ".".join([*parents, new_name])))
+    return found
 
 
 def _split_site(overrides: list[str] | None) -> tuple[str, list[str]]:

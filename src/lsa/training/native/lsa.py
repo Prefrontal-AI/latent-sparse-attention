@@ -1,4 +1,4 @@
-"""The flat LSA read as a training arm - the keys a query reads are exactly the keys lsa serves.
+"""The flat LSA read as a training method - the keys a query reads are exactly the keys lsa serves.
 
 The index space is the model's own q,k input and nothing is learned: the position-free dims of the post-norm query and
 key heads, grouped-query regrouped into unit rows that every head of the layer shares, as `lsa.core` builds them.

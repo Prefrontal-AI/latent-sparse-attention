@@ -1,4 +1,4 @@
-# Override run.init_from to branch another arm or trunk at its decay-start checkpoint.
+# Override run.init_from to branch another method or trunk at its decay-start checkpoint.
 defaults:
   - dense_mqa8
   - phase/decay32k@_global_

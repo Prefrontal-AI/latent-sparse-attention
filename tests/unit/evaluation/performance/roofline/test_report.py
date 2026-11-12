@@ -103,7 +103,7 @@ def test_build_roofline_carries_stage_and_machine() -> None:
     assert roofline["machine"]["reported"]["l2_bytes_per_second"] == 6.0
 
 
-def test_build_roofline_keeps_each_arms_launches_apart() -> None:
+def test_build_roofline_keeps_each_languages_launches_apart() -> None:
     def kernel(label: str, name: str) -> dict[str, object]:
         return {"label": label, "name": name, "metrics": {}, "device": "NVIDIA H200"}
 
@@ -116,8 +116,8 @@ def test_build_roofline_keeps_each_arms_launches_apart() -> None:
         kernel("expansion by threshold@1024@triton", "void at::native::elementwise_kernel"),
     ]
     timings = [
-        {"step": "expansion by threshold", "stage": "expansion", "context": 1024, "kernels": arm}
-        for arm in ("triton", "cutedsl")
+        {"step": "expansion by threshold", "stage": "expansion", "context": 1024, "kernels": language}
+        for language in ("triton", "cutedsl")
     ]
     roofline = report.build_roofline(kernels, timings)
     assert [record["kernels"] for record in roofline["kernels"]] == ["triton", "cutedsl", "triton"]

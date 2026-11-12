@@ -8,11 +8,11 @@ The only prefix token is the end-of-text token, which is what separates document
 Three things differ from the source, and all three come from the model.
 
 **No padding mask.** The native attentions read a sequence as the model's own blocks, so a batch is right-padded and
-the pad sits after every scored token - causal attention and the recurrent layers never read it back. A sparse arm
+the pad sits after every scored token - causal attention and the recurrent layers never read it back. A sparse method
 needs a length that its block divides, so every batch is padded up to the next power of two from 512.
 That is also why generation batches prompts of any length: a row's next token is written into its own pad slot.
 
-**No decode cache.** Generation recomputes the whole prefix at every step, for every arm. That is exact, and its
+**No decode cache.** Generation recomputes the whole prefix at every step, for every method. That is exact, and its
 cost is one forward over the batch per generated token, which is why `max_gen_toks` can be capped.
 
 **Hidden states, not logits.** A 16,384-token row of 248k-way logits is 16 GB in fp32, so the model returns hidden
@@ -37,7 +37,7 @@ from lsa.training.native.constants import Benchmark
 
 logger = logging.getLogger(__name__)
 
-# The shortest padded length, which is the sparse arms' block
+# The shortest padded length, which is the sparse methods' block
 MIN_PADDED = 512
 # Rows of hidden states projected to the vocabulary at once
 PROJECTION_CHUNK = 2048
@@ -82,7 +82,7 @@ def padded_length(length: int) -> int:
         length: The longest row of the batch.
 
     Returns:
-        A length every sparse arm's block divides.
+        A length every sparse method's block divides.
     """
     padded = MIN_PADDED
     while padded < length:

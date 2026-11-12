@@ -35,8 +35,8 @@ from lsa.sglang.models.qwen3_5.index_space import HeadShard
 from lsa.sglang.settings.debug import PisaCheck
 from lsa.sglang.settings.design import PisaConfig
 
-# Every quadratic layer's indexer, built by the first backend armed
-ARMED: dict[int, "PisaGroupedQueryIndexer"] = {}
+# Every quadratic layer's indexer, built by the first backend enabled
+ENABLED: dict[int, "PisaGroupedQueryIndexer"] = {}
 
 # What a key head's replicas read of sglang besides - the attention group's sum and gather
 REQUIRED_REPLICAS: tuple[str, ...] = (
@@ -528,7 +528,7 @@ def replicas_of(geometry: index_space.Geometry, heads: HeadShard) -> Replicas | 
     return Replicas(heads.kv_first, geometry.kv_head_count, size, attn_tp_all_reduce, gather)
 
 
-def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
+def enable(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
     """Give a Qwen server's FlashAttention or triton backend a PISA indexer for every quadratic layer.
 
     Args:
@@ -538,7 +538,7 @@ def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
         **kwargs: The same, by name.
 
     Returns:
-        None - the backend is armed in place.
+        None - the backend is enabled in place.
 
     Raises:
         TypeError: The backend was built without a model runner.
@@ -551,17 +551,17 @@ def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
         return None
     geometry = index_space.geometry_of(text)
     heads = refuse_unservable(self, geometry)
-    if not ARMED:
+    if not ENABLED:
         replicas = replicas_of(geometry, heads)
         served = settings.of(runner.model_config.hf_config)
         config, check = settings.pisa_of(runner.model_config.hf_config), served.debug.check_pisa
-        ARMED.update(
+        ENABLED.update(
             {
                 layer: PisaGroupedQueryIndexer(layer, geometry, config, check, self, heads.kv_count, replicas)
                 for layer in geometry.layers
             }
         )
-    setattr(self, backend.INDEXERS, ARMED)
+    setattr(self, backend.INDEXERS, ENABLED)
     return None
 
 
@@ -579,7 +579,7 @@ def select_and_read(original: Any, self: Any, *args: Any, **kwargs: Any) -> Any:
 
     Raises:
         RuntimeError: A prefill is being captured into a CUDA graph, which would replay one batch's selection.
-        NotImplementedError: The forward is a speculative verify or draft - refused at arming, checked again.
+        NotImplementedError: The forward is a speculative verify or draft - refused when the backend is enabled, checked again.
     """
     bound = plugin.bind(original, self, *args, **kwargs)
     arguments = bound.arguments

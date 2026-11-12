@@ -246,7 +246,7 @@ class EvaluatedModelConfig(ModelConfig):
 
     @property
     def settings(self) -> dict[str, Any] | None:
-        """Return the settings block's body the plugin is armed with, or None for the checkpoint's own indexer.
+        """Return the settings block's body the plugin is enabled with, or None for the checkpoint's own indexer.
 
         Raises:
             ValueError: An LSA experiment names no `model.serving.projections`, and there is no index without a map.

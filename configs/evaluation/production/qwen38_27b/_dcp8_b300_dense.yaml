@@ -6,7 +6,7 @@
 # fa3 does not run on sm_103, and decode context parallel for a dense model is the triton backend's alone, for prefill
 # fa3's or triton's - sglang refuses trtllm_mha with --dcp-size - so triton serves both phases, the decode at 128 splits
 # as on H200.
-# FlashInfer's autotune is off, as on every B300 arm.
+# FlashInfer's autotune is off, as on every B300 method.
 
 defaults:
   - _image_b300

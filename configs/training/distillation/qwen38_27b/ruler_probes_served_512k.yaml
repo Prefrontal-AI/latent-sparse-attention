@@ -1,6 +1,6 @@
-# The Qwen selection study's arms over the RULER probe set at 512k - the five tasks of
+# The Qwen selection study's methods over the RULER probe set at 512k - the five tasks of
 # `configs/data/targets/qwen38_27b/ruler_probes_512k.yaml`, 8 prompts each. See `ruler_probes_served.yaml` for the designs,
-# the arms and how they are read and scored.
+# the methods and how they are read and scored.
 #
 #     lsa distill served-read configs/training/distillation/qwen38_27b/ruler_probes_served_512k.yaml \
 #         --shards 8 --partition <partition>

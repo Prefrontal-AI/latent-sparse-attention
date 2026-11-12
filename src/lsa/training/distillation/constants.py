@@ -514,14 +514,17 @@ class Served:
     # A design's mass this far under the native read's is flagged
     BELOW_NATIVE: float = 0.02
 
-    # An arm reads a bucket cache and its levels, or PISA's block pyramid
-    ARM_REFERENCE: str = "reference"
-    ARM_PISA: str = "pisa"
-    ARM_KINDS: tuple[str, ...] = (ARM_REFERENCE, ARM_PISA)
+    # A method reads a bucket cache and its levels, or PISA's block pyramid
+    METHOD_REFERENCE: str = "reference"
+    METHOD_PISA: str = "pisa"
+    METHOD_KINDS: tuple[str, ...] = (METHOD_REFERENCE, METHOD_PISA)
     # The space PISA reads, the model's keys and queries or a design's index keys and index queries
     SPACE_ATTENTION: str = "attention"
     SPACE_INDEX: str = "index"
-    ARM_SPACES: tuple[str, ...] = (SPACE_ATTENTION, SPACE_INDEX)
+    METHOD_SPACES: tuple[str, ...] = (SPACE_ATTENTION, SPACE_INDEX)
+    # Keys read under the name they had before, each with the name it has now - a file, an override or a saved
+    # resume state written before the rename
+    RENAMED_KEYS: tuple[tuple[str, str], ...] = (("run.report.served.arms", "methods"),)
 
     # What a probe record keeps of each row, to group them afterwards
     PROBE_ROW_METRICS: tuple[str, ...] = (

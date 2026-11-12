@@ -1,6 +1,6 @@
 """The accuracy step of a served experiment - score a live server with the suite, as a subprocess.
 
-`lsa.sglang.launch` starts the server and waits until LSA is armed; this runs `lsa.evaluation.accuracy`
+`lsa.sglang.launch` starts the server and waits until LSA is enabled; this runs `lsa.evaluation.accuracy`
 against it, into the run directory the launcher names. The suite reshapes nothing, and a scoring run is long,
 so its teardown is the subprocess's problem rather than the launcher's.
 """

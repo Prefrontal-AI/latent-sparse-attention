@@ -14,7 +14,7 @@ Both forms are accepted from yaml and read back through `IndexerConfig.at`.
 
 Every refusal says what arrived and what was wanted.
 This module runs on the job host as well as in the server, so it imports no sglang.
-The block of the model config a server is armed with is the two blocks flattened into one json object - their keys never
+The block of the model config a server is enabled with is the two blocks flattened into one json object - their keys never
 collide, so `DesignSettings.body` writes it and `parse` reads it back, refusing any key neither block has.
 """
 

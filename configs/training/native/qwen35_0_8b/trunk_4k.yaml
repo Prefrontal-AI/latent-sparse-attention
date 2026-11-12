@@ -1,8 +1,8 @@
-# The shared dense trunk the long-context arms branch from: dense attention at 4,096 tokens, warmup then a flat
-# learning rate with no decay, so every checkpoint is a mid-schedule model an arm can continue and decay at 16,384.
+# The shared dense trunk the long-context methods branch from: dense attention at 4,096 tokens, warmup then a flat
+# learning rate with no decay, so every checkpoint is a mid-schedule model a method can continue and decay at 16,384.
 #
 # Two nodes, eight sequences a GPU: 524,288 tokens a step, 15,000 steps, about 7.9B tokens. A checkpoint every
-# 1,500 steps (about 0.8B tokens), ten in all, which is torchtitan's default retention - so an arm can branch at
+# 1,500 steps (about 0.8B tokens), ten in all, which is torchtitan's default retention - so a method can branch at
 # several trunk lengths and the trunk length becomes a variable rather than a guess.
 #
 # Compiled, which measured 59k tokens/s per GPU against 40k uncompiled and 57 GiB against 101 (one node, 60 steps), on FlashAttention-3, 65k against flex's 59k compiled. Resumed at step 1,500

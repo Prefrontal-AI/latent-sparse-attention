@@ -49,5 +49,5 @@ run:
         - name: tree
           indexer: {top_k: 4096, top_p: 1024, top_level: 16, node_bucket_size: 4, node_cluster_block_size: 4096, beam_width: 2048, start_nodes: 32768}
           serving: {node_centroid_precision: fp8}
-      arms:
+      methods:
         - {name: pisa, kind: pisa, space: attention, block_size: 64, keep_count: 64}
