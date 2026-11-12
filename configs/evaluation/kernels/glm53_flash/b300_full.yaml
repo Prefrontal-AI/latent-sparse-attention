@@ -4,7 +4,7 @@
 # no rope-free head, and triton prefilled a 128k chunk of 8,192 in 1965 ms against fa3's 113 on H200.
 # trtllm_mla takes a bf16 latent only on a checkpoint sglang does not resolve as DSA's, so the cut is
 # `glm53_flash_real5_dense`, the five-layer cut's files with `index_topk: null` in its config - what the harness's model
-# override sets for a dense read anyway.
+# override sets for a dense read anyway. `lsa kernels cut --dense --out $LSA_ROOT/models/glm53_flash_real5_dense` writes it.
 # Its decode runs on triton, sglang's triton dense MLA decode: FlashMLA's dense decode is SM90's and trtllm_mla's decode
 # takes no rope-free latent. It is captured under a CUDA graph and validated replay by replay
 # (graph_validated at all 7 contexts).

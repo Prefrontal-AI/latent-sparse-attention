@@ -13,6 +13,8 @@
 #
 #     lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048.yaml \
 #         --gpus 8 --cpus 64 --mem-gb 1200 --hours 24 --partition <partition>
+#     lsa distill export $LSA_ROOT/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048 \
+#         $LSA_ROOT/models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt
 
 defaults:
   - base

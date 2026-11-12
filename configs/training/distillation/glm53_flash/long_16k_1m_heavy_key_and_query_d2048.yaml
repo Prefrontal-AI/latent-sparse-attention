@@ -16,7 +16,7 @@
 #     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048.yaml \
 #         --shards 11 --mem-gb 300 --hours 12 --partition <partition>
 #     lsa distill export $LSA_ROOT/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048 \
-#         $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-key-and-query-d2048.pt
+#         $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt
 
 defaults:
   - long_16k_1m_heavy_x

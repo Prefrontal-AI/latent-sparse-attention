@@ -4,8 +4,13 @@ The full checkpoint needs more than one device, and the layer harness drives one
 at the first few layers instead: the config is rewritten and only the shards those layers name are copied,
 which is enough to measure layer 3 and the linear layer after it and nothing more.
 
-    lsa kernels cut --layers 5 --weights --out $DATA/models/glm53flash-real5
-    lsa kernels cut --layers 5 --weights --snapshot $QWEN/Qwen3.5-27B --out $DATA/models/qwen3.5-27b-real5
+    lsa kernels cut --out $LSA_ROOT/models/glm53_flash_real5
+    lsa kernels cut --snapshot $HF_HOME/hub/models--Qwen--Qwen3.8-27b/snapshots/<revision> --out $LSA_ROOT/models/qwen38_27b_real5
+
+The defaults are the five layers and real weights every kernel config reads; `--layers` and `--no-weights` change them.
+`--dense` also nulls GLM's `index_topk`, so sglang does not resolve the cut as DSA's and trtllm_mla takes its bf16 latent:
+
+    lsa kernels cut --dense --out $LSA_ROOT/models/glm53_flash_real5_dense
 
 It reads the snapshot's config and copies its files, so it needs neither a GPU nor the container, and runs as
 a CPU job.
@@ -22,6 +27,8 @@ from lsa.evaluation.constants import Family
 from lsa.evaluation.performance.kernels.family import model_family
 
 MODEL = "zai-org/GLM-5.3-Flash"
+# Five layers make layer 3 the sparse one, which every kernel config reads
+LAYERS = 5
 SIDE_FILES = (
     "tokenizer.json",
     "tokenizer_config.json",
@@ -79,6 +86,25 @@ def truncate(config, layers):
     return config
 
 
+def densify(config):
+    """Null a DSA config's `index_topk`, so the server reads the checkpoint as dense MLA.
+
+    Args:
+        config: The checkpoint's `config.json`, edited in place.
+
+    Returns:
+        The edited config.
+
+    Raises:
+        ValueError: The config has no `index_topk` to null.
+    """
+    text = config["text_config"]
+    if "index_topk" not in text:
+        raise ValueError(f"{text['model_type']} has no index_topk - only a DSA checkpoint has a dense cut")
+    text["index_topk"] = None
+    return config
+
+
 def layer_of(name):
     """Return the decoder layer a weight name belongs to, or -1 when it names none."""
     if ".layers." not in name:
@@ -122,7 +148,7 @@ def link_weights(snapshot, out, layers):
     return len(set(weights.values()))
 
 
-def cut(snapshot: str, out: str, layers: int, weights: bool) -> str:
+def cut(snapshot: str, out: str, layers: int, weights: bool, dense: bool = False) -> str:
     """Write a checkpoint of a snapshot's first layers - its config rewritten, its files copied.
 
     Args:
@@ -130,11 +156,14 @@ def cut(snapshot: str, out: str, layers: int, weights: bool) -> str:
         out: Where the cut goes.
         layers: Decoder layers kept.
         weights: Link the real shards of the kept layers, rather than leaving the weights to a dummy load.
+        dense: Null the config's `index_topk`, so the cut is read as dense MLA rather than DSA.
 
     Returns:
         The cut's directory.
     """
     config = truncate(io.read_json(f"{snapshot}/config.json"), layers)
+    if dense:
+        config = densify(config)
     os.makedirs(out, exist_ok=True)
     with open(f"{out}/config.json", "w") as target:
         json.dump(config, target, indent=2)
@@ -152,17 +181,43 @@ def cut(snapshot: str, out: str, layers: int, weights: bool) -> str:
     return out
 
 
-def main() -> None:
-    """Parse the command line and submit the job that cuts the checkpoint it names."""
+def build_parser() -> argparse.ArgumentParser:
+    """Return the parser of `lsa kernels cut`."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--layers", type=int, default=8)
-    parser.add_argument("--weights", action="store_true", help="link the real shards of the kept layers")
+    parser.add_argument("--layers", type=int, default=LAYERS, help="decoder layers kept")
+    parser.add_argument(
+        "--weights",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="copy the real shards of the kept layers, rather than leaving the weights to a dummy load",
+    )
+    parser.add_argument(
+        "--dense",
+        action="store_true",
+        help="null index_topk, so the cut is read as dense MLA rather than DSA",
+    )
     parser.add_argument(
         "--snapshot", help="the checkpoint to cut - GLM-5.3-Flash from the hub cache by default"
     )
     parser.add_argument("--out", required=True)
     slurm.add_flags(parser)
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    """Parse the command line and submit the job that cuts the checkpoint it names."""
+    args = build_parser().parse_args()
     snapshot = os.path.abspath(args.snapshot or default_snapshot())
     out = os.path.abspath(args.out)
-    slurm.submit(args, "lsa-cut", env.offline_hf(), slurm.CPU, cut, snapshot, out, args.layers, args.weights)
+    slurm.submit(
+        args,
+        "lsa-cut",
+        env.offline_hf(),
+        slurm.CPU,
+        cut,
+        snapshot,
+        out,
+        args.layers,
+        args.weights,
+        args.dense,
+    )
