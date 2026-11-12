@@ -986,7 +986,12 @@ def top_keys(scores: torch.Tensor, lengths: torch.Tensor, k: int) -> torch.Tenso
     Returns:
         Packed keys [R, k] int64, the best score first and a tie to the lower column, the empty key past the row's
         length.
+
+    Raises:
+        TypeError: The scores are not fp32.
     """
+    if scores.dtype != torch.float32:
+        raise TypeError(f"top_keys reads fp32 scores, not {scores.dtype}")
     pick = TopK(k)
     pick.listed(scores, lengths)
     return pick.best()
