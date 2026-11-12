@@ -323,3 +323,19 @@ def test_a_keeps_estimate_lists_enough_columns_and_few_enough_that_a_normal_row_
     scores = 0.9 + 0.05 * torch.randn(rows, columns, device=DEVICE, generator=generator)
     totals, capacity = keep_listing_totals(scores, k)
     assert int(((totals < k) | (totals > capacity)).sum()) == 0
+
+
+@pytest.mark.parametrize("most", [7, 512])
+@pytest.mark.parametrize(
+    ("rows", "columns", "k"), [(1, 2052, 2048), (8, 2052, 2048), (1000, 2052, 2048), (700, 20000, 512)]
+)
+def test_a_capped_grid_writes_the_keys_an_uncapped_one_does(monkeypatch, most, rows, columns, k):
+    generator = torch.Generator(device=DEVICE).manual_seed(rows)
+    scores = torch.randn(rows, columns, device=DEVICE, generator=generator)
+    lengths = torch.randint(
+        columns // 2, columns + 1, (rows,), device=DEVICE, dtype=torch.int32, generator=generator
+    )
+    expected = top_keys(scores, lengths, k)
+    monkeypatch.setattr(TritonTopK, "MOST_PROGRAMS", most)
+    assert top_k_module.programs(rows) == min(rows, most)
+    assert torch.equal(top_keys(scores, lengths, k), expected)
