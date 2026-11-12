@@ -22,7 +22,7 @@ import torch.nn.functional as F
 from lsa.core.kernels import dispatch, scan_select
 from lsa.core.kernels import expansion as front_expansion
 from lsa.core.kernels import ward as front_ward
-from lsa.core.kernels.constants import PackedKey, TritonBeam, TritonScanSelect
+from lsa.core.kernels.constants import Index, PackedKey, TritonBeam, TritonScanSelect
 from lsa.core.kernels.cutedsl import (
     beam,
     bucket_scan,
@@ -40,18 +40,22 @@ from lsa.core.kernels.triton.paged import scan_paged
 from lsa.core.kernels.triton.top_k import TopK
 from lsa.core.ward import pool_keys
 from lsa.evaluation.constants import Kernels
+from lsa.sglang.settings.design import IndexerConfig
+
+# The served design, whose defaults the roofline's shapes follow
+_DESIGN = IndexerConfig()
 
 # Queries in a served prefill chunk
 CHUNK = Kernels.CHUNK
-INDEX_DIM = 64
-BUCKET_SIZE = 8
+INDEX_DIM = Index.DIM
+BUCKET_SIZE = _DESIGN.bucket_size
 BUCKET_CAP = 16
 TOP_P = 1024
-TOP_K = 4096
-WINDOW_SIZE = 512
-SINK_SIZE = 4
+TOP_K = _DESIGN.top_k
+WINDOW_SIZE = _DESIGN.window_size
+SINK_SIZE = _DESIGN.sink_size
 # Keys a page holds, one cluster block
-CLUSTER_BLOCK_SIZE = 512
+CLUSTER_BLOCK_SIZE = WINDOW_SIZE
 PAGE_ROWS = CLUSTER_BLOCK_SIZE // BUCKET_SIZE
 POOL_SIZE = 4
 NODE_BUCKET_SIZE = 4

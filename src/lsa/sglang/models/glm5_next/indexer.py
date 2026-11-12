@@ -3,9 +3,9 @@
 The design's input, and the default, is the key and the heads' queries: the key latent and the absorbed queries of
 this rank's heads, which the plugin hands over from the end of `forward_absorb_prepare` - the frozen design's input,
 served with maps distilled on `x` and re-exported for it. `query_heads: all`, the default, sums the ranks' head sums
-across the group (the internal snapshot's `query: all`), so every rank selects the one list; `query_heads: rank` has each
-tensor-parallel rank sum its own heads (the internal snapshot's `query: local`), so ranks may select different lists, each for its
-own heads. Under context parallel it serves with attention one GPU wide and `query_heads: all`, as the internal snapshot served it
+across the group (the original implementation's `query: all`), so every rank selects the one list; `query_heads: rank` has each
+tensor-parallel rank sum its own heads (the original implementation's `query: local`), so ranks may select different lists, each for its
+own heads. Under context parallel it serves with attention one GPU wide and `query_heads: all`, as the original implementation served it
 under prefill and decode context parallel 8: a rank holds every head, so the query side is its own, and the key side
 reads the layouts below - a prefill chunk's key latents arrive whole, gathered by the fork for attention, and a key in
 another decode rank's share of the pool is projected there and its index key summed across the group.

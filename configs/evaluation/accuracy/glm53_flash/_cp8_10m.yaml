@@ -5,7 +5,7 @@
 # Past 1M the battery runs context parallel only: one node holds a 10M prompt here, where tensor
 # parallel needs two pipeline stages.
 # `--max-total-tokens` is per GPU under decode context parallel: 1,315,000 a GPU is 10.52M tokens on the node,
-# one 10M RULER prompt and its answer - the production layout's pool (`production/glm53_flash/cp.yaml`).
+# one 10M RULER prompt and its answer - the production layout's pool (`production/glm53_flash/_cp8.yaml`).
 # One request at a time: with two in flight the pool sat about 90% full late in a 10M prefill, and a 32,768-token
 # chunk ran fixed and tree out of memory in DeepGEMM's masked MoE.
 # The production layout sends one at a time on the same pool and chunk, and all four designs reached 10M.

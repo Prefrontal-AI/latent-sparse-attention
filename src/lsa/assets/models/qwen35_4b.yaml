@@ -4,7 +4,7 @@
 # ties its embedding to its output projection where the 27B does not, which is read off `config.json` at
 # load rather than recorded here.
 #
-# The ladder extracts from this rather than from [the base model](qwen35_4b_base.yaml) because it is the
+# The ladder extracts from this rather than from the base model because it is the
 # only flavour the 9B and the 27B are published in: both carry a chat template where the base 4B does not,
 # so a base bottom rung would vary flavour and scale together.
 

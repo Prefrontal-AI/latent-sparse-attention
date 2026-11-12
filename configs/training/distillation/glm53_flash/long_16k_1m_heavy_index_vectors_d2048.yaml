@@ -9,15 +9,15 @@
 # again, so a reader sees the rule here.
 #
 # The indexer reads the key latent and every head's query summed, `input: key_and_query` with `query_heads: all`, in the
-# latent bases the internal snapshot distilled in - `L` for the key, `L^-T` for the summed query - starting at the PCA of the carried
+# latent bases the original implementation distilled in - `L` for the key, `L^-T` for the summed query - starting at the PCA of the carried
 # keys. The cache's vectors are taken back through `L^-1` and `L^T`, which every projection normalizes away, and the maps
 # are saved with the bases folded in, so `lsa distill export` writes what the server reads off the plain latent.
 #
 # The recipe is the dense target cut to 2048 under the forward KL, 48,000 steps at 3e-4, batch 128, steps drawn by
-# token, the temperature calibrated per layer. The held-out sets are the pilot cache's, `long_16k_1m`, which the internal snapshot
+# token, the temperature calibrated per layer. The held-out sets are the pilot cache's, `long_16k_1m`, which the original implementation
 # scored on, and the `seen` sets are training rows of this cache.
 #
-# A layer's share of the cache is some 400 GiB and a shard holds it in host memory, as the internal snapshot did:
+# A layer's share of the cache is some 400 GiB and a shard holds it in host memory, as the original implementation did:
 #
 #     lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_index_vectors_d2048.yaml \
 #         --shards 11 --mem-gb 1100 --hours 12 --partition <partition>

@@ -1,7 +1,7 @@
 """What the accuracy suite reads - the fixed prompt files, where they live, what generation recorded, and what a suite asks for.
 
 RULER comes from NVIDIA's own generators ([ruler](ruler.py)), LongBench v2 is prepared once per context
-limit ([longbench](longbench.py)) and PaperTrail is copied from its repository ([papertrail](papertrail.py)). All land under one root, 12G of files too large for git, so it is a cache
+limit ([longbench](longbench.py)) and PaperTrail is copied from its repository ([papertrail](papertrail/__init__.py)). All land under one root, 12G of files too large for git, so it is a cache
 root like HF_HOME that generation fills:
 
     <root>/ruler/<task>_<length>.jsonl
@@ -19,7 +19,7 @@ through [lsa.data.tokenizer](../../../data/tokenizer.py) as the production promp
 |---|---|
 | [ruler](ruler.py) | NVIDIA's RULER generators, driven over the card's grid as a CPU job by `lsa data prepare ruler` |
 | [longbench](longbench.py) | LongBench v2 under the official template, truncated in the middle to a limit - `lsa data prepare longbench2` |
-| [papertrail](papertrail.py) | PaperTrail's samples at every length and control, one context each - `lsa data prepare papertrail` |
+| [papertrail](papertrail/__init__.py) | PaperTrail's samples at every length and control, one context each - `lsa data prepare papertrail` |
 | [suites](suites.py) | `full`, `ruler` and `smoke` - which tasks a run asks for and how many prompts of each |
 | [hashes](hashes.py) | the prompt-set hash of every plan, pinned in `hashes.json` |
 """

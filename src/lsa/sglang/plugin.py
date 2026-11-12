@@ -34,7 +34,7 @@ A design whose `input` is the key and query - the design's input and the default
 queries - needs two hooks more, because neither exists where the model calls its indexer with `x`. `gate` stops an
 LSA layer's indexer from running there and remembers that it wanted to, and `prepare` runs it at the end of
 `forward_absorb_prepare`, where the absorbed query and the normed key latent are in the tuple the method returns,
-and puts the selection where attention reads it - as the internal snapshot did. Its index keys are projected from the key
+and puts the selection where attention reads it - as the original implementation did. Its index keys are projected from the key
 latents the KV pool holds, so the dense path that prefills a short prompt needs no call either. Under prefill context
 parallel the key latents that method returns are the chunk's whole, which the fork's DSA attention gathered.
 

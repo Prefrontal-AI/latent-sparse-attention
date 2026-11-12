@@ -4,7 +4,7 @@ The indexer's input is the design's `input`. From the key and the heads' queries
 an index key is `normalize(key @ key_projection)`, the key $K^{(attn)}$ being GLM's 512-dim latent, and an index query
 is `normalize(sum_h query_h @ query_projection)` over the heads' absorbed queries - every head of the layer under
 `query_heads: all`, the default, or the heads a rank holds. The key is in the KV pool already, so nothing else is
-kept: a key's index key is projected from the pool when it is read, as the internal snapshot read it, and a prefill writes its
+kept: a key's index key is projected from the pool when it is read, as the original implementation read it, and a prefill writes its
 chunk's keys to the pool before it selects.
 
 From the attention input `x` - a research option, which lost to the key and query on RULER cwe 512k -
@@ -295,7 +295,7 @@ class KeySplit:
 class KeyAndQueryProjection:
     """A layer's two maps over the key and the heads' queries, in the frozen design's numerics.
 
-    The maps are bf16 and the products bf16, as the internal snapshot served them, so its index keys come out bit for bit:
+    The maps are bf16 and the products bf16, as the original implementation served them, so its index keys come out bit for bit:
     an index key is the key times the key projection, normalized in fp32 and stored in bf16, and an index query
     the heads' queries summed in fp32, cast to bf16, times the query projection, then normalized.
     """

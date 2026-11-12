@@ -62,7 +62,7 @@ ATTENTION_INPUT: str = "attention_input"
 INDEXER_INPUTS: tuple[str, ...] = (KEY_AND_QUERY, ATTENTION_INPUT)
 
 # Which heads' queries an index query sums under the key and query: every head of the layer, so every rank selects
-# the one list - the design's, the internal snapshot's `query: all` - or the heads a tensor-parallel rank holds, each rank
+# the one list - the design's, the original implementation's `query: all` - or the heads a tensor-parallel rank holds, each rank
 # selecting for its own
 QUERY_HEADS_RANK: str = "rank"
 QUERY_HEADS_ALL: str = "all"

@@ -7,9 +7,9 @@ Both start as the leading PCA directions of the layer's own `x`, which is the be
 width there is, and training moves them from there.
 
 Under `indexer.input: key_and_query` the projections read GLM's key latent and the heads' queries summed, in the bases
-the internal snapshot distilled them in: the key carried by `key_basis` and the query by `query_basis` before its projection, so an
+the original implementation distilled them in: the key carried by `key_basis` and the query by `query_basis` before its projection, so an
 index key is `normalize(key @ key_basis @ key_projection)`. The bases are fixed, the PCA is taken of the keys carried
-into theirs and normalized, as the internal snapshot's cache held them, and `served_projections` folds them in - what a server reads.
+into theirs and normalized, as the original implementation's cache held them, and `served_projections` folds them in - what a server reads.
 
 `tau` is a parameter rather than a constant because the loss is a softmax over tens of thousands of keys and
 its sharpness is not something to guess.

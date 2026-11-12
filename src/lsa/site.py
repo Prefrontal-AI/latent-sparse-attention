@@ -6,7 +6,7 @@ runs a job, and the `slurm` values a job is submitted with.
 [The config loader](config_loader.py) composes it into every run as the `site` node, and code outside a loaded
 run - a command that takes no config, a record reader - reads it through `load`.
 
-`DEFAULT_SITE` is the one place the default is chosen, and the line an export of the public repository changes.
+`DEFAULT_SITE` is the one place the default is chosen.
 `load` reads only the standard library and PyYAML, so a record reader that never composes a config needs neither omegaconf nor hydra.
 `select` picks another for this process, which is what `lsa --site <name>` does, and `site=<name>` on a run's
 command line picks another for that run alone.
@@ -51,7 +51,7 @@ SLURM_KEYS: tuple[str, ...] = (
 )
 
 # The site every process and run uses unless one is selected
-# => the one line an export of the public repository changes
+# => change it here to move the default for every process and run
 DEFAULT_SITE = "local"
 
 # Where the sites live, beside the other configs of the checkout
