@@ -137,7 +137,7 @@ def require_output(experiment: "Experiment") -> None:
 def require_mounted_output(experiment: "Experiment") -> None:
     """Refuse an evaluation whose records root the container will not see, before a job is queued for it.
 
-    The container reads the run directory - the indexer settings the harness or the server is armed with are
+    The container reads the run directory - the indexer settings the harness or the server is enabled with are
     written there - so a root outside every mount fails inside the job, after its wait in the queue.
 
     Args:
@@ -174,7 +174,7 @@ class Launch:
     one run lands in the directory the first one wrote.
     """
 
-    # The indexer settings the plugin is armed with, or None for the checkpoint's own indexer
+    # The indexer settings the plugin is enabled with, or None for the checkpoint's own indexer
     settings: dict[str, Any] | None
     # `run.name`, which the record is grouped by
     name: str
@@ -315,7 +315,7 @@ def run_production(experiment: "ProductionConfig", force: bool) -> Path:
     """Time a served model's requests - first token and every token after it - through sglang's own client.
 
     The server is started exactly as a scored run starts it, and waited on the same way, so the plugin's
-    arming check stands between a production record and a server running the checkpoint's own indexer.
+    enabling check stands between a production record and a server running the checkpoint's own indexer.
 
     A rerun resumes into its directory and keeps every length already measured, so pinning the id is how one
     record spans a one-node and a two-node server.

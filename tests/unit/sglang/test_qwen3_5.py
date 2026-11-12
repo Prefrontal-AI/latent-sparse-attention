@@ -3,7 +3,7 @@
 The input a server reads off the heads attention is handed has to be the one distillation trained the maps on -
 `regroup_partial` over `position_free` pre-rotation heads - or a map that scored one way offline selects other keys
 served. The rotation is a prefix, so anything done to it must leave the input alone. The backend's hooks are checked
-against fakes of the backend and the batch: what they hand on unchanged, what they arm, and that the read attends over
+against fakes of the backend and the batch: what they hand on unchanged, what they enable, and that the read attends over
 exactly the slots a list names.
 """
 
@@ -481,28 +481,28 @@ def forward_extend(self, q, k, v, layer, forward_batch, save_kv_cache=True, q_ro
 
 
 def test_a_layer_outside_the_design_and_an_idle_batch_reach_the_backend_unchanged():
-    armed = SimpleNamespace(dense=[], **{backend.INDEXERS: {3: object()}})
+    enabled = SimpleNamespace(dense=[], **{backend.INDEXERS: {3: object()}})
     linear = SimpleNamespace(layer_id=2)
     batch = SimpleNamespace(forward_mode=Mode("extend"))
-    assert backend.select_and_read(forward_extend, armed, "q", "k", "v", linear, batch) == "dense"
+    assert backend.select_and_read(forward_extend, enabled, "q", "k", "v", linear, batch) == "dense"
     quadratic = SimpleNamespace(layer_id=3)
     idle = SimpleNamespace(forward_mode=Mode("idle"))
-    assert backend.select_and_read(forward_extend, armed, "q", "k", "v", quadratic, idle) == "dense"
-    # A backend that was never armed - another model's - reads everything densely
+    assert backend.select_and_read(forward_extend, enabled, "q", "k", "v", quadratic, idle) == "dense"
+    # A backend that was never enabled - another model's - reads everything densely
     plain = SimpleNamespace(dense=[])
     assert backend.select_and_read(forward_extend, plain, "q", "k", "v", quadratic, batch) == "dense"
-    assert armed.dense == [2, 3] and plain.dense == [3]
+    assert enabled.dense == [2, 3] and plain.dense == [3]
 
 
 def test_another_models_backend_and_a_draft_are_left_unarmed(monkeypatch, tmp_path):
-    monkeypatch.setattr(backend, "ARMED", {})
+    monkeypatch.setattr(backend, "ENABLED", {})
     glm = SimpleNamespace(model_config=SimpleNamespace(hf_text_config=GLM))
     plain = SimpleNamespace()
-    backend.arm(None, plain, glm)
+    backend.enable(None, plain, glm)
     assert not hasattr(plain, backend.INDEXERS)
     qwen = SimpleNamespace(model_config=SimpleNamespace(hf_text_config=QWEN38["text_config"]))
     draft = SimpleNamespace(is_draft_runner=True)
-    backend.arm(None, draft, qwen)
+    backend.enable(None, draft, qwen)
     assert not hasattr(draft, backend.INDEXERS)
 
 
@@ -511,11 +511,11 @@ def test_an_unarmed_backend_maintains_nothing(monkeypatch):
     monkeypatch.setattr(registry, "maintain", called.append)
     backend.maintain(SimpleNamespace(), "batch")
     backend.maintain_out_graph(SimpleNamespace(), "batch", False)
-    armed = SimpleNamespace(**{backend.INDEXERS: {3: object()}})
-    backend.maintain(armed, "batch")
+    enabled = SimpleNamespace(**{backend.INDEXERS: {3: object()}})
+    backend.maintain(enabled, "batch")
     # A capture records device work - maintenance is host work, done before every replay
-    backend.maintain_out_graph(armed, "capture", True)
-    backend.maintain_out_graph(armed, "replay", in_capture=False)
+    backend.maintain_out_graph(enabled, "capture", True)
+    backend.maintain_out_graph(enabled, "replay", in_capture=False)
     assert called == ["batch", "replay"]
 
 

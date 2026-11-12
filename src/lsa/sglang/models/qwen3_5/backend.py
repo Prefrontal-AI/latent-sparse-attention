@@ -35,7 +35,7 @@ already, and a key in another rank's share is projected there and its index key 
 selects the same lists, with the budget a single GPU spends - `top_k` keys and `top_p` buckets over the whole context.
 Each rank reads the selected slots it owns with every head, and the group merges the partial reads by their
 log-sum-exp into the softmax over the whole list, each rank keeping its own heads. The image decodes such a mesh on the
-triton backend and prefills it on FlashAttention, so both backends are armed and both read through FlashAttention's
+triton backend and prefills it on FlashAttention, so both backends are enabled and both read through FlashAttention's
 paged kernel.
 
 It imports sglang, so nothing but the plugin reaches it, and only after the plugin resolved every target.
@@ -56,14 +56,14 @@ from lsa.sglang.index.layer_index import KeySplit, LayerIndex, Shard
 from lsa.sglang.models.qwen3_5 import index_space
 from lsa.sglang.settings.design import KEY_AND_QUERY, DesignSettings
 
-# Where an armed backend keeps its layers' indexers
+# Where an enabled backend keeps its layers' indexers
 INDEXERS: str = "lsa_lsa_indexers"
 
-# Every quadratic layer's indexer, built by the first backend armed - one index a layer, however many backends read it
-ARMED: dict[int, "GroupedQueryIndexer"] = {}
+# Every quadratic layer's indexer, built by the first backend enabled - one index a layer, however many backends read it
+ENABLED: dict[int, "GroupedQueryIndexer"] = {}
 
-# What an armed backend reads by name - the fork's image has them all, and a Qwen server runs on nothing else
-# => resolved when a backend is armed, so a GLM server on a stock image never needs them
+# What an enabled backend reads by name - the fork's image has them all, and a Qwen server runs on nothing else
+# => resolved when a backend is enabled, so a GLM server on a stock image never needs them
 REQUIRED: tuple[str, ...] = (
     "sglang.srt.mem_cache.memory_pool.KVWriteLoc",
     "sglang.srt.runtime_context.get_parallel",
@@ -234,7 +234,7 @@ def resolve_all(targets: tuple[str, ...], what: str) -> None:
         except (AttributeError, ModuleNotFoundError, ImportError) as failure:
             missing.append(f"{target} ({failure})")
     if missing:
-        raise RuntimeError(f"lsa-lsa cannot serve {what} on this sglang - " + "; ".join(missing))
+        raise RuntimeError(f"lsa cannot serve {what} on this sglang - " + "; ".join(missing))
 
 
 def decode_shard() -> Shard:
@@ -302,7 +302,7 @@ def refuse_unservable(
     return heads
 
 
-def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
+def enable(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
     """Give a Qwen server's FlashAttention or triton backend an indexer for every quadratic layer.
 
     A backend built for anything else - another model, a draft - is left as it was. A second backend of the same
@@ -316,7 +316,7 @@ def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
         **kwargs: The same, by name.
 
     Returns:
-        None - the backend is armed in place.
+        None - the backend is enabled in place.
 
     Raises:
         TypeError: The backend was built without a model runner.
@@ -331,9 +331,9 @@ def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
     config = runner.model_config.hf_config
     served, design = settings.of(config), settings.design_of(config)
     heads = refuse_unservable(self, geometry, design)
-    if not ARMED:
+    if not ENABLED:
         shard = decode_shard()
-        ARMED.update(
+        ENABLED.update(
             {
                 layer: GroupedQueryIndexer(
                     layer, geometry, design, self, shard, heads, served.debug.check_index
@@ -341,9 +341,9 @@ def arm(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
                 for layer in geometry.layers
             }
         )
-    setattr(self, INDEXERS, ARMED)
+    setattr(self, INDEXERS, ENABLED)
     if served.debug.dumps:
-        print("lsa-lsa: the dump reads GLM's x - Qwen's layers dump nothing", flush=True)
+        print("lsa: the dump reads GLM's x - Qwen's layers dump nothing", flush=True)
     return None
 
 
@@ -798,7 +798,7 @@ def select_and_read(original: Any, self: Any, *args: Any, **kwargs: Any) -> Any:
 
     Raises:
         RuntimeError: A prefill is being captured into a CUDA graph, which would replay one batch's selection.
-        NotImplementedError: The forward is a speculative verify or draft - refused at arming, checked again.
+        NotImplementedError: The forward is a speculative verify or draft - refused when the backend is enabled, checked again.
     """
     bound = plugin.bind(original, self, *args, **kwargs)
     arguments = bound.arguments

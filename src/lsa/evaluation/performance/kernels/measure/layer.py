@@ -280,7 +280,7 @@ def run(args):
     torch.manual_seed(0)
     os.environ["SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN"] = "1"
     # No server entry point runs here
-    # => load the plugin that arms the design's indexer (LSA or PISA) the way serving does
+    # => load the plugin that enables the design's indexer (LSA or PISA) the way serving does
     if args.indexer in ("lsa", "pisa"):
         from sglang.srt.plugins import load_plugins
 

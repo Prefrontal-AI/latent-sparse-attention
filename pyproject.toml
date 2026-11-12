@@ -143,7 +143,7 @@ analysis = [
 # sglang finds the serving backend through this, and calls `register` once per process before the engine
 # starts. It costs nothing where sglang is absent - an entry point is a line of metadata, not an import - so
 # it is declared unconditionally and `lsa.sglang` stays out of the required set.
-# The `lsa` block of the model config is what actually arms it.
+# The `lsa` block of the model config is what actually enables it.
 [project.entry-points."sglang.srt.plugins"]
 lsa = "lsa.sglang.plugin:register"
 

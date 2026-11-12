@@ -330,7 +330,7 @@ def test_an_idle_batch_selects_nothing(engine):
 def test_the_indexer_announces_itself_and_registers_for_maintenance(engine, capsys):
     indexer = build(engine)
     assert registry.INDEXERS == [indexer]
-    assert "lsa-lsa: indexing" in capsys.readouterr().out
+    assert "lsa: indexing" in capsys.readouterr().out
 
 
 def test_a_list_width_that_is_not_the_designs_is_refused(engine):
@@ -396,7 +396,7 @@ def test_every_layer_checks_its_lists_and_the_tally_passes(engine, monkeypatch, 
         "layer 3"
     ] * 2
     assert all(", exact at gap" in line for line in rows)
-    assert printed[-1].startswith("lsa-lsa: pisa check tally rows 4 exact 4 ") and printed[-1].endswith(
+    assert printed[-1].startswith("lsa: pisa check tally rows 4 exact 4 ") and printed[-1].endswith(
         "verdict PASS"
     )
 

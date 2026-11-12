@@ -120,8 +120,8 @@ python -m sglang.launch_server --model-path Qwen/Qwen3.8-27b --tp 1 \
 LSA selects keys for a prefill on the host, which a CUDA graph cannot capture, so without the flag the server crashes during startup.
 Decode is still captured.
 
-The plugin registers through SGLang's `sglang.srt.plugins` entry point and arms itself from the `lsa` block.
-The server log prints `armed` when it does.
+The plugin registers through SGLang's `sglang.srt.plugins` entry point and enables itself from the `lsa` block.
+The server log prints `enabled` when it does.
 Without that line, the server is running the checkpoint's own attention.
 The line appears before startup finishes, so wait for `/health` and send a request:
 

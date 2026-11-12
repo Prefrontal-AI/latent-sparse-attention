@@ -155,7 +155,7 @@ A decode step captured in a CUDA graph is checked after it ran, from a copy of i
 The copy is read at the next forward, so a row whose request left the batch on that step is skipped and counted as `left-batch` - its table row may already hold another request's.
 Each row is `exact`, a `near-tie` - the lists differ, and the reference's search came within a thousandth of a tie at some level, which bf16 leaf means and another summation order can tip - or a `MISMATCH`.
 GLM's ranks also compare their lists on every check.
-After each check the first rank prints the run's tally, `lsa-lsa: pisa check tally ... verdict PASS|FAIL` - FAIL on any mismatch or any rank that differed - and the run's last tally line is its gate verdict.
+After each check the first rank prints the run's tally, `lsa: pisa check tally ... verdict PASS|FAIL` - FAIL on any mismatch or any rank that differed - and the run's last tally line is its gate verdict.
 
 ## The prompt files
 

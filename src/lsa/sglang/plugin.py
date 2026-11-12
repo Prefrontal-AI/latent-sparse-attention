@@ -1,4 +1,4 @@
-"""The hooks that arm a stock sglang with the design's indexer, registered from outside it.
+"""The hooks that enable the design's indexer in a stock sglang, registered from outside it.
 
 sglang discovers this through the `sglang.srt.plugins` entry point, calls `register` once per process before
 the engine starts, and applies what it registered. Nothing in sglang is modified, so the server runs a stock
@@ -8,20 +8,20 @@ The indexer's settings have no command-line flag of their own, because the parse
 They are one block of the model config instead - `--json-model-override-args '{"lsa": {...}}'`, or the same key in a
 checkpoint's config.json - which [settings](settings/__init__.py) parses and every reader below takes its config to find.
 
-## When a process arms
+## When a process is enabled
 
 The plugin loads in every process, before any model config exists, and sglang applies a hook for good, so the choice of hooks cannot
 wait for a block and cannot be made without one. Two schemes were open: register every hook always and have each gate on the block, or
-register one hook on the model config and arm the rest from it.
+register one hook on the model config and enable the rest from it.
 The second is the one here, for two reasons.
 A gate on `_forward_fa3`, the backends' forwards and the memory estimates would cost a native server a wrapper on every call, and the
 indexer is a class replacement, which cannot gate - the checkpoint's own indexer must stay the class a native server builds.
 And every process that runs a model builds a model config before the hooked code runs: the scheduler builds it in its constructor,
 so each tensor-parallel and pipeline rank has it before a layer, a pool or a backend exists, and the entrypoint's own resolution
 builds one in the process that tokenizes.
-So `register` carries `configure` on `ModelConfig.__init__`, and `configure` arms the process, once, from the
+So `register` carries `configure` on `ModelConfig.__init__`, and `configure` enables the process, once, from the
 block it finds. A server with no block registers nothing else, and each of its configs costs one attribute read.
-`apply_hooks` is idempotent and rebinds a name other modules imported, so arming after sglang's modules loaded patches what a
+`apply_hooks` is idempotent and rebinds a name other modules imported, so enabling the indexer after sglang's modules loaded patches what a
 registration at load would have.
 
 The model calls its indexer with `x`, the attention's input, at the call site its own DSA indexer reads it at, so
@@ -46,7 +46,7 @@ the scheduler has published it - has the symbols those layouts are read through 
 
 Qwen3.8-27B is a dense model with no indexer to replace, so its hooks sit on the attention backends its sixteen
 full-attention layers attend through - FlashAttention's, and triton's, which decodes under decode context parallel,
-behind the hybrid wrapper - and [qwen3_5](models/qwen3_5/backend.py) says how: a backend's constructor arms it with an
+behind the hybrid wrapper - and [qwen3_5](models/qwen3_5/backend.py) says how: a backend's constructor enables it with an
 indexer for every quadratic layer when the model is grouped-query, its two metadata calls maintain the index, and its
 `forward_extend` and `forward_decode` select from the key and query input and read the selection. On any other model
 they hand every call on unchanged, so both families' hooks are registered on every server and each acts on its own
@@ -54,7 +54,7 @@ model alone.
 
 A flat decode captures one CUDA graph for each range of context and replays the narrowest that covers the batch's
 longest request, so the index kernels are sized to the range instead of the server's context length.
-`arm_context_graphs` hands sglang's decode runner the ranges as the attention variants it already keys a graph by,
+`enable_context_graphs` hands sglang's decode runner the ranges as the attention variants it already keys a graph by,
 and [context_buckets](context_buckets.py) says how a replay picks one and how a capture reads which it is sized to.
 A descending decode captures one graph and takes no ranges: its shapes are fixed by the design and the levels the server's
 longest context grows, never by the request in the batch.
@@ -62,7 +62,7 @@ It is captured as it is, and a design with shaped node buckets builds no tree fo
 
 PISA is a second selector in the same plugin, named by the block's `selector`, and reads no projection file. On GLM it
 replaces the same indexer class and takes the same backend and memory hooks and the same two hooks of the key and query input.
-On a grouped-query model it takes LSA's backend hooks with its own arming and read, a list a key-value head. It serves tensor
+On a grouped-query model it takes LSA's backend hooks with its own setup and read, a list a key-value head. It serves tensor
 parallel only, so it registers none of the context-parallel layouts.
 
 An early budget shortens the lists below its position, which FA3 and FlashMLA read through the exact lengths and the
@@ -78,7 +78,7 @@ attach leaves a server running the checkpoint's own indexer under an LSA label. 
 before anything is registered, and the banner is printed only once they all did.
 
 What another process reads - the two banners, the plugin's name and the block's key - is [constants](constants.py). The dotted
-paths below are not, and stay next to the loop that resolves them: the arming indexes `TARGETS` positionally to
+paths below are not, and stay next to the loop that resolves them: enabling indexes `TARGETS` positionally to
 pair each target with its hook, and a reader who has to open another file to learn what `TARGETS[3]` is has lost
 the registration.
 """
@@ -152,7 +152,7 @@ TRITON: str = "sglang.srt.layers.attention.triton_backend.TritonAttnBackend"
 # The backends a grouped-query model's quadratic layers are served through
 GROUPED_QUERY_BACKENDS: tuple[str, ...] = (FLASH_ATTENTION, TRITON)
 
-# What each of them is hooked at - the constructor, which arms it, its eager and captured metadata calls, which
+# What each of them is hooked at - the constructor, which enables it, its eager and captured metadata calls, which
 # maintain the index, and the two forwards, which select and read
 GROUPED_QUERY_METHODS: tuple[str, ...] = (
     "__init__",
@@ -249,7 +249,7 @@ def resolve(target: str) -> object:
 
 
 def configure(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
-    """Arm this process from the settings its model config carries, and size the config for the design's list.
+    """Enable this process from the settings its model config carries, and size the config for the design's list.
 
     A config with no block is left exactly as it was, which is every config of a native server.
     A block is read from wherever the override landed and put on the text config too, since the indexer
@@ -273,7 +273,7 @@ def configure(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
 
     Raises:
         ValueError: The block is refused.
-        RuntimeError: This process was armed with other settings, or a target no longer resolves.
+        RuntimeError: This process was enabled with other settings, or a target no longer resolves.
     """
     text = getattr(self, "hf_text_config", None)
     if text is None or getattr(self, "is_draft_model", False):
@@ -283,7 +283,7 @@ def configure(result: None, self: Any, *args: Any, **kwargs: Any) -> None:
         return None
     if settings.block_of(text) is None:
         setattr(text, Plugin.BLOCK, settings.block_of(self.hf_config))
-    arm(served)
+    enable(served)
     if served.pisa is not None:
         return size_pisa_lists(text, served.pisa)
     if served.design is None:
@@ -375,7 +375,7 @@ def require_context_parallel(design: DesignSettings) -> None:
     missing = unresolved(wanted)
     if missing:
         raise RuntimeError(
-            "lsa-lsa cannot serve context parallel on this sglang - these symbols no longer resolve: "
+            "lsa cannot serve context parallel on this sglang - these symbols no longer resolve: "
             + "; ".join(missing)
         )
     return None
@@ -598,7 +598,7 @@ def tilelang(original: Any, self: Any, *args: Any, early_width: int, **kwargs: A
     return original(*bound.args, **bound.kwargs)
 
 
-def arm_context_graphs(original: Any, self: Any, *args: Any, **kwargs: Any) -> Any:
+def enable_context_graphs(original: Any, self: Any, *args: Any, **kwargs: Any) -> Any:
     """Capture a decode graph a context range, by handing the runner the ranges as its attention variants.
 
     Called once per capture of the decode runner, before it loops over batch sizes, so every size is captured
@@ -626,7 +626,7 @@ def arm_context_graphs(original: Any, self: Any, *args: Any, **kwargs: Any) -> A
         context_length = self.model_runner.model_config.context_len
         buckets = context_buckets.ContextBuckets.under(design.serving.decode_context_limits, context_length)
         if buckets is not None:
-            logger.info("lsa-lsa: decode graphs for contexts up to %s and %d", buckets.limits, context_length)
+            logger.info("lsa: decode graphs for contexts up to %s and %d", buckets.limits, context_length)
             self.attention_graph_variants = buckets
     return original(self, *args, **kwargs)
 
@@ -677,7 +677,7 @@ def refuse_metadata_glue() -> None:
 
     if envs.SGLANG_ENABLE_METADATA_GLUE_GRAPH.get():
         raise RuntimeError(
-            "lsa-lsa maintains its index from init_forward_metadata_out_graph, and the metadata glue "
+            "lsa maintains its index from init_forward_metadata_out_graph, and the metadata glue "
             "graph captures that call and replays the recording - which would leave every index frozen at "
             "its capture step and score as though nothing were wrong. Unset "
             "SGLANG_ENABLE_METADATA_GLUE_GRAPH to serve LSA"
@@ -694,11 +694,11 @@ def register_context_graphs() -> bool:
         for target in CONTEXT_GRAPH_TARGETS:
             resolve(target)
     except (AttributeError, ModuleNotFoundError, ImportError) as absent:
-        logger.info("lsa-lsa: one decode graph, no context ranges - %s", absent)
+        logger.info("lsa: one decode graph, no context ranges - %s", absent)
         return False
     from sglang.srt.plugins.hook_registry import HookRegistry, HookType
 
-    HookRegistry.register(CONTEXT_GRAPH_TARGETS[0], arm_context_graphs, HookType.AROUND)
+    HookRegistry.register(CONTEXT_GRAPH_TARGETS[0], enable_context_graphs, HookType.AROUND)
     return True
 
 
@@ -774,18 +774,18 @@ def register_native_dump(dump: DumpSettings) -> None:
     try:
         resolve(QSA_INDEXER)
     except (AttributeError, ModuleNotFoundError, ImportError) as absent:
-        logger.info("lsa-lsa: no QSA indexer to dump - %s (%s)", QSA_INDEXER, absent)
+        logger.info("lsa: no QSA indexer to dump - %s (%s)", QSA_INDEXER, absent)
         return None
     HookRegistry.register(QSA_INDEXER, partial(dump_qsa, dump=dump), HookType.AFTER)
     return None
 
 
-def arm_pisa(config: PisaConfig) -> None:
-    """Arm PISA on this process - GLM's through the same hooks as LSA's key and query input, without the projections, the
+def enable_pisa(config: PisaConfig) -> None:
+    """Enable PISA on this process - GLM's through the same hooks as LSA's key and query input, without the projections, the
     context-parallel layouts and the decode graphs, and a grouped-query model's through LSA's backend hooks with PISA's
     selection and read.
 
-    Every target is resolved before any hook is registered, as every arming does.
+    Every target is resolved before any hook is registered, as it is whenever a process is enabled.
 
     Args:
         config: The pyramid the settings block names.
@@ -807,8 +807,7 @@ def arm_pisa(config: PisaConfig) -> None:
     )
     if missing:
         raise RuntimeError(
-            "lsa-lsa cannot attach PISA to this sglang - these targets no longer resolve: "
-            + "; ".join(missing)
+            "lsa cannot attach PISA to this sglang - these targets no longer resolve: " + "; ".join(missing)
         )
 
     refuse_metadata_glue()
@@ -833,9 +832,9 @@ def arm_pisa(config: PisaConfig) -> None:
         (KEY_AND_QUERY_TARGETS[1], prepare, HookType.AFTER),
         (REPOINT_TARGET, pisa.reopen_repointed, HookType.BEFORE),
     )
-    # A grouped-query model's quadratic layers - armed only where the model is one, so GLM's backends are left alone
+    # A grouped-query model's quadratic layers - enabled only where the model is one, so GLM's backends are left alone
     grouped_query_hooks: dict[str, tuple[Any, Any]] = {
-        "__init__": (grouped_query_pisa.arm, HookType.AFTER),
+        "__init__": (grouped_query_pisa.enable, HookType.AFTER),
         "init_forward_metadata": (backend.maintain, HookType.BEFORE),
         "init_forward_metadata_out_graph": (backend.maintain_out_graph, HookType.BEFORE),
         "forward_extend": (grouped_query_pisa.select_and_read, HookType.AROUND),
@@ -853,11 +852,11 @@ def arm_pisa(config: PisaConfig) -> None:
 
     label = f"pisa-block_size{config.block_size}-keep_count{config.keep_count}-branching{config.branching}-beam{config.beam}"
     print(f"{Banner.READY} {label} width {config.width} from the model config's {Plugin.BLOCK!r}", flush=True)
-    logger.info("lsa-lsa: %d hooks registered for PISA, index keys elided", len(hooks))
+    logger.info("lsa: %d hooks registered for PISA, index keys elided", len(hooks))
 
 
-def arm_lsa(design: DesignSettings) -> None:
-    """Arm the design's indexer on this process.
+def enable_lsa(design: DesignSettings) -> None:
+    """Enable the design's indexer on this process.
 
     Every target is resolved before any hook is registered, so a rename upstream fails here with the name in the
     message rather than silently leaving a server that runs the checkpoint's indexer under an LSA label.
@@ -888,7 +887,7 @@ def arm_lsa(design: DesignSettings) -> None:
     )
     if missing:
         raise RuntimeError(
-            "lsa-lsa cannot attach to this sglang - these targets no longer resolve: " + "; ".join(missing)
+            "lsa cannot attach to this sglang - these targets no longer resolve: " + "; ".join(missing)
         )
 
     refuse_metadata_glue()
@@ -909,7 +908,7 @@ def arm_lsa(design: DesignSettings) -> None:
         (TARGETS[10], memory.report, HookType.AFTER),
     )
     grouped_query_hooks: dict[str, tuple[Any, Any]] = {
-        "__init__": (backend.arm, HookType.AFTER),
+        "__init__": (backend.enable, HookType.AFTER),
         "init_forward_metadata": (backend.maintain, HookType.BEFORE),
         "init_forward_metadata_out_graph": (backend.maintain_out_graph, HookType.BEFORE),
         "forward_extend": (backend.select_and_read, HookType.AROUND),
@@ -943,11 +942,11 @@ def arm_lsa(design: DesignSettings) -> None:
         f"from the model config's {Plugin.BLOCK!r}",
         flush=True,
     )
-    logger.info("lsa-lsa: %d hooks registered, index keys elided", registered)
+    logger.info("lsa: %d hooks registered, index keys elided", registered)
 
 
-def arm_native_dump(dump: DumpSettings) -> None:
-    """Arm the dump of what the checkpoint's own indexer reads, for a server whose block names no design.
+def enable_native_dump(dump: DumpSettings) -> None:
+    """Enable the dump of what the checkpoint's own indexer reads, for a server whose block names no design.
 
     Args:
         dump: The settings block's `debug.dump`.
@@ -956,36 +955,36 @@ def arm_native_dump(dump: DumpSettings) -> None:
 
     register_native_dump(dump)
     HookRegistry.apply_hooks()
-    logger.info("lsa-lsa: dumping the native indexer's x")
+    logger.info("lsa: dumping the native indexer's x")
 
 
-# What this process was armed with, so that a second config in it is held to the same settings
-ARMED: list[PluginSettings] = []
+# What this process was enabled with, so that a second config in it is held to the same settings
+ENABLED: list[PluginSettings] = []
 
 
-def arm(served: PluginSettings) -> None:
+def enable(served: PluginSettings) -> None:
     """Register the hooks the settings ask for, once per process.
 
     Args:
         served: What the model config's block asks of this server, which is not the checkpoint's own with no checks.
 
     Raises:
-        RuntimeError: This process was armed with other settings, a target no longer resolves, or the metadata glue graph is on.
+        RuntimeError: This process was enabled with other settings, a target no longer resolves, or the metadata glue graph is on.
     """
-    if ARMED:
-        if ARMED[0] != served:
+    if ENABLED:
+        if ENABLED[0] != served:
             raise RuntimeError(
-                f"this process was armed from one {Plugin.BLOCK!r} block, which names {ARMED[0].selector}, and a "
+                f"this process was enabled from one {Plugin.BLOCK!r} block, which names {ENABLED[0].selector}, and a "
                 f"second model config carries another, which names {served.selector} - a server runs one block"
             )
         return None
     if served.pisa is not None:
-        arm_pisa(served.pisa)
+        enable_pisa(served.pisa)
     elif served.design is not None:
-        arm_lsa(served.design)
+        enable_lsa(served.design)
     elif served.debug.dumps:
-        arm_native_dump(served.debug.dump)
-    ARMED.append(served)
+        enable_native_dump(served.debug.dump)
+    ENABLED.append(served)
     return None
 
 
@@ -993,8 +992,8 @@ def register() -> None:
     """Carry the plugin's one standing hook, on the model config.
 
     Called once per process by sglang's plugin loader, before any config exists.
-    Whether to arm is not known yet, and sglang applies a hook for good, so nothing a design needs is
-    registered here: `configure` runs after every model config is built, finds the block, and arms the process
+    Whether to enable is not known yet, and sglang applies a hook for good, so nothing a design needs is
+    registered here: `configure` runs after every model config is built, finds the block, and enables the process
     then - which every process that runs a model does before it builds one.
     A server with no block pays one attribute read per model config it builds.
 
@@ -1003,9 +1002,9 @@ def register() -> None:
     """
     missing = unresolved((MODEL_CONFIG,))
     if missing:
-        raise RuntimeError("lsa-lsa cannot read its settings from this sglang - " + "; ".join(missing))
+        raise RuntimeError("lsa cannot read its settings from this sglang - " + "; ".join(missing))
 
     from sglang.srt.plugins.hook_registry import HookRegistry, HookType
 
     HookRegistry.register(MODEL_CONFIG, configure, HookType.AFTER)
-    logger.info("lsa-lsa: settings are read from the model config's %r block", Plugin.BLOCK)
+    logger.info("lsa: settings are read from the model config's %r block", Plugin.BLOCK)

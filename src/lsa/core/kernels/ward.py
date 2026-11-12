@@ -38,7 +38,7 @@ def warn_of_the_fallback(pool_keys: torch.Tensor, precision: str) -> None:
         return
     WARNED.add((pools, blocks))
     logger.warning(
-        "lsa-lsa: Ward merge of %d blocks of %d pools runs in Triton under kernels: cutedsl - "
+        "lsa: Ward merge of %d blocks of %d pools runs in Triton under kernels: cutedsl - "
         "more blocks than the GPU's %d SMs, where the CuTeDSL merge is slower",
         blocks,
         pools,

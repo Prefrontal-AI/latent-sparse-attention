@@ -1,14 +1,14 @@
 """Start a served model, wait until it is ready, and stop it - what every served experiment shares.
 
 The server is a stock sglang in a pinned container image with this package installed beside it, so what
-this module builds is a container invocation and a command line, and the plugin is armed by a block of the model
+this module builds is a container invocation and a command line, and the plugin is enabled by a block of the model
 config that the command line carries.
 It runs on the job host rather than in the container, so it imports no sglang.
 
 What runs against the server is the experiment's own - `lsa.evaluation.accuracy.job` scores it, the production
 ladder times it. This module owns the steps around that - the `sglang:` block that says how a server starts,
 writing the [settings](settings/design.py) where the record can quote them, starting the server, and waiting
-until it says LSA is armed.
+until it says LSA is enabled.
 
 A healthy port is not enough to start scoring. sglang's plugin loader logs a failed hook rather than raising
 it, so a server whose hooks did not apply would answer `/health` and quietly run the checkpoint's own
@@ -46,7 +46,7 @@ class SglangConfig:
     The server is a stock sglang in a container image, with `lsa.sglang` installed beside it as a plugin.
     So what this block carries is the image and the server's own command line, which is this repository's to
     own now that no flag of it belongs elsewhere. The design it runs is not here - it is the settings block
-    the plugin is armed with, written from `model.indexer` and `model.serving` and carried on the command line
+    the plugin is enabled with, written from `model.indexer` and `model.serving` and carried on the command line
     by `with_settings`.
 
     What it does not carry is anything the cluster already knows. `image` is a docker tag and enroot caches
@@ -589,7 +589,7 @@ def serve(backend: SglangConfig, model: str, settings: Path | None, log: Path) -
     Raises:
         NotNamed: `backend.image` is empty.
         TimeoutError: The server did not answer `/health` within `backend.startup_minutes`.
-        RuntimeError: The server exited before it was ready, or came up without the plugin armed.
+        RuntimeError: The server exited before it was ready, or came up without the plugin enabled.
     """
     require_image(backend.image)
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -614,13 +614,13 @@ def serve(backend: SglangConfig, model: str, settings: Path | None, log: Path) -
             start_new_session=True,
         )
         try:
-            wait_ready(process, backend, log, armed=settings is not None, model=model)
+            wait_ready(process, backend, log, enabled=settings is not None, model=model)
             yield f"http://127.0.0.1:{backend.port}"
         finally:
             stop(process)
 
 
-def plugin_armed(log: Path) -> bool:
+def plugin_enabled(log: Path) -> bool:
     """Return whether the plugin attached and was then actually reached.
 
     Two banners rather than one, because the first run showed the difference. The hooks registered, the
@@ -660,7 +660,7 @@ def wait_ready(
     process: subprocess.Popen[bytes],
     backend: SglangConfig,
     log: Path,
-    armed: bool = False,
+    enabled: bool = False,
     model: str = "",
 ) -> None:
     """Block until the server answers, is the one this run started, and has the hooks it claims.
@@ -680,7 +680,7 @@ def wait_ready(
         process: The running server, watched so a crashed load fails here rather than at the deadline.
         backend: The launch block, whose `startup_minutes` is the deadline.
         log: The server's own output, whose tail goes into the message.
-        armed: Whether this run needs the plugin, which is every run but the native baseline.
+        enabled: Whether this run needs the plugin, which is every run but the native baseline.
         model: The checkpoint this run asked for, or "" not to check it.
 
     Raises:
@@ -699,7 +699,7 @@ def wait_ready(
                     f"port {backend.port} is answering for {answered} rather than {model} - another run "
                     f"holds it, so give this one its own run.port rather than scoring against theirs"
                 )
-            if armed and not plugin_armed(log):
+            if enabled and not plugin_enabled(log):
                 raise RuntimeError(
                     f"the server is up but never printed both {Banner.READY!r} and {Banner.BUILT!r} - its "
                     f"hooks did not apply or were never reached, so it is running the checkpoint's own "

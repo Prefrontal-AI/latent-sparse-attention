@@ -17,7 +17,7 @@ from lsa.sglang.launch import (
     derived_ports,
     free_port,
     launch_line,
-    plugin_armed,
+    plugin_enabled,
     serve,
     serve_environment,
     server_command,
@@ -214,24 +214,24 @@ def test_a_launch_with_no_image_refuses(tmp_path):
 def test_a_server_that_never_armed_is_not_ready(tmp_path):
     log = tmp_path / "server.log"
     log.write_text("some sglang output\nno banner here\n")
-    assert not plugin_armed(log)
+    assert not plugin_enabled(log)
 
 
 def test_armed_alone_is_not_ready(tmp_path):
     log = tmp_path / "server.log"
     # The hooks registered and the model still asked for another class - this is what the first run did
     log.write_text(f"loading\n{Banner.READY} lsa-top_level0 width 2560\nserving\n")
-    assert not plugin_armed(log)
+    assert not plugin_enabled(log)
 
 
 def test_both_banners_mean_lsa_was_reached(tmp_path):
     log = tmp_path / "server.log"
     log.write_text(f"{Banner.READY} lsa-top_level0 width 2560\n{Banner.BUILT} layer 3\n")
-    assert plugin_armed(log)
+    assert plugin_enabled(log)
 
 
-def test_a_missing_log_has_not_armed(tmp_path):
-    assert not plugin_armed(tmp_path / "absent.log")
+def test_a_missing_log_is_not_enabled(tmp_path):
+    assert not plugin_enabled(tmp_path / "absent.log")
 
 
 def test_settings_are_written_where_they_were_asked_for(tmp_path):
@@ -292,7 +292,7 @@ def test_the_banner_check_still_applies_to_the_right_checkpoint(tmp_path, monkey
     log = tmp_path / "server.log"
     log.write_text("no banner here\n")
     with pytest.raises(RuntimeError, match="hooks did not apply"):
-        wait_ready(FakeProcess(), backend_at(tmp_path), log, armed=True, model=MODEL)
+        wait_ready(FakeProcess(), backend_at(tmp_path), log, enabled=True, model=MODEL)
 
 
 @pytest.mark.parametrize(
@@ -332,7 +332,7 @@ def started_with(tmp_path, monkeypatch, backend, settings=None):
     ready_at(monkeypatch, MODEL)
     log = tmp_path / "server.log"
     # A server that runs the plugin has printed both banners by the time it answers
-    monkeypatch.setattr("lsa.sglang.launch.plugin_armed", lambda _: True)
+    monkeypatch.setattr("lsa.sglang.launch.plugin_enabled", lambda _: True)
     with serve(backend, MODEL, settings, log) as url:
         pass
     return url, seen["argv"][-1]

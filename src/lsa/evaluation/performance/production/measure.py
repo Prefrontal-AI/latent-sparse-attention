@@ -1,7 +1,7 @@
 """Drive sglang's serving benchmark against a live server, one client process per length.
 
 The server is the one `launch.serve` starts for a scored run, with the same image, the same plugin and the
-same arming check - only what is asked of it differs. The client is sglang's own, already in that image, so
+same enabling check - only what is asked of it differs. The client is sglang's own, already in that image, so
 it runs there too: a step of its own on the node that answers http, holding no GPU, pointed at the server.
 
 A length whose samples already exist is kept, and the ladder stops at the first length that fails. That is

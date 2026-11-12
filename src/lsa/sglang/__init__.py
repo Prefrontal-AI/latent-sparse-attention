@@ -13,7 +13,7 @@ modified.
 |---|---|
 | [plugin](plugin.py) | the entry point sglang calls, and the hooks that stand in for the fork's edits |
 | [constants](constants.py) | what a reader outside the process matches on - the banners above all - and where a server runs |
-| [launch](launch.py) | the container, the server's command line, and the wait until it says LSA is armed |
+| [launch](launch.py) | the container, the server's command line, and the wait until it says LSA is enabled |
 | [settings](settings/__init__.py) | the block of the model config a server runs under - the design's `DesignSettings`, its indexer knobs and serving choices under their config keys, the `debug` checks - and which combinations the kernels can serve |
 | [index](index/__init__.py) | the selection every model shares - the bucket cache, the clustering, the hierarchy, the selector, the paged read, the top-k, the live indexers |
 | [models](models/__init__.py) | one package per model, named by its `model_type` - what LSA needs of that checkpoint alone |

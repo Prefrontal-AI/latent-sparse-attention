@@ -479,7 +479,7 @@ class CheckTally:
         """Return the run's tally so far and its verdict - FAIL on any mismatch or any rank that differed."""
         failed = self.counts["MISMATCH"] or self.rank_differences
         return (
-            f"lsa-lsa: pisa check tally rows {sum(self.counts.values())} exact {self.counts['exact']} "
+            f"lsa: pisa check tally rows {sum(self.counts.values())} exact {self.counts['exact']} "
             f"near-tie {self.counts['near-tie']} mismatch {self.counts['MISMATCH']} "
             f"rank-checks {self.rank_checks} rank-differences {self.rank_differences} left-batch {self.left_batch} "
             f"near-tie-gap {NEAR_TIE_GAP:g} "
@@ -511,7 +511,7 @@ def report_check(label: str, rows: Sequence[CheckedRow]) -> None:
         return
     for row, verdict in zip(rows, verdicts, strict=True):
         print(
-            f"lsa-lsa: pisa check {label} position {row.position} - {row.both} of the reference's {row.wanted} keys, "
+            f"lsa: pisa check {label} position {row.position} - {row.both} of the reference's {row.wanted} keys, "
             f"served {row.served}, {verdict} at gap {row.gap:.2e}",
             flush=True,
         )
@@ -528,7 +528,7 @@ def report_left(layer: int, positions: Sequence[int]) -> None:
     TALLY.left_batch += len(positions)
     if positions and first_rank():
         print(
-            f"lsa-lsa: pisa check layer {layer} captured decode skipped positions {list(positions)} - "
+            f"lsa: pisa check layer {layer} captured decode skipped positions {list(positions)} - "
             "the request left the batch, so its table row may hold another's",
             flush=True,
         )

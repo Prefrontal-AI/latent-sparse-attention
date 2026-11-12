@@ -47,7 +47,7 @@ class Backend:
 
 
 @pytest.fixture
-def armed(monkeypatch):
+def enabled(monkeypatch):
     monkeypatch.setattr(registry, "INDEXERS", [])
     monkeypatch.setattr(registry, "ANNOUNCED", set())
     monkeypatch.setattr(torch.cuda, "memory_allocated", lambda device=None: 0)
@@ -100,8 +100,8 @@ def queries_for(count, seed):
     return torch.randn(count, 24, 256, generator=generator).bfloat16()
 
 
-def test_each_key_head_selects_what_the_reference_selects_for_it_from_its_own_group(armed):
-    attention, indexer = armed
+def test_each_key_head_selects_what_the_reference_selects_for_it_from_its_own_group(enabled):
+    attention, indexer = enabled
     # A prefill of two requests, then a decode step of each
     queries = queries_for(48 + 40, seed=1)
     prefill = batch(True, [0, 1], list(range(48)) + list(range(40)), [48, 40], [48, 40])
@@ -118,8 +118,8 @@ def test_each_key_head_selects_what_the_reference_selects_for_it_from_its_own_gr
     assert served_sets(attention, 1, lists[1:]) == reference_sets(attention, 1, 41, step[1:], [40])
 
 
-def test_the_key_heads_select_apart_where_their_keys_differ(armed):
-    attention, indexer = armed
+def test_the_key_heads_select_apart_where_their_keys_differ(enabled):
+    attention, indexer = enabled
     prefill = batch(True, [0], list(range(64)), [64], [64])
     indexer.maintain(prefill)
     lists = served_sets(
@@ -210,7 +210,7 @@ def test_a_mesh_that_splits_the_query_heads_unevenly_is_refused():
 
 
 def test_only_a_qwen_backend_is_armed_and_with_a_list_a_key_head_it_holds(monkeypatch):
-    monkeypatch.setattr(grouped_query_pisa, "ARMED", {})
+    monkeypatch.setattr(grouped_query_pisa, "ENABLED", {})
     monkeypatch.setattr(registry, "INDEXERS", [])
     monkeypatch.setattr(registry, "ANNOUNCED", set())
     monkeypatch.setattr(
@@ -221,13 +221,13 @@ def test_only_a_qwen_backend_is_armed_and_with_a_list_a_key_head_it_holds(monkey
     block = SimpleNamespace(lsa={**CONFIG.body(), "debug": {"check_pisa": {"rows": 3}}})
     glm = SimpleNamespace(model_config=SimpleNamespace(hf_config=block, hf_text_config=GLM))
     plain = SimpleNamespace()
-    grouped_query_pisa.arm(None, plain, glm)
+    grouped_query_pisa.enable(None, plain, glm)
     assert not hasattr(plain, backend.INDEXERS)
     qwen = SimpleNamespace(
         model_config=SimpleNamespace(hf_config=block, hf_text_config=QWEN38["text_config"])
     )
     served = SimpleNamespace()
-    grouped_query_pisa.arm(None, served, qwen)
+    grouped_query_pisa.enable(None, served, qwen)
     indexers = getattr(served, backend.INDEXERS)
     assert sorted(indexers) == list(index_space.geometry_of(QWEN38).layers)
     assert {indexer.kv_head_count for indexer in indexers.values()} == {2}
@@ -237,8 +237,8 @@ def test_only_a_qwen_backend_is_armed_and_with_a_list_a_key_head_it_holds(monkey
     assert {indexer.check_rows for indexer in indexers.values()} == {3}
 
 
-def test_a_captured_prefill_is_refused_with_the_way_out(armed, monkeypatch):
-    attention, indexer = armed
+def test_a_captured_prefill_is_refused_with_the_way_out(enabled, monkeypatch):
+    attention, indexer = enabled
     setattr(attention, backend.INDEXERS, {LAYER: indexer})
     monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
     layer = SimpleNamespace(layer_id=LAYER)
@@ -275,7 +275,7 @@ def test_the_debugging_check_starts_once_the_request_holds_the_keys_it_is_set_to
     for line in rows:
         held, wanted = line.split(" - ")[1].split(" of the reference's ")
         assert held == wanted.split()[0] and ", exact at gap" in line
-    assert printed[-1].startswith("lsa-lsa: pisa check tally rows 8 exact 8 ") and printed[-1].endswith(
+    assert printed[-1].startswith("lsa: pisa check tally rows 8 exact 8 ") and printed[-1].endswith(
         "verdict PASS"
     )
 

@@ -94,7 +94,7 @@ run:
     SGLANG_JIT_DEEPGEMM_FAST_WARMUP: "1"
     SGLANG_DEEPGEMM_STANDARD_LAYOUT: masked
   # The root, not the run's own directory. A run writes one directory under it, named by the run id the
-  # config derives, holding what was armed and what it scored.
+  # config derives, holding what was enabled and what it scored.
   #
   # It stays a bare root because the root is deliberately shared by every experiment in the repository -
   # that is what lets a records reader put two configurations side by side. Interpolating the run name in here

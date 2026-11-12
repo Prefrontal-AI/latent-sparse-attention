@@ -1,7 +1,7 @@
-"""The hooks that arm a stock sglang with the design's indexer, exercised without sglang or a GPU.
+"""The hooks that enable the design's indexer in a stock sglang, exercised without sglang or a GPU.
 
 What is worth testing here is the handover: that every target the plugin patches is named, that each hook
-does to its arguments what it should, that a model config with a block arms the process with the indexer and the
+does to its arguments what it should, that a model config with a block enables the process with the indexer and the
 elision and one without registers nothing, and that the projection file is checked against the model before it loads.
 The selection past that point is tested in test_selector, and the indexer's own path in test_layer_index.
 """
@@ -46,14 +46,14 @@ def served(block):
 
 @pytest.fixture(autouse=True)
 def fresh_process(monkeypatch):
-    """Every test starts from a process nothing has armed."""
-    monkeypatch.setattr(plugin, "ARMED", [])
+    """Every test starts from a process nothing has enabled."""
+    monkeypatch.setattr(plugin, "ENABLED", [])
 
 
 @pytest.fixture
 def unarmed(monkeypatch):
-    """Leave arming to its own tests, so the config hook is seen alone."""
-    monkeypatch.setattr(plugin, "arm", lambda served: None)
+    """Leave enabling to its own tests, so the config hook is seen alone."""
+    monkeypatch.setattr(plugin, "enable", lambda served: None)
 
 
 def write_maps(tmp_path, layers=(3, 7), model_dim=16, index_dim=8):
@@ -86,7 +86,7 @@ def fake_indexer_module(monkeypatch):
 
 def test_a_server_that_asks_for_lsa_without_a_projection_file_is_refused(tmp_path):
     with pytest.raises(RuntimeError, match="projections"):
-        plugin.arm(served(block_of(tmp_path, projections="")))
+        plugin.enable(served(block_of(tmp_path, projections="")))
 
 
 def test_a_target_that_no_longer_resolves_is_named_and_nothing_is_registered(monkeypatch, tmp_path):
@@ -99,7 +99,7 @@ def test_a_target_that_no_longer_resolves_is_named_and_nothing_is_registered(mon
 
     monkeypatch.setattr(plugin, "resolve", resolve)
     with pytest.raises(RuntimeError, match="_forward_fa3"):
-        plugin.arm(served(block_of(tmp_path)))
+        plugin.enable(served(block_of(tmp_path)))
     assert registered == []
 
 
@@ -109,7 +109,7 @@ def test_a_model_config_with_no_block_arms_nothing(monkeypatch):
     plugin.configure(None, config)
     # The native baseline is the absence of a setting - no hook, and the config as it was
     assert registered == []
-    assert plugin.ARMED == []
+    assert plugin.ENABLED == []
     assert config.hf_text_config.index_topk == 2048
 
 
@@ -139,13 +139,13 @@ def test_a_process_armed_once_refuses_a_second_block_that_says_otherwise(monkeyp
     monkeypatch.setattr(plugin, "elide_index_keys", lambda: None)
     fake_indexer_module(monkeypatch)
     first = served(block_of(tmp_path))
-    plugin.arm(first)
+    plugin.enable(first)
     count = len(registered)
     # The same block again is the same server's other config - the main process builds more than one
-    plugin.arm(first)
+    plugin.enable(first)
     assert len(registered) == count
     with pytest.raises(RuntimeError, match="a server runs one block"):
-        plugin.arm(served(block_of(tmp_path, top_k=1024)))
+        plugin.enable(served(block_of(tmp_path, top_k=1024)))
 
 
 def test_the_elision_answers_yes_on_the_two_pool_modules_and_leaves_the_models_logic_alone(monkeypatch):
@@ -251,10 +251,10 @@ def test_a_block_that_arrived_on_the_text_config_is_found_there(tmp_path, model_
 
 def test_a_config_is_armed_from_its_block_before_it_is_sized(monkeypatch, tmp_path, model_config_module):
     write_maps(tmp_path)
-    armed = []
-    monkeypatch.setattr(plugin, "arm", armed.append)
+    enabled = []
+    monkeypatch.setattr(plugin, "enable", enabled.append)
     plugin.configure(None, config_with(block_of(tmp_path), FakeText()))
-    assert [item.design.indexer.top_k for item in armed] == [2048]
+    assert [item.design.indexer.top_k for item in enabled] == [2048]
 
 
 def test_a_refused_block_stops_the_launch_with_what_arrived(tmp_path, unarmed):
@@ -390,7 +390,7 @@ def test_the_attention_input_registers_neither_key_and_query_hook(monkeypatch, t
     monkeypatch.setattr(plugin, "refuse_metadata_glue", lambda: None)
     monkeypatch.setattr(plugin, "elide_index_keys", lambda: None)
     fake_indexer_module(monkeypatch)
-    plugin.arm(served(block_of(tmp_path)))
+    plugin.enable(served(block_of(tmp_path)))
     targets = {target for target, _, _ in registered}
     assert not targets & set(plugin.KEY_AND_QUERY_TARGETS)
 
@@ -474,7 +474,7 @@ def test_the_decode_runner_is_handed_the_context_ranges_narrower_than_the_server
         seen.append(self.attention_graph_variants)
         return "captured"
 
-    assert plugin.arm_context_graphs(capture, runner) == "captured"
+    assert plugin.enable_context_graphs(capture, runner) == "captured"
     narrower = tuple(limit for limit in DECODE_CONTEXT_LIMITS if limit < 2_000_000)
     assert seen == [context_buckets.ContextBuckets(narrower)]
 
@@ -482,10 +482,10 @@ def test_the_decode_runner_is_handed_the_context_ranges_narrower_than_the_server
 def test_the_decode_runner_keeps_variants_it_has_and_a_server_of_one_range(tmp_path):
     held = object()
     runner = decode_runner(block_of(tmp_path), 2_000_000, variants=held)
-    plugin.arm_context_graphs(lambda self: None, runner)
+    plugin.enable_context_graphs(lambda self: None, runner)
     assert runner.attention_graph_variants is held
     short = decode_runner(block_of(tmp_path), 100_000)
-    plugin.arm_context_graphs(lambda self: None, short)
+    plugin.enable_context_graphs(lambda self: None, short)
     assert short.attention_graph_variants is None
 
 
@@ -499,19 +499,19 @@ def test_a_descending_decode_is_captured_as_one_graph_whatever_the_context(tmp_p
         beam_width=2048,
     )
     runner = decode_runner(block, 2_000_000)
-    plugin.arm_context_graphs(lambda self: None, runner)
+    plugin.enable_context_graphs(lambda self: None, runner)
     assert runner.attention_graph_variants is None
 
 
 def test_a_runner_that_does_not_decode_is_left_with_one_graph(tmp_path):
     runner = decode_runner(block_of(tmp_path), 2_000_000, decoding=False)
-    plugin.arm_context_graphs(lambda self: None, runner)
+    plugin.enable_context_graphs(lambda self: None, runner)
     assert runner.attention_graph_variants is None
 
 
 def test_a_design_with_no_ranges_is_left_with_one_graph(tmp_path):
     runner = decode_runner(block_of(tmp_path, decode_context_limits=[]), 2_000_000)
-    plugin.arm_context_graphs(lambda self: None, runner)
+    plugin.enable_context_graphs(lambda self: None, runner)
     assert runner.attention_graph_variants is None
 
 
@@ -519,7 +519,7 @@ def test_the_context_graph_hook_is_registered_where_the_runner_has_variants(monk
     registered = fake_hook_registry(monkeypatch)
     monkeypatch.setattr(plugin, "resolve", lambda target: object())
     assert plugin.register_context_graphs()
-    assert registered == [(plugin.CONTEXT_GRAPH_TARGETS[0], plugin.arm_context_graphs, "around")]
+    assert registered == [(plugin.CONTEXT_GRAPH_TARGETS[0], plugin.enable_context_graphs, "around")]
 
 
 def test_an_image_without_the_runners_variants_serves_one_graph_and_registers_nothing(monkeypatch):
@@ -557,7 +557,7 @@ def test_the_block_names_the_selector_and_a_block_with_none_is_lsas(tmp_path):
 
 def test_pisa_needs_no_projection_file_and_registers_its_own_indexer_in_lsas_place(monkeypatch, capsys):
     registered, indexer = pisa_plugin(monkeypatch)
-    plugin.arm(served(pisa_block()))
+    plugin.enable(served(pisa_block()))
     hooks = {target: (hook, kind) for target, hook, kind in registered}
     assert hooks[plugin.TARGETS[1]] == (indexer, "replace")
     assert hooks[plugin.KEY_AND_QUERY_TARGETS[0]] == (plugin.gate, "around")
@@ -574,10 +574,10 @@ def test_pisa_arms_the_grouped_query_backends_with_its_own_selection_and_no_deco
     from lsa.sglang.models.qwen3_5 import pisa as grouped_query_pisa
 
     registered, _ = pisa_plugin(monkeypatch)
-    plugin.arm(served(pisa_block()))
+    plugin.enable(served(pisa_block()))
     hooks = {target: hook for target, hook, _ in registered}
     for attention in plugin.GROUPED_QUERY_BACKENDS:
-        assert hooks[f"{attention}.__init__"] is grouped_query_pisa.arm
+        assert hooks[f"{attention}.__init__"] is grouped_query_pisa.enable
         assert hooks[f"{attention}.forward_extend"] is grouped_query_pisa.select_and_read
         assert hooks[f"{attention}.forward_decode"] is grouped_query_pisa.select_and_read
         assert hooks[f"{attention}.init_forward_metadata"] is backend.maintain
@@ -592,7 +592,7 @@ def test_pisa_resolves_the_gather_it_reads_ranks_queries_through(monkeypatch):
         return object()
 
     pisa_plugin(monkeypatch, resolve)
-    plugin.arm(served(pisa_block()))
+    plugin.enable(served(pisa_block()))
     assert set(plugin.REQUIRED_PISA) <= set(wanted)
     assert not set(plugin.REQUIRED_CP) & set(wanted)
 
@@ -605,7 +605,7 @@ def test_a_target_pisa_reads_that_no_longer_resolves_is_named_and_nothing_is_reg
 
     registered, _ = pisa_plugin(monkeypatch, resolve)
     with pytest.raises(RuntimeError, match="attn_tp_all_gather_into_tensor"):
-        plugin.arm(served(pisa_block()))
+        plugin.enable(served(pisa_block()))
     assert registered == []
 
 
@@ -621,7 +621,7 @@ def test_a_block_with_only_debug_arms_the_dump_of_the_native_indexer_and_nothing
     registered = fake_hook_registry(monkeypatch)
     monkeypatch.setattr(plugin, "resolve", lambda target: object())
     dump = {"directory": str(tmp_path), "layers": [3]}
-    plugin.arm(served({"debug": {"dump": dump}}))
+    plugin.enable(served({"debug": {"dump": dump}}))
     assert {target for target, _, kind in registered if kind == "after"} == {
         *(f"{indexer}.forward_cuda" for indexer in plugin.NATIVE_INDEXERS),
         plugin.QSA_INDEXER,
@@ -675,5 +675,5 @@ def test_the_gate_stops_a_pisa_layers_indexer_too():
 def test_a_block_with_only_a_check_registers_nothing_for_the_checkpoints_own_indexer(monkeypatch):
     registered = fake_hook_registry(monkeypatch)
     monkeypatch.setattr(plugin, "resolve", lambda target: object())
-    plugin.arm(served({"debug": {"check_index": True}}))
+    plugin.enable(served({"debug": {"check_index": True}}))
     assert registered == []
