@@ -210,6 +210,8 @@ Make both once before the first run:
 ```bash
 # GLM-5.3-Flash, cut from the hub cache (hf download zai-org/GLM-5.3-Flash)
 lsa --site mycluster kernels cut --out "$LSA_ROOT/models/glm53_flash_real5"
+# GLM read densely, for the B300 baseline (b300_full)
+lsa --site mycluster kernels cut --dense --out "$LSA_ROOT/models/glm53_flash_real5_dense"
 # Qwen3.8-27B, cut from its pinned snapshot (hf download Qwen/Qwen3.8-27b)
 lsa --site mycluster kernels cut --snapshot "$HF_HOME/hub/models--Qwen--Qwen3.8-27b/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0" \
   --out "$LSA_ROOT/models/qwen38_27b_real5"
@@ -221,6 +223,7 @@ lsa --site mycluster data prepare production_qwen38
 ```
 
 The cut keeps five layers with their real weights by default, which is what every kernel config assumes.
+`--dense` nulls GLM's `index_topk` as well, so sglang reads the cut as dense MLA rather than DSA.
 The `qwen38_27b_qsa_real5` cut reads `qwen38_27b_qsa`, which `lsa distill inject` builds from the QSA indexer first, as in [Weights](#weights).
 The Qwen production prompts need the `qwen38_27b` tokenized dataset, and the GLM ones the `glm53_flash` one, see [Workloads](docs/guide/data.md#workloads).
 

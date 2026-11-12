@@ -30,3 +30,19 @@ def test_weights_can_be_left_to_a_dummy_load():
     args = cut.build_parser().parse_args(["--out", "x", "--no-weights"])
 
     assert args.weights is False
+
+
+def test_a_dense_cut_nulls_the_index_top_k():
+    config = {"text_config": {"model_type": "glm_moe_dsa", "index_topk": 2048}}
+
+    assert cut.densify(config)["text_config"]["index_topk"] is None
+
+
+def test_a_checkpoint_without_an_index_top_k_has_no_dense_cut():
+    with pytest.raises(ValueError, match="qwen3_5 has no index_topk"):
+        cut.densify({"text_config": {"model_type": "qwen3_5"}})
+
+
+def test_dense_is_off_unless_asked():
+    assert cut.build_parser().parse_args(["--out", "x"]).dense is False
+    assert cut.build_parser().parse_args(["--out", "x", "--dense"]).dense is True

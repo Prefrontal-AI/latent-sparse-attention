@@ -31,11 +31,12 @@ lsa distill targets configs/data/targets/glm53_flash/long_16k_1m_heavy_key_and_q
 lsa distill train configs/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048.yaml \
     --shards 11 --mem-gb 300 --hours 12 --partition <partition>
 lsa distill export $LSA_ROOT/training/distillation/glm53_flash/long_16k_1m_heavy_key_and_query_d2048 \
-    $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-key-and-query-d2048.pt
+    $LSA_ROOT/models/maps/glm53_flash__long-16k-1M-heavy-d2048-lr3e-4-latent.pt
 ```
 
 The indexer reads GLM's key latent and every head's query summed, which is what the server serves.
 The extraction keeps only those - `run.input: key_and_query`, a fifth of the attention input `x` on GLM - and the run trains a map of them, so `lsa distill export` writes the map the server reads.
+It writes it under the released map's name, the one every GLM evaluation config reads, so a trained map and the downloaded one are interchangeable.
 
 The extraction's `data.selection` declares which documents and windows it reads, balanced by length and domain.
 Extraction records the resolved selection as `selection.json` inside its target collection before loading weights.
@@ -69,7 +70,11 @@ A cache of `x` for Qwen3.8-27B over the heavy mix would be some 60 TiB, so its r
 lsa data prepare qwen38_27b --sources <source>          # the heavy mix's corpus in Qwen's ids, a job a source
 lsa distill train configs/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048.yaml \
     --gpus 8 --cpus 64 --mem-gb 1200 --hours 24 --partition <partition>
+lsa distill export $LSA_ROOT/training/distillation/qwen38_27b/long_16k_1m_heavy_key_and_query_d2048 \
+    $LSA_ROOT/models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt
 ```
+
+The export writes the released map's name, the one every Qwen evaluation config reads.
 
 The maps train on the first card and a copy of the model reads documents on each of the others, every layer of a document at once, into the same pool a cache feeds.
 The documents, their query positions and their targets are the extraction's own, so the targets are the ones `lsa distill targets` would have written.
