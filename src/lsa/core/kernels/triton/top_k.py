@@ -586,6 +586,7 @@ def _select(
     listing_stride: tl.tensor,
     out_stride: tl.tensor,
     columns: tl.tensor,
+    rows: tl.tensor,
     K: tl.constexpr,
     PAD: tl.constexpr,
     TILE: tl.constexpr,
@@ -598,26 +599,29 @@ def _select(
     A row whose listing fell short of its k, or overflowed, is searched across the whole row instead.
     That is done here for columns, and by `_repair` for keys, whose longer writes slow every row's select.
     """
-    row = tl.program_id(0).to(tl.int64)
-    length = tl.minimum(tl.load(lengths + row), columns)
-    want = tl.minimum(length, K)
-    slot = tl.arange(0, TILE)
-    out_row = out + row * out_stride
-    if LISTED:
-        total = tl.load(totals + row)
-        if (total >= want) & (total <= TILE):
-            live = slot < total
-            listed = tl.load(listing + row * listing_stride + slot, mask=live, other=0)
-            score = (listed >> 32).to(tl.int32).to(tl.float32, bitcast=True)
-            _choose(score, (listed & 0xFFFFFFFF).to(tl.int32), live, want, out_row, K, PAD, COLUMNS)
-        if COLUMNS:
-            if (total < want) | (total > TILE):
-                written = _search(scores + row * score_stride, out_row, length, want, BLOCK, COLUMNS)
-                _pad(out_row, written, K, PAD, COLUMNS)
-    else:
-        live = slot < length
-        score = tl.load(scores + row * score_stride + slot, mask=live, other=0.0)
-        _choose(score, slot, live, want, out_row, K, PAD, COLUMNS)
+    # A grid capped below the rows leaves a program several of them
+    # => program p takes rows p, p + programs, p + 2 programs, and one row on an uncapped grid
+    for program_row in range(tl.program_id(0), rows, tl.num_programs(0)):
+        row = tl.cast(program_row, tl.int64)
+        length = tl.minimum(tl.load(lengths + row), columns)
+        want = tl.minimum(length, K)
+        slot = tl.arange(0, TILE)
+        out_row = out + row * out_stride
+        if LISTED:
+            total = tl.load(totals + row)
+            if (total >= want) & (total <= TILE):
+                live = slot < total
+                listed = tl.load(listing + row * listing_stride + slot, mask=live, other=0)
+                score = (listed >> 32).to(tl.int32).to(tl.float32, bitcast=True)
+                _choose(score, (listed & 0xFFFFFFFF).to(tl.int32), live, want, out_row, K, PAD, COLUMNS)
+            if COLUMNS:
+                if (total < want) | (total > TILE):
+                    written = _search(scores + row * score_stride, out_row, length, want, BLOCK, COLUMNS)
+                    _pad(out_row, written, K, PAD, COLUMNS)
+        else:
+            live = slot < length
+            score = tl.load(scores + row * score_stride + slot, mask=live, other=0.0)
+            _choose(score, slot, live, want, out_row, K, PAD, COLUMNS)
 
 
 @triton.jit
@@ -629,20 +633,37 @@ def _repair(
     score_stride: tl.tensor,
     out_stride: tl.tensor,
     columns: tl.tensor,
+    rows: tl.tensor,
     K: tl.constexpr,
     PAD: tl.constexpr,
     CAPACITY: tl.constexpr,
     BLOCK: tl.constexpr,
 ) -> None:
     """Search a row whose listing fell short or overflowed across the whole row and write its keys."""
-    row = tl.program_id(0).to(tl.int64)
-    length = tl.minimum(tl.load(lengths + row), columns)
-    want = tl.minimum(length, K)
-    total = tl.load(totals + row)
-    if (total < want) | (total > CAPACITY):
-        out_row = out + row * out_stride
-        written = _search(scores + row * score_stride, out_row, length, want, BLOCK, False)
-        _pad(out_row, written, K, PAD, False)
+    # A grid capped below the rows leaves a program several of them
+    # => program p takes rows p, p + programs, p + 2 programs, and one row on an uncapped grid
+    for program_row in range(tl.program_id(0), rows, tl.num_programs(0)):
+        row = tl.cast(program_row, tl.int64)
+        length = tl.minimum(tl.load(lengths + row), columns)
+        want = tl.minimum(length, K)
+        total = tl.load(totals + row)
+        if (total < want) | (total > CAPACITY):
+            out_row = out + row * out_stride
+            written = _search(scores + row * score_stride, out_row, length, want, BLOCK, False)
+            _pad(out_row, written, K, PAD, False)
+
+
+def programs(rows: int) -> int:
+    """Return the programs a per-row launch over `rows` rows takes, capped where the backend needs it.
+
+    Args:
+        rows: Rows the launch covers.
+
+    Returns:
+        Programs in the grid, each stepping over rows that far apart.
+    """
+    most = TritonTopK.MOST_PROGRAMS
+    return rows if most is None else max(1, min(rows, most))
 
 
 def listing_plan(k: int, columns: int) -> tuple[int, int, int, int]:
@@ -839,7 +860,7 @@ class TopK:
         k = out.shape[1]
         pad = triton.next_power_of_2(k)
         if width <= TritonTopK.NARROW:
-            _select[(rows,)](
+            _select[(programs(rows),)](
                 scores,
                 lengths,
                 scores,
@@ -849,6 +870,7 @@ class TopK:
                 0,
                 out.stride(0),
                 width,
+                rows,
                 K=k,
                 PAD=pad,
                 TILE=triton.next_power_of_2(width),
@@ -911,7 +933,7 @@ class TopK:
                 STAGES=stages,
                 num_warps=warps,
             )
-        _select[(rows,)](
+        _select[(programs(rows),)](
             scores,
             lengths,
             listing,
@@ -921,6 +943,7 @@ class TopK:
             listing.stride(0),
             out.stride(0),
             width,
+            rows,
             K=k,
             PAD=pad,
             TILE=capacity,
@@ -930,7 +953,7 @@ class TopK:
             num_warps=TritonTopK.SELECT_WARPS,
         )
         if not columns:
-            _repair[(rows,)](
+            _repair[(programs(rows),)](
                 scores,
                 lengths,
                 totals,
@@ -938,6 +961,7 @@ class TopK:
                 scores.stride(0),
                 out.stride(0),
                 width,
+                rows,
                 K=k,
                 PAD=pad,
                 CAPACITY=capacity,
