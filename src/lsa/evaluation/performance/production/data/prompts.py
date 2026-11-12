@@ -1,6 +1,6 @@
 """Build the prompt files a production run sends - a workload card's, one file per length.
 
-    lsa data prepare production                     # the card's seven files, about four minutes, as a CPU job
+    lsa data prepare production                     # the card's nine files, about four minutes, as a CPU job
     lsa data prepare production_qwen38              # Qwen 3.8's, sized in its own tokens
     lsa data prepare production --lengths 131072 --out /tmp/prompts
 

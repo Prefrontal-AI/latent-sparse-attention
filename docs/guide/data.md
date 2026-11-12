@@ -15,7 +15,7 @@ python -c 'from lsa import assets; print(assets.tokenized("glm53_flash").manifes
 | `tokenized` | glm53_flash, gpt2, qwen3_5, qwen38_27b | some sources as one tokenizer's ids, in rows of `sample_length` |
 | `shards` | fineweb_edu_100bt | flat token files another pipeline wrote, read where they are - nothing prepares them |
 | `benchmark` | aime25, gpqa_diamond, graphwalks, longbench2, math500, mmlu_pro, ruler | what an accuracy run asks - a hub dataset at a pinned revision, or a generator and its grid |
-| `workload` | production | what a performance run sends, built from a tokenized dataset |
+| `workload` | concurrency, concurrency_qwen38, production, production_qwen38 | what a performance run sends, built from a tokenized dataset |
 
 A card's `kind:` picks its schema and has to match the directory it sits in.
 A name is one card across all five, so `assets.dataset(name)` finds it wherever it is, and `assets.source`, `assets.tokenized`, `assets.shards`, `assets.benchmark` and `assets.workload` read one kind.
@@ -251,8 +251,29 @@ The LongBench v2 file of 2026-09-21 was built from whatever snapshot that cache 
 ## Workloads
 
 ```bash
-lsa data prepare production      # the card's seven files, about four minutes
+lsa data prepare production            # nine files, one a length, about four minutes
+lsa data prepare production_qwen38     # the same in Qwen's tokens
+lsa data prepare concurrency           # six files
+lsa data prepare concurrency_qwen38    # five files
 ```
 
-The [production card](../../src/lsa/assets/datasets/workloads/production.yaml) names the tokenized dataset and the source its text is decoded from, the lengths and the entries per file, and a production run names the card as `data.workload`.
+A workload card names the tokenized dataset and the source its text is decoded from, the lengths and the entries per file, and writes one file per length, so the count of files is the count of lengths.
+A production run names its card as `data.workload`, and its text is gutenberg rows of the card's tokenized dataset, so that dataset is the prerequisite: `lsa data prepare glm53_flash --sources gutenberg` for the GLM cards, and `lsa data prepare qwen38_27b --sources gutenberg` for the Qwen ones.
+A length is counted in the tokens of the card's own tokenizer, which is why each model has cards of its own.
+
+| card | tokenized dataset it needs | files | entries a file |
+|---|---|---|---|
+| [production](../../src/lsa/assets/datasets/workloads/production.yaml) | glm53_flash | nine lengths, 16k to 10M | 3, nested |
+| [production_qwen38](../../src/lsa/assets/datasets/workloads/production_qwen38.yaml) | qwen38_27b | nine lengths, 16k to 10,485,504 | 3, nested |
+| [concurrency](../../src/lsa/assets/datasets/workloads/concurrency.yaml) | glm53_flash | six lengths, 128k to 10M | 256, 80, 40, 20, 8 and 3, one count a length |
+| [concurrency_qwen38](../../src/lsa/assets/datasets/workloads/concurrency_qwen38.yaml) | qwen38_27b | five lengths, 128k to 5M | 256, 32, 16, 8 and 3, one count a length |
+
+`production` and `production_qwen38` are what a production run sends one request at a time.
 Entry i starts at the same row at every length, so the first L tokens of stream i are a prefix of every longer prompt of it and the ladder is nested.
+The Qwen ladder ends at 10,485,504 and not 10,485,760, because Qwen's YaRN factor 40 holds 10,485,760 positions and the prompt and its answer have to fit in them.
+
+`concurrency` and `concurrency_qwen38` are the prompts of one concurrent wave a length.
+Their entries are not nested: each owns a span of its own, so no two prompts of a wave share a prefix.
+A length holds as many entries as a node fits there, and the Qwen card stops at 5M because one 10M request is all a node holds.
+
+`--lengths` builds some of a card's lengths and `--out` writes elsewhere, and the manifest beside the files keeps each file's sha256.

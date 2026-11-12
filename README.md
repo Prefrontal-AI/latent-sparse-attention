@@ -78,6 +78,13 @@ LSA is an SGLang plugin.
 It runs in the serving image of our [SGLang fork](https://github.com/Prefrontal-AI/sglang/tree/lsa-v0.1.0), which adds the context-parallel and long-context support the 10M-token runs need.
 LSA itself is not in the image - you install this repository into it.
 
+Download the Qwen map of the `d-lsa-weights-v1` release into a directory of its own, which the commands below mount as `/maps`:
+
+```bash
+gh release download d-lsa-weights-v1 -R Prefrontal-AI/latent-sparse-attention \
+  --pattern 'qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt' --dir <maps directory>
+```
+
 Pull the image and start a container with this repository, a distilled map and the Hugging Face cache mounted.
 The image is built with CUDA 13.0.3, and B300 (Blackwell) nodes take their own image, tagged `lsa-v0.1.0-b300`.
 To build it from source, run the fork's `docker/enroot/build.sh` at the tag, from a checkout of it - it needs Docker with buildx and enroot, no GPU, and writes `sglang-lsa-<sha10>.sqsh`, where `<sha10>` is the first 10 characters of the commit (`042d955ba3` for `lsa-v0.1.0`).
@@ -113,7 +120,7 @@ Inside the container, install this repository and pass an `lsa` block in the mod
 pip install --no-deps /workspace/latent-sparse-attention
 python -m sglang.launch_server --model-path Qwen/Qwen3.8-27b --tp 1 \
   --attention-backend fa3 --page-size 1 --disable-prefill-cuda-graph \
-  --json-model-override-args '{"lsa": {"projections": "/maps/qwen38_27b.pt", "query_heads": "all"}}'
+  --json-model-override-args '{"lsa": {"projections": "/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt", "query_heads": "all"}}'
 ```
 
 `--disable-prefill-cuda-graph` is required.
@@ -196,6 +203,26 @@ lsa --site mycluster evaluate production configs/evaluation/production/glm53_fla
 
 Swap the stem for each method, and `glm53_flash` for `qwen38_27b`.
 The configs prefixed `b300_` measure on B300.
+
+The kernel configs time a five-layer cut of the model, and the production configs send the prompt files of a workload card.
+Make both once before the first run:
+
+```bash
+# GLM-5.3-Flash, cut from the hub cache (hf download zai-org/GLM-5.3-Flash)
+lsa --site mycluster kernels cut --out "$LSA_ROOT/models/glm53_flash_real5"
+# Qwen3.8-27B, cut from its pinned snapshot (hf download Qwen/Qwen3.8-27b)
+lsa --site mycluster kernels cut --snapshot "$HF_HOME/hub/models--Qwen--Qwen3.8-27b/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0" \
+  --out "$LSA_ROOT/models/qwen38_27b_real5"
+# Qwen with QSA, cut from the injected checkpoint, see Weights
+lsa --site mycluster kernels cut --snapshot "$LSA_ROOT/models/qwen38_27b_qsa" --out "$LSA_ROOT/models/qwen38_27b_qsa_real5"
+# The production prompts, in GLM's tokens and in Qwen's
+lsa --site mycluster data prepare production
+lsa --site mycluster data prepare production_qwen38
+```
+
+The cut keeps five layers with their real weights by default, which is what every kernel config assumes.
+The `qwen38_27b_qsa_real5` cut reads `qwen38_27b_qsa`, which `lsa distill inject` builds from the QSA indexer first, as in [Weights](#weights).
+The Qwen production prompts need the `qwen38_27b` tokenized dataset, and the GLM ones the `glm53_flash` one, see [Workloads](docs/guide/data.md#workloads).
 
 ### Native training (Section 4.4)
 
