@@ -251,7 +251,7 @@ The LongBench v2 file of 2026-09-21 was built from whatever snapshot that cache 
 ## Workloads
 
 ```bash
-lsa data prepare production            # nine files, one a length, about four minutes
+lsa data prepare production            # nine files, one a length, and a manifest, about four minutes
 lsa data prepare production_qwen38     # the same in Qwen's tokens
 lsa data prepare concurrency           # six files
 lsa data prepare concurrency_qwen38    # five files

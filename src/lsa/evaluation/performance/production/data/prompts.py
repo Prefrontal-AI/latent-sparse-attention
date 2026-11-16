@@ -1,14 +1,15 @@
 """Build the prompt files a production run sends - a workload card's, one file per length.
 
-    lsa data prepare production                     # the card's nine files, about four minutes, as a CPU job
+    lsa data prepare production                     # the card's nine files and their manifest, about four minutes, as a CPU job
     lsa data prepare production_qwen38              # Qwen 3.8's, sized in its own tokens
     lsa data prepare production --lengths 131072 --out /tmp/prompts
 
 The card names the tokenized dataset and the source the text is decoded from, the lengths and the entries
 per file. Each file is ShareGPT-shaped, which is what sglang's random dataset reads: the client tokenizes an
-entry, cuts it to exactly the length and sends the ids. Entry i starts at the same row at every length, so the
-first L tokens of stream i are a prefix of every longer prompt of it and the ladder is nested. The manifest
-beside the files keeps each entry's rows, the tokens it encodes to and each file's sha256.
+entry, cuts it to exactly the length and sends the ids. On a nested card entry i starts at the same row at every
+length, so the first L tokens of stream i are a prefix of every longer prompt of it; on any other card, such as a
+concurrency one, each entry owns a span of its own. The manifest beside the files keeps each entry's rows, the
+tokens it encodes to and each file's sha256.
 """
 
 import argparse

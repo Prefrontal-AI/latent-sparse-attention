@@ -37,9 +37,11 @@ lsa distill export $LSA_ROOT/training/distillation/glm53_flash/long_16k_1m_heavy
 The indexer reads GLM's key latent and every head's query summed, which is what the server serves.
 The extraction keeps only those - `run.input: key_and_query`, a fifth of the attention input `x` on GLM - and the run trains a map of them, so `lsa distill export` writes the map the server reads.
 It writes it under the released map's name, the one every GLM evaluation config reads, so a trained map and the downloaded one are interchangeable.
+The export replaces a map already at that path without asking, and the release's `SHA256SUMS` then no longer matches it - move the downloaded map aside first to keep it.
 
 The extraction's `data.selection` declares which documents and windows it reads, balanced by length and domain.
 Extraction records the resolved selection as `selection.json` inside its target collection before loading weights.
+`configs/data/targets/glm53_flash/dense_mass.yaml` reads its documents from that file, so submit this extraction before it - the job writes the file once it starts, and `--dry-run` writes nothing.
 Every length bucket holds the same tokens, and inside a bucket every domain holds the same share wherever it has documents that long.
 `configs/data/targets/` holds extraction configs with their document allocation; `configs/training/distillation/` holds runs that train and score on those targets.
 `run.collection` names the extracted collection, and the trainer names the extraction cache root as `data.root`.
@@ -74,7 +76,7 @@ lsa distill export $LSA_ROOT/training/distillation/qwen38_27b/long_16k_1m_heavy_
     $LSA_ROOT/models/maps/qwen38_27b__long-16k-1M-heavy-key-and-query-d2048.pt
 ```
 
-The export writes the released map's name, the one every Qwen evaluation config reads.
+The export writes the released map's name, the one every Qwen evaluation config reads, and replaces a downloaded map there just as the GLM one does.
 
 The maps train on the first card and a copy of the model reads documents on each of the others, every layer of a document at once, into the same pool a cache feeds.
 The documents, their query positions and their targets are the extraction's own, so the targets are the ones `lsa distill targets` would have written.

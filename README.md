@@ -204,15 +204,20 @@ lsa --site mycluster evaluate production configs/evaluation/production/glm53_fla
 Swap the stem for each method, and `glm53_flash` for `qwen38_27b`.
 The configs prefixed `b300_` measure on B300.
 
-The kernel configs time a five-layer cut of the model, and the production configs send the prompt files of a workload card.
-Make both once before the first run:
+The kernel configs time a five-layer cut of the model on a shipped book as the prompt, and the production configs send the prompt files of a workload card.
+Make all of them once before the first run, in a shell that has read the site:
 
 ```bash
-# GLM-5.3-Flash, cut from the hub cache (hf download zai-org/GLM-5.3-Flash)
+eval "$(lsa --site mycluster env)"
+# The kernel configs' prompt, under the shared root
+install -D -m 644 data/prompts/gutenberg_300k.txt "$LSA_ROOT/data/prompts/gutenberg_300k.txt"
+# GLM-5.3-Flash at its pinned revision, cut from the hub cache
+HF_HUB_OFFLINE=0 hf download zai-org/GLM-5.3-Flash --revision eb9eb208eb0d988989d07a6a12d0fdeb5f52574a
 lsa --site mycluster kernels cut --out "$LSA_ROOT/models/glm53_flash_real5"
 # GLM read densely, for the B300 baseline (b300_full)
 lsa --site mycluster kernels cut --dense --out "$LSA_ROOT/models/glm53_flash_real5_dense"
-# Qwen3.8-27B, cut from its pinned snapshot (hf download Qwen/Qwen3.8-27b)
+# Qwen3.8-27B at its pinned revision, cut from that snapshot
+HF_HUB_OFFLINE=0 hf download Qwen/Qwen3.8-27b --revision 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
 lsa --site mycluster kernels cut --snapshot "$HF_HOME/hub/models--Qwen--Qwen3.8-27b/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0" \
   --out "$LSA_ROOT/models/qwen38_27b_real5"
 # Qwen with QSA, cut from the injected checkpoint, see Weights
@@ -224,6 +229,8 @@ lsa --site mycluster data prepare production_qwen38
 
 The cut keeps five layers with their real weights by default, which is what every kernel config assumes.
 `--dense` nulls GLM's `index_topk` as well, so sglang reads the cut as dense MLA rather than DSA.
+Each cut copies its shards rather than linking them, so the dense one takes as much room again as the first.
+The prompt's sha256 and how to check it are in [its readme](data/prompts/README.md).
 The `qwen38_27b_qsa_real5` cut reads `qwen38_27b_qsa`, which `lsa distill inject` builds from the QSA indexer first, as in [Weights](#weights).
 The Qwen production prompts need the `qwen38_27b` tokenized dataset, and the GLM ones the `glm53_flash` one, see [Workloads](docs/guide/data.md#workloads).
 
@@ -345,7 +352,7 @@ images:
 Every `slurm` key is optional, and an unset key adds no sbatch flag.
 Large artifacts - targets, maps, records and logs - live under `root`.
 `LSA_ROOT` and `HF_HOME` override `root` and `hf_home`, and `LSA_EXTRA_MOUNTS` adds directories to the serving container.
-Jobs read the Hugging Face cache offline, so download a model first, for example `hf download Qwen/Qwen3.8-27b`.
+Jobs read the Hugging Face cache offline, so download a model first at its card's pinned revision, for example `hf download Qwen/Qwen3.8-27b --revision 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`.
 That download is about 52 GB and a job log shows no progress for it, so run it in a terminal where the progress bar prints.
 `images` names the image built above, or a docker tag your runner can pull, and `run.image=<file or tag>` overrides it for one run.
 
