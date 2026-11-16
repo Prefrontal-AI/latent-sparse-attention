@@ -214,6 +214,9 @@ class TritonExpansion:
 class TritonTopK:
     """The Triton exact top-k."""
 
+    # Most programs a per-row launch takes, each stepping over rows that many apart - None is one a row
+    # => a backend that corrupts rows past a grid size, as triton-ascend does past 512, caps it there
+    MOST_PROGRAMS: int | None = None
     # Widest a row is listed whole, in k - a sample cannot rank so large a share of a row
     WHOLE: int = 4
     # Most columns a row samples
