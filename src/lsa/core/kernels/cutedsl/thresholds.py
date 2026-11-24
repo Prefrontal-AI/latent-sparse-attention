@@ -750,7 +750,8 @@ class SamplePass:
             total = total + cute.arch.shuffle_sync_bfly(total, 1)
             if quad == 0:
                 part_sums[row, block, part] = total
-            # A group is one slot of one quad lane over every block and part - 64 disjoint groups a row
+            # A group is a run of slots of one quad lane of one part, over the blocks of one parity - 128 disjoint
+            # groups a row
             groups = slots // CuteThresholds.PARTS
             first_group = (block % CuteThresholds.GROUP_SETS) * (
                 CuteThresholds.GROUPS // CuteThresholds.GROUP_SETS

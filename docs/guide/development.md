@@ -99,7 +99,6 @@ Agreement means the same best top-p keys and nothing about the rest of the listi
 ### The threshold estimate
 
 The threshold estimate is the one kernel whose bits no pick depends on, so it adds in its own order and divides exactly.
-Matching Triton there took a second compile for the sample counts Triton loads four wide, permuted reads of the samples and pins on Triton's code generation.
 `test_cutedsl_thresholds.py` holds it to the Triton thresholds within the bounds its comments state, so a change in how Triton adds no longer breaks it.
 
 ## Environment variables

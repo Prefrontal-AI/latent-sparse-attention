@@ -85,10 +85,19 @@ def test_each_row_has_a_threshold_agreeing_with_the_triton_one(rows, buckets, to
     assert_agreeing_thresholds(rows, buckets, top_p, rows)
 
 
-def test_one_compile_serves_every_sample_count():
+def test_one_compile_serves_every_sample_count(monkeypatch):
+    compiles = []
+    compile_kernel = cutedsl_thresholds.cute.compile
+    monkeypatch.setattr(cutedsl_thresholds, "COMPILED", {})
+    monkeypatch.setattr(
+        cutedsl_thresholds.cute,
+        "compile",
+        lambda *arguments, **options: compiles.append(1) or compile_kernel(*arguments, **options),
+    )
+    # 18432 samples, a multiple of 16, and 20001, not one
     for buckets in (36864, 40001, 36864):
         assert_agreeing_thresholds(200, buckets, 64, buckets)
-    assert sorted(cutedsl_thresholds.COMPILED) == ["histogram", "prepare", "sums", "threshold"]
+    assert len(compiles) == 4
 
 
 def test_rows_the_kernel_does_not_take_are_refused():
