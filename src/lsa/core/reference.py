@@ -123,18 +123,18 @@ def build_buckets(
     index_dim = keys.shape[1]
     blocks = keys[: block_count * cluster_block_size].view(block_count, cluster_block_size, index_dim)
     pools = pool_keys(blocks, pool_size)
-    pool_sizes = torch.full(pools.shape[:2], float(pool_size))
+    pool_sizes = torch.full(pools.shape[:2], float(pool_size), device=pools.device)
     if cluster_algorithm == "position":
-        labels = (torch.arange(pools.shape[1]) // (bucket_size // pool_size)).expand(block_count, -1)
+        labels = (torch.arange(pools.shape[1], device=pools.device) // (bucket_size // pool_size)).expand(block_count, -1)
     else:
         labels = ward_merge(pools, pool_sizes, block_bucket_count, bucket_cap)
     key_labels = labels.repeat_interleave(pool_size, dim=1)
     # Bucket of each key across the whole cache, numbered block after block
-    bucket_of_key = key_labels + block_bucket_count * torch.arange(block_count)[:, None]
-    key_sums = torch.zeros(block_count * block_bucket_count, index_dim)
+    bucket_of_key = key_labels + block_bucket_count * torch.arange(block_count, device=keys.device)[:, None]
+    key_sums = torch.zeros(block_count * block_bucket_count, index_dim, device=keys.device)
     key_sums.index_add_(0, bucket_of_key.flatten(), blocks.reshape(-1, index_dim))
     bucket_centroids = key_sums / key_sums.norm(dim=1, keepdim=True).clamp_min(1e-30)
-    members = torch.empty(block_count * block_bucket_count, bucket_cap, dtype=torch.int32)
+    members = torch.empty(block_count * block_bucket_count, bucket_cap, dtype=torch.int32, device=keys.device)
     for block in range(block_count):
         local = members_from_labels(key_labels[block], block_bucket_count, bucket_cap)
         rows = slice(block * block_bucket_count, (block + 1) * block_bucket_count)
@@ -223,8 +223,8 @@ def read(
             f"got top_p {early_budget.top_p} and top_k {early_budget.top_k}"
         )
     width = top_k + window_size + sink_size
-    selected = torch.full((index_queries.shape[0], width), -1, dtype=torch.int32)
-    lengths = torch.zeros(index_queries.shape[0], dtype=torch.int32)
+    selected = torch.full((index_queries.shape[0], width), -1, dtype=torch.int32, device=buckets.bucket_centroids.device)
+    lengths = torch.zeros(index_queries.shape[0], dtype=torch.int32, device=buckets.bucket_centroids.device)
     scores_all = index_queries.float() @ buckets.bucket_centroids.T
     if shapes is not None:
         scores_all = scores_all + deviations * spread(index_queries, shapes)
@@ -284,6 +284,6 @@ def expand_buckets(
     window_start = max(0, position + 1 - window_size)
     members = buckets.bucket_members[picked].flatten().long()
     members = members[(members >= sink_size) & (members < window_start)][:top_k]
-    window = torch.arange(window_start, position + 1)
-    sinks = torch.arange(min(sink_size, window_start, position + 1))
+    window = torch.arange(window_start, position + 1, device=buckets.bucket_centroids.device)
+    sinks = torch.arange(min(sink_size, window_start, position + 1), device=buckets.bucket_centroids.device)
     return torch.cat([members, window, sinks]).to(torch.int32)
