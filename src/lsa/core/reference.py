@@ -125,7 +125,9 @@ def build_buckets(
     pools = pool_keys(blocks, pool_size)
     pool_sizes = torch.full(pools.shape[:2], float(pool_size), device=pools.device)
     if cluster_algorithm == "position":
-        labels = (torch.arange(pools.shape[1], device=pools.device) // (bucket_size // pool_size)).expand(block_count, -1)
+        labels = (torch.arange(pools.shape[1], device=pools.device) // (bucket_size // pool_size)).expand(
+            block_count, -1
+        )
     else:
         labels = ward_merge(pools, pool_sizes, block_bucket_count, bucket_cap)
     key_labels = labels.repeat_interleave(pool_size, dim=1)
@@ -223,7 +225,9 @@ def read(
             f"got top_p {early_budget.top_p} and top_k {early_budget.top_k}"
         )
     width = top_k + window_size + sink_size
-    selected = torch.full((index_queries.shape[0], width), -1, dtype=torch.int32, device=buckets.bucket_centroids.device)
+    selected = torch.full(
+        (index_queries.shape[0], width), -1, dtype=torch.int32, device=buckets.bucket_centroids.device
+    )
     lengths = torch.zeros(index_queries.shape[0], dtype=torch.int32, device=buckets.bucket_centroids.device)
     scores_all = index_queries.float() @ buckets.bucket_centroids.T
     if shapes is not None:
