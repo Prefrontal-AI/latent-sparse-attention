@@ -370,6 +370,17 @@ That download is about 52 GB and a job log shows no progress for it, so run it i
 | `docs/guide/development.md` | Checks, tests and conventions |
 | `docs/reference/notation.md` | Every symbol and config key, mapped to its name in the code |
 
+## Community ports
+
+Ports to other hardware, maintained by their authors in their own repositories.
+We have not run them and CI does not test them - each port checks itself against the torch reference in `lsa.core.reference`.
+
+| Port | Hardware | Covers | Maintainer |
+|---|---|---|---|
+| [Ascend](https://github.com/dahai80/latent-sparse-attention/tree/latent-sparse-attention-ascend) | Huawei Ascend 950DT, triton-ascend on CANN 9.2.1, for vLLM-Ascend | The Triton kernels | [dahai80](https://github.com/dahai80) |
+
+On triton-ascend, `top_keys` returns wrong keys past 512 rows a call, so a port calls it on slices of at most 512 rows - see its docstring.
+
 ## Development
 
 ```bash
