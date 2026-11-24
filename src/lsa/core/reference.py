@@ -225,10 +225,9 @@ def read(
             f"got top_p {early_budget.top_p} and top_k {early_budget.top_k}"
         )
     width = top_k + window_size + sink_size
-    selected = torch.full(
-        (index_queries.shape[0], width), -1, dtype=torch.int32, device=buckets.bucket_centroids.device
-    )
-    lengths = torch.zeros(index_queries.shape[0], dtype=torch.int32, device=buckets.bucket_centroids.device)
+    device = buckets.bucket_centroids.device
+    selected = torch.full((index_queries.shape[0], width), -1, dtype=torch.int32, device=device)
+    lengths = torch.zeros(index_queries.shape[0], dtype=torch.int32, device=device)
     scores_all = index_queries.float() @ buckets.bucket_centroids.T
     if shapes is not None:
         scores_all = scores_all + deviations * spread(index_queries, shapes)
@@ -288,6 +287,7 @@ def expand_buckets(
     window_start = max(0, position + 1 - window_size)
     members = buckets.bucket_members[picked].flatten().long()
     members = members[(members >= sink_size) & (members < window_start)][:top_k]
-    window = torch.arange(window_start, position + 1, device=buckets.bucket_centroids.device)
-    sinks = torch.arange(min(sink_size, window_start, position + 1), device=buckets.bucket_centroids.device)
+    device = buckets.bucket_centroids.device
+    window = torch.arange(window_start, position + 1, device=device)
+    sinks = torch.arange(min(sink_size, window_start, position + 1), device=device)
     return torch.cat([members, window, sinks]).to(torch.int32)

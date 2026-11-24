@@ -1,6 +1,8 @@
 """The torch reference on CUDA tensors - the buckets, the hierarchy and both reads give the CPU's answers, on the GPU.
 
-One GPU. Every tensor the reference makes sits on its input's device, so a caller on the GPU never mixes devices.
+One GPU.
+Every tensor the reference makes sits on its input's device, so a caller on the GPU never mixes devices.
+The reads run on the CPU's buckets and hierarchy moved over, so the only arithmetic that differs is their own.
 """
 
 import pytest
@@ -38,18 +40,35 @@ def queries_near(keys, positions, seed=1):
     return F.normalize(keys[earlier] + 0.1 * torch.randn(len(positions), 16, generator=generator), dim=-1)
 
 
+def on_gpu(value):
+    """A tensor, a list of them or a tuple of fields, moved to the GPU"""
+    if isinstance(value, torch.Tensor):
+        return value.to(DEVICE)
+    if isinstance(value, list):
+        return [on_gpu(item) for item in value]
+    if isinstance(value, tuple):
+        fields = [on_gpu(field) for field in value]
+        return type(value)(*fields) if hasattr(value, "_fields") else tuple(fields)
+    return value
+
+
+def built_on(keys, device, cluster_algorithm):
+    on_device = keys.to(device)
+    buckets = build_buckets(on_device, 4, 8, 16, WINDOW, cluster_algorithm=cluster_algorithm)
+    hierarchy = build_hierarchy(
+        on_device, buckets, 16, 4, NODE_BLOCK, node_cluster_algorithm=cluster_algorithm
+    )
+    return on_device, buckets, hierarchy
+
+
 @pytest.fixture(scope="module", params=["ward", "position"])
 def stores(request):
+    """The store built on the CPU, built on the GPU, and the CPU's moved to the GPU"""
     keys = spread_keys(KEYS)
-    built = []
-    for device in ("cpu", DEVICE):
-        on_device = keys.to(device)
-        buckets = build_buckets(on_device, 4, 8, 16, WINDOW, cluster_algorithm=request.param)
-        hierarchy = build_hierarchy(
-            on_device, buckets, 16, 4, NODE_BLOCK, node_cluster_algorithm=request.param
-        )
-        built.append((on_device, buckets, hierarchy))
-    return built
+    on_cpu = built_on(keys, "cpu", request.param)
+    moved = on_gpu(on_cpu)
+    assert moved[1].bucket_centroids.is_cuda and moved[2].node_centroids[0].is_cuda
+    return on_cpu, built_on(keys, DEVICE, request.param), moved
 
 
 def test_a_buckets_members_sit_on_their_labels_device():
@@ -60,7 +79,7 @@ def test_a_buckets_members_sit_on_their_labels_device():
 
 
 def test_buckets_built_on_the_gpu_are_the_ones_built_on_the_cpu(stores):
-    (_, on_cpu, _), (_, on_cuda, _) = stores
+    (_, on_cpu, _), (_, on_cuda, _), _ = stores
     assert on_cuda.bucket_members.device.type == "cuda"
     assert torch.equal(on_cuda.bucket_members.cpu(), on_cpu.bucket_members)
     assert torch.equal(on_cuda.bucket_sizes.cpu(), on_cpu.bucket_sizes)
@@ -68,7 +87,7 @@ def test_buckets_built_on_the_gpu_are_the_ones_built_on_the_cpu(stores):
 
 
 def test_a_hierarchy_built_on_the_gpu_is_the_one_built_on_the_cpu(stores):
-    (_, _, on_cpu), (_, _, on_cuda) = stores
+    (_, _, on_cpu), (_, _, on_cuda), _ = stores
     assert len(on_cuda.children) == len(on_cpu.children) > 1
     for children, expected in zip(on_cuda.children, on_cpu.children, strict=True):
         assert children.device.type == "cuda"
@@ -78,7 +97,7 @@ def test_a_hierarchy_built_on_the_gpu_is_the_one_built_on_the_cpu(stores):
 
 
 def test_a_beam_on_the_gpu_picks_the_buckets_it_picks_on_the_cpu(stores):
-    (keys, buckets, hierarchy), (_, gpu_buckets, gpu_hierarchy) = stores
+    (keys, buckets, hierarchy), _, (_, gpu_buckets, gpu_hierarchy) = stores
     cpu_scorer = Scorer(buckets, hierarchy, "centroid", "centroid", 1.0, None)
     gpu_scorer = Scorer(gpu_buckets, gpu_hierarchy, "centroid", "centroid", 1.0, None)
     page_buckets = PAGE // buckets.cluster_block_size * buckets.block_bucket_count
@@ -95,7 +114,7 @@ def test_a_beam_on_the_gpu_picks_the_buckets_it_picks_on_the_cpu(stores):
 
 
 def test_a_read_on_the_gpu_selects_what_it_selects_on_the_cpu(stores):
-    (keys, buckets, _), (_, gpu_buckets, _) = stores
+    (keys, buckets, _), _, (_, gpu_buckets, _) = stores
     positions = torch.arange(WINDOW, KEYS, 997)
     queries = queries_near(keys, positions)
     expected = read(queries, positions, buckets, TOP_P, TOP_K, SINKS, WINDOW)
@@ -106,7 +125,7 @@ def test_a_read_on_the_gpu_selects_what_it_selects_on_the_cpu(stores):
 
 
 def test_a_counted_beam_read_on_the_gpu_is_the_one_on_the_cpu(stores):
-    (keys, buckets, hierarchy), (_, gpu_buckets, gpu_hierarchy) = stores
+    (keys, buckets, hierarchy), _, (_, gpu_buckets, gpu_hierarchy) = stores
     positions = torch.arange(WINDOW, KEYS, 997)
     queries = queries_near(keys, positions)
     options = {
