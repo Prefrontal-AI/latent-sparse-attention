@@ -84,15 +84,15 @@ def pair_into_node_buckets(
         Each bucket's node bucket within its block, numbered from 0 in the order of its first child.
     """
     blocks, buckets, index_dim = key_sums.shape
-    labels = torch.arange(buckets).expand(blocks, buckets)
+    labels = torch.arange(buckets, device=key_sums.device).expand(blocks, buckets)
     if node_cluster_algorithm == "position":
         return labels // node_bucket_size
     for _ in range(node_bucket_size.bit_length() - 1):
         count = key_sums.shape[1]
         # Pairs - a merge to half the buckets, at most two a bucket
-        pairs = ward_rounds(key_sums, torch.ones(blocks, count), count // 2, 2)[0]
+        pairs = ward_rounds(key_sums, key_sums.new_ones(blocks, count), count // 2, 2)[0]
         labels = pairs.gather(1, labels)
-        key_sums = torch.zeros(blocks, count // 2, index_dim).scatter_add_(
+        key_sums = key_sums.new_zeros(blocks, count // 2, index_dim).scatter_add_(
             1, pairs[..., None].expand_as(key_sums), key_sums
         )
     return labels
@@ -153,7 +153,10 @@ def build_hierarchy(
             key_sums[:count].view(blocks, block, -1), node_bucket_size, node_cluster_algorithm
         )
         # Each block's rows in the order of their node buckets, then block after block
-        order = (torch.argsort(labels, dim=1, stable=True) + block * torch.arange(blocks)[:, None]).flatten()
+        order = (
+            torch.argsort(labels, dim=1, stable=True)
+            + block * torch.arange(blocks, device=labels.device)[:, None]
+        ).flatten()
         key_sums = key_sums[order].view(-1, node_bucket_size, key_sums.shape[1]).sum(1)
         key_counts = key_counts[order].view(-1, node_bucket_size).sum(1)
         node_centroids.append(F.normalize(key_sums, dim=-1))
@@ -332,7 +335,7 @@ def read_hierarchy_counted(
     beam_widths = per_level(beam_width, len(hierarchy.node_cluster_block_sizes))
     page_buckets = page_size // buckets.cluster_block_size * buckets.block_bucket_count
     queries = index_queries.float()
-    scored = torch.zeros(len(positions), dtype=torch.int64)
+    scored = torch.zeros(len(positions), dtype=torch.int64, device=lengths.device)
     for row, position in enumerate(positions.tolist()):
         scorer.scored = 0
         growth = growth_at(hierarchy, position // page_size * page_buckets, page_buckets, growth_buckets)
@@ -430,18 +433,19 @@ def beam_pick(
         start = next(
             (level for level in range(1, levels + 1) if growth.made[level - 1] <= start_nodes), levels
         )
-    carried = torch.empty(0, dtype=torch.int64)
+    device = buckets.bucket_centroids.device
+    carried = torch.empty(0, dtype=torch.int64, device=device)
     for level in range(start, 0, -1):
         made, closed = growth.made[level - 1], growth.closed[level - 1]
         # The start level whole when a level above covers some of it, else its open node buckets and the carried
         first_open = 0 if level == start and start_nodes is not None else closed
-        candidates = torch.cat([carried, torch.arange(first_open, made)]).sort().values
+        candidates = torch.cat([carried, torch.arange(first_open, made, device=device)]).sort().values
         kept = best(scorer.node_buckets(query, level, candidates), candidates, beam_widths[level - 1])
         carried = scorer.hierarchy.children[level - 1][kept].flatten()
     visible = min(
         position // buckets.cluster_block_size * buckets.block_bucket_count, len(buckets.bucket_sizes)
     )
-    uncovered = torch.arange(growth.covered_buckets, max(visible, growth.covered_buckets))
+    uncovered = torch.arange(growth.covered_buckets, max(visible, growth.covered_buckets), device=device)
     candidates = torch.cat([carried, uncovered]).sort().values
     return best(scorer.bucket_rows(query, candidates), candidates, top_p)
 

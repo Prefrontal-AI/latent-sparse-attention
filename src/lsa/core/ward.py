@@ -136,7 +136,7 @@ def members_from_labels(labels: torch.Tensor, bucket_count: int, bucket_cap: int
     Returns:
         Bucket members [bucket_count, bucket_cap] int32 - block-local positions, -1 past a bucket's size.
     """
-    members = torch.full((bucket_count, bucket_cap), -1, dtype=torch.int32)
+    members = torch.full((bucket_count, bucket_cap), -1, dtype=torch.int32, device=labels.device)
     for bucket in range(bucket_count):
         keys = (labels == bucket).nonzero().flatten()
         members[bucket, : keys.numel()] = keys.to(torch.int32)
