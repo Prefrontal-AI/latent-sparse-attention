@@ -435,9 +435,9 @@ class CuteThresholds:
     # CTAs an SM holds at once, which caps a thread's registers - the sums pass's, the histogram pass's
     MIN_BLOCKS: ClassVar[dict[bool, int]] = {False: 2, True: 3}
     # The tiles of a block, and the parts it splits into, a CTA each, dealt its tiles in turn
+    TILES: int = ThresholdEstimate.BLOCK // COLUMNS
     # A launch's grid holds blocks * PARTS CTAs in y, at most 65535
     # => 67M samples a call at most
-    TILES: int = ThresholdEstimate.BLOCK // COLUMNS
     PARTS: int = 4
     # Tiles in shared memory at once - one scored while the next loads
     STAGES: int = 2
