@@ -3,8 +3,8 @@
 One GPU. A threshold only sets how many buckets a row lists, and a row that lists fewer than its top-p lists again or
 is scored in full, so the picks must match exactly and the thresholds need only agree - see
 [kernel parity](../../../docs/guide/development.md#kernel-parity).
-The kernel does add in Triton's order today, so every row matches to the bit.
-The bounds below are what a different order would still meet, and the exact equality is not asked for.
+The kernel adds in its own order and divides exactly, so a threshold is off the Triton one by ulps of the mean,
+and now and then by the bins a sample carried over an edge moves it.
 """
 
 import pytest
@@ -66,11 +66,10 @@ def assert_agreeing_thresholds(rows, buckets, top_p, seed):
 @pytest.mark.parametrize(
     ("rows", "buckets", "top_p"),
     [
-        # 20001 samples - Triton adds a thread's columns one at a time
+        # 20001 samples, and 18432 - a multiple of 16, which Triton loads four wide
         (300, 40001, 64),
-        # 18432 samples - a multiple of 16, so four at a time
         (128, 36864, 64),
-        # Short contexts - one partial block, a partial tile, both orders
+        # Short contexts - one partial block, a partial tile
         (300, 1000, 1024),
         (130, 4096 * 24, 1024),
         (64, 3000, 64),
@@ -86,10 +85,10 @@ def test_each_row_has_a_threshold_agreeing_with_the_triton_one(rows, buckets, to
     assert_agreeing_thresholds(rows, buckets, top_p, rows)
 
 
-def test_one_process_takes_both_orders_in_turn():
+def test_one_compile_serves_every_sample_count():
     for buckets in (36864, 40001, 36864):
         assert_agreeing_thresholds(200, buckets, 64, buckets)
-    assert len(cutedsl_thresholds.COMPILED) == 6
+    assert sorted(cutedsl_thresholds.COMPILED) == ["histogram", "prepare", "sums", "threshold"]
 
 
 def test_rows_the_kernel_does_not_take_are_refused():

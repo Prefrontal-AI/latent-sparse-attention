@@ -6,7 +6,7 @@ The kernels here use no instruction only one GPU has; [hopper](hopper/__init__.p
 
 | module | what it does |
 |---|---|
-| [thresholds](thresholds.py) | flat's sampled thresholds, bit for bit the Triton ones |
+| [thresholds](thresholds.py) | flat's sampled thresholds, agreeing with the Triton ones |
 | [scoring](scoring.py) | the listed buckets, or every bucket a row sees, scored and packed into keys, bit for bit the Triton keys |
 | [expansion](expansion.py) | flat's expansion by threshold and the expansion in rank order of picked buckets - a row's buckets read as their members |
 | [decode](decode.py) | a flat decode step's buckets scored through their pages and its best listed, the scan and the select in one pass |

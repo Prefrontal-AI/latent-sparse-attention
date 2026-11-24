@@ -46,7 +46,7 @@ class Radix:
 
 
 class ThresholdEstimate:
-    """The threshold estimate, which CuTeDSL matches to Triton's bit for bit though only agreement is required."""
+    """The threshold estimate, which CuTeDSL agrees with Triton's on."""
 
     # Samples a Triton program of the histogram adds as one block - the columns an exact pick's program reads at a time
     BLOCK: int = 4096
@@ -434,8 +434,11 @@ class CuteThresholds:
     HIT_SLOTS: int = 4
     # CTAs an SM holds at once, which caps a thread's registers - the sums pass's, the histogram pass's
     MIN_BLOCKS: ClassVar[dict[bool, int]] = {False: 2, True: 3}
-    # The tiles of a Triton program's block
+    # The tiles of a block, and the parts it splits into, a CTA each, dealt its tiles in turn
     TILES: int = ThresholdEstimate.BLOCK // COLUMNS
+    PARTS: int = 4
+    # Tiles in shared memory at once - one scored while the next loads
+    STAGES: int = 2
     # Disjoint groups of a row's samples, whose maxima's rank-th greatest bounds its rank-th best - each block of an
     # odd or even place in a set of groups of its own
     GROUPS: int = 128

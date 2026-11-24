@@ -68,10 +68,8 @@ It changes an order exactly where two scores are within an ulp of each other, an
 One ulp is rare per row and certain over enough rows, so the tests cannot ask for "close" on a score that ranks.
 Bit for bit is the only agreement that does not depend on how many near-ties a test happens to draw.
 
-The cost is that a CuTeDSL kernel adds in the order the Triton compiler emits.
-The reduction orders, the 64-dim dot's lanes and the tf32x3 split are copied, and so are two facts about Triton's code generation that no Triton source states.
-A 4096-sample block is summed four wide when the sample count is a multiple of 16, and a mean is divided with the approximate `div.full`.
-[The pins](#what-exact-equality-rests-on) fail on those facts directly, so a Triton change names its cause instead of surfacing as a mismatch in a threshold.
+The cost is that a CuTeDSL kernel held to the bit adds in the order the Triton compiler emits.
+The reduction orders, the 64-dim dot's lanes and the tf32x3 split are copied.
 
 ### Where it applies
 
@@ -98,18 +96,11 @@ Agreement means the same best top-p keys and nothing about the rest of the listi
 `test_cutedsl_top_k.py` and the decode listing tests already compare that way.
 `test_cutedsl_thresholds.py` compares thresholds that way too: the row's pick is checked exactly, and the threshold only within the tolerance its comment states.
 
-### What exact equality rests on
+### The threshold estimate
 
-`tests/unit/core/test_triton_assumptions.py` compiles the Triton kernels the CuTeDSL ones copy and reads what Triton generated.
-It pins the divisibility-by-16 specialization that makes a block load four wide, the absence of a four-wide load for any other sample count, the warp's butterfly from the widest step down, and the approximate division.
-A failure there means Triton changed what the CuTeDSL path copies, whatever the thresholds or scores then do.
-The CuTeDSL kernel and the pin move together, and the torch pin moves only with the image.
-
-### Which could drop the Triton order
-
-The threshold estimate is the one kernel whose bits no pick depends on.
-Its Triton-order sums, `div.full` and four-wide permuted reads exist only to match a value the contract has just stopped asking for.
-Dropping them would remove a compile variant per vectorization and a permuted read, and it is not part of this change.
+The threshold estimate is the one kernel whose bits no pick depends on, so it adds in its own order and divides exactly.
+Matching Triton there took a second compile for the sample counts Triton loads four wide, permuted reads of the samples and pins on Triton's code generation.
+`test_cutedsl_thresholds.py` holds it to the Triton thresholds within the bounds its comments state, so a change in how Triton adds no longer breaks it.
 
 ## Environment variables
 
